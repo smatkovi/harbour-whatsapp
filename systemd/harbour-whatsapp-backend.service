@@ -1,0 +1,9 @@
+[Unit]
+Description=WhatsApp Backend
+
+[Service]
+Type=simple
+ExecStartPre=/bin/mkdir -p %h/.local/share/harbour-whatsapp
+WorkingDirectory=%h/.local/share/harbour-whatsapp
+ExecStart=/usr/share/harbour-whatsapp/wa-backend
+Restart=no

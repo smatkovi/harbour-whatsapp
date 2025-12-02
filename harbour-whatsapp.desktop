@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=WhatsApp
+Icon=harbour-whatsapp
+Exec=sailfish-qml harbour-whatsapp
+X-Nemo-Application-Type=silica-qt5
