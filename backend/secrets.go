@@ -14,7 +14,7 @@ import (
 )
 
 const (
-    COLLECTION_NAME = "whatsapp-systemd"
+    COLLECTION_NAME = "harbour-whatsapp-secrets"
     SECRET_KEY_NAME = "encryption-key"
     DEFAULT_PLUGIN  = "org.sailfishos.secrets.plugin.encryptedstorage.sqlcipher"
 
@@ -273,11 +273,26 @@ func LoadEncrypted(filename string, v interface{}) error {
     if err != nil {
         return err
     }
-    return DecryptJSON(data, v)
+    // Try decrypted first, fallback to plain JSON
+    if encryptionKey != nil {
+        if err := DecryptJSON(data, v); err == nil {
+            return nil
+        }
+    }
+    // Fallback: plain JSON
+    return json.Unmarshal(data, v)
 }
 
 func SaveEncrypted(filename string, v interface{}) error {
-    data, err := EncryptJSON(v)
+    if encryptionKey != nil {
+        data, err := EncryptJSON(v)
+        if err != nil {
+            return err
+        }
+        return os.WriteFile(filename, data, 0600)
+    }
+    // Fallback: plain JSON
+    data, err := json.Marshal(v)
     if err != nil {
         return err
     }

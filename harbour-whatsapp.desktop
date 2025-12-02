@@ -4,3 +4,8 @@ Name=WhatsApp
 Icon=harbour-whatsapp
 Exec=sailfish-qml harbour-whatsapp
 X-Nemo-Application-Type=silica-qt5
+
+[X-Sailjail]
+Permissions=Internet;Secrets;UserDirs;Contacts;
+OrganizationName=harbour
+ApplicationName=harbour-whatsapp
