@@ -2,7 +2,7 @@ import QtQuick 2.0
 import Sailfish.Silica 1.0
 import Sailfish.Pickers 1.0
 import org.nemomobile.contacts 1.0
-import Nemo.DBus 2.0
+import io.thp.pyotherside 1.5
 
 ApplicationWindow {
     id: app
@@ -15,18 +15,38 @@ ApplicationWindow {
     property var chats: []
     property var waContacts: []
 
-    // Systemd D-Bus interface to start backend
-    DBusInterface {
-        id: systemd
-        bus: DBus.SessionBus
-        service: "org.freedesktop.systemd1"
-        path: "/org/freedesktop/systemd1"
-        iface: "org.freedesktop.systemd1.Manager"
+    // Python backend starter
+    Python {
+        id: python
+        
+        Component.onCompleted: {
+            addImportPath(Qt.resolvedUrl('..'))
+            
+            setHandler('backendReady', function(success) {
+                if (success) {
+                    console.log("Backend ready")
+                    checkStatus()
+                } else {
+                    console.log("Backend failed to start")
+                }
+            })
+            
+            importModule('start_backend', function() {
+                call('start_backend.start', [])
+            })
+        }
+        
+        Component.onDestruction: {
+            call('start_backend.stop', [])
+        }
+        
+        onError: {
+            console.log("Python error:", traceback)
+        }
     }
+
+
     
-    function ensureBackend() {
-        systemd.call("StartUnit", ["harbour-whatsapp-backend.service", "replace"])
-    }
     
     // Sailfish Contacts
     PeopleModel {
@@ -158,7 +178,6 @@ ApplicationWindow {
         onTriggered: checkStatus()
     }
 
-    Component.onCompleted: { ensureBackend(); checkStatus() }
 
     // Avatar component
     Component {
@@ -262,8 +281,8 @@ ApplicationWindow {
                         id: phoneField
                         width: parent.width
                         label: "Phone number (with country code)"
-                        placeholderText: "436766517141"
-                        text: "436766517141"
+                        placeholderText: "43664..."
+                        text: ""
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
