@@ -1,12 +1,9 @@
 package main
 
 import (
-    "crypto/aes"
-    "crypto/cipher"
     "crypto/rand"
     "encoding/json"
     "fmt"
-    "io"
     "os"
     "time"
 
@@ -100,7 +97,7 @@ func InitSecrets() error {
         return fmt.Errorf("timeout connecting to secrets daemon")
     }
 
-    fmt.Printf("\U0001F510 P2P socket: %s\n", secrets.p2pAddress)
+    fmt.Printf("🔐 P2P socket: %s\n", secrets.p2pAddress)
 
     testDone := make(chan error, 1)
     go func() {
@@ -123,7 +120,7 @@ func InitSecrets() error {
     }
 
     secrets.available = true
-    fmt.Println("\U0001F510 Sailfish Secrets ready")
+    fmt.Println("🔐 Sailfish Secrets ready")
     return nil
 }
 
@@ -190,117 +187,50 @@ func ClearAllSecrets() {
 }
 
 func GetOrCreateKey() ([]byte, error) {
-    if secrets != nil && secrets.available {
-        if key, err := secrets.RetrieveSecret(SECRET_KEY_NAME); err == nil && len(key) == 32 {
-            fmt.Println("\U0001F510 Encryption key loaded from Sailfish Secrets")
-            encryptionKey = key
-            return key, nil
-        }
-
-        fmt.Println("\U0001F510 Generating new encryption key...")
-        key := make([]byte, 32)
-        if _, err := rand.Read(key); err != nil {
-            return nil, err
-        }
-
-        if err := secrets.StoreSecret(SECRET_KEY_NAME, key); err != nil {
-            return nil, fmt.Errorf("couldn't store key: %v", err)
-        }
-
-        fmt.Println("\U0001F510 Encryption key stored in Sailfish Secrets")
+    if secrets == nil || !secrets.available {
+        return nil, fmt.Errorf("Sailfish Secrets not available")
+    }
+    
+    if key, err := secrets.RetrieveSecret(SECRET_KEY_NAME); err == nil && len(key) == 32 {
+        fmt.Println("🔐 Encryption key loaded from Sailfish Secrets")
         encryptionKey = key
         return key, nil
     }
-    return nil, fmt.Errorf("Sailfish Secrets not available")
+
+    fmt.Println("🔐 Generating new encryption key...")
+    key := make([]byte, 32)
+    if _, err := rand.Read(key); err != nil {
+        return nil, err
+    }
+
+    if err := secrets.StoreSecret(SECRET_KEY_NAME, key); err != nil {
+        return nil, fmt.Errorf("couldn't store key: %v", err)
+    }
+
+    fmt.Println("🔐 Encryption key stored in Sailfish Secrets")
+    encryptionKey = key
+    return key, nil
 }
 
-func Encrypt(data []byte) ([]byte, error) {
-    if encryptionKey == nil {
-        return nil, fmt.Errorf("no encryption key")
-    }
-    block, err := aes.NewCipher(encryptionKey)
-    if err != nil {
-        return nil, err
-    }
-    gcm, err := cipher.NewGCM(block)
-    if err != nil {
-        return nil, err
-    }
-    nonce := make([]byte, gcm.NonceSize())
-    if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-        return nil, err
-    }
-    return gcm.Seal(nonce, nonce, data, nil), nil
+func RegenerateKey() ([]byte, error) {
+    ClearAllSecrets()
+    return GetOrCreateKey()
 }
 
-func Decrypt(data []byte) ([]byte, error) {
-    if encryptionKey == nil {
-        return nil, fmt.Errorf("no encryption key")
-    }
-    block, err := aes.NewCipher(encryptionKey)
-    if err != nil {
-        return nil, err
-    }
-    gcm, err := cipher.NewGCM(block)
-    if err != nil {
-        return nil, err
-    }
-    if len(data) < gcm.NonceSize() {
-        return nil, fmt.Errorf("ciphertext too short")
-    }
-    nonce, ciphertext := data[:gcm.NonceSize()], data[gcm.NonceSize():]
-    return gcm.Open(nil, nonce, ciphertext, nil)
-}
-
-func EncryptJSON(v interface{}) ([]byte, error) {
-    data, err := json.Marshal(v)
-    if err != nil {
-        return nil, err
-    }
-    return Encrypt(data)
-}
-
-func DecryptJSON(data []byte, v interface{}) error {
-    decrypted, err := Decrypt(data)
-    if err != nil {
-        return err
-    }
-    return json.Unmarshal(decrypted, v)
-}
-
+// LoadEncrypted - plain JSON (no encryption)
 func LoadEncrypted(filename string, v interface{}) error {
     data, err := os.ReadFile(filename)
     if err != nil {
         return err
     }
-    // Try decrypted first, fallback to plain JSON
-    if encryptionKey != nil {
-        if err := DecryptJSON(data, v); err == nil {
-            return nil
-        }
-    }
-    // Fallback: plain JSON
     return json.Unmarshal(data, v)
 }
 
+// SaveEncrypted - plain JSON (no encryption)
 func SaveEncrypted(filename string, v interface{}) error {
-    if encryptionKey != nil {
-        data, err := EncryptJSON(v)
-        if err != nil {
-            return err
-        }
-        return os.WriteFile(filename, data, 0600)
-    }
-    // Fallback: plain JSON
     data, err := json.Marshal(v)
     if err != nil {
         return err
     }
     return os.WriteFile(filename, data, 0600)
-}
-
-func RegenerateKey() ([]byte, error) {
-    ClearAllSecrets()
-    key, err := GetOrCreateKey()
-    return key, err
 }
