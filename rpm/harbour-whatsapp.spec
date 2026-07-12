@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.4.8
+Version:    0.4.9
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -45,6 +45,18 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.9-1
+- Media in history-synced chats: images, videos, audio, documents and
+  stickers from conversations imported at pairing time now show up as
+  placeholders with size info and can be downloaded on demand by
+  tapping them (previously all media messages from history were
+  silently skipped, so freshly paired installs showed no pictures)
+- Media keys are stored encrypted (rawmedia.enc) so downloads also
+  work after a restart; downloaded media opens in the system viewer
+- Live messages whose automatic download fails keep their media key
+  and can be retried by tapping
+- Clear error message when media has expired on WhatsApp servers
+
 * Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.8-1
 - Fix "Send image" (and "Send file") pickers showing no entries: the
   Sailfish gallery pickers query the Tracker3 media index over D-Bus,

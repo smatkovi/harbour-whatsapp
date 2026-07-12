@@ -801,6 +801,30 @@ ApplicationWindow {
 
                 header: Item { height: Theme.paddingLarge }
 
+                property string downloadingId: ""
+                property string downloadError: ""
+                property string lastDownloadFailId: ""
+
+                function downloadMediaFor(msgId) {
+                    if (downloadingId !== "") return
+                    downloadingId = msgId
+                    downloadError = ""
+                    var xhr = new XMLHttpRequest()
+                    xhr.open("GET", "http://127.0.0.1:" + backendPort + "/download?id=" + encodeURIComponent(msgId))
+                    xhr.onreadystatechange = function() {
+                        if (xhr.readyState === 4) {
+                            downloadingId = ""
+                            if (xhr.status === 200) {
+                                load()
+                            } else {
+                                downloadError = xhr.responseText
+                                lastDownloadFailId = msgId
+                            }
+                        }
+                    }
+                    xhr.send()
+                }
+
                 delegate: ListItem {
                     width: parent.width
                     contentHeight: msgContent.height + Theme.paddingSmall
@@ -841,8 +865,32 @@ ApplicationWindow {
                                 BusyIndicator {
                                     anchors.centerIn: parent
                                     running: parent.status === Image.Loading
+                                            || downloadingId === modelData.id
                                     size: BusyIndicatorSize.Medium
                                 }
+                            }
+
+                            Column {
+                                anchors.centerIn: parent
+                                visible: !modelData.localPath && downloadingId !== modelData.id
+                                spacing: Theme.paddingSmall
+                                Image {
+                                    source: "image://theme/icon-l-image"
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                                Label {
+                                    text: "Tap to download" + (modelData.fileSize ? " (" + formatSize(modelData.fileSize) + ")" : "")
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    color: Theme.secondaryColor
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: modelData.localPath
+                                           ? Qt.openUrlExternally("file://" + modelData.localPath)
+                                           : downloadMediaFor(modelData.id)
                             }
                         }
 
@@ -860,8 +908,23 @@ ApplicationWindow {
                                 Column {
                                     anchors.verticalCenter: parent.verticalCenter
                                     Label { text: modelData.fileName || "Video"; font.pixelSize: Theme.fontSizeSmall }
-                                    Label { text: formatSize(modelData.fileSize); font.pixelSize: Theme.fontSizeExtraSmall; color: Theme.secondaryColor }
+                                    Label { text: formatSize(modelData.fileSize) + (modelData.localPath ? "" : " · tap to download"); font.pixelSize: Theme.fontSizeExtraSmall; color: Theme.secondaryColor }
                                 }
+                            }
+
+                            BusyIndicator {
+                                anchors.right: parent.right
+                                anchors.rightMargin: Theme.paddingMedium
+                                anchors.verticalCenter: parent.verticalCenter
+                                running: downloadingId === modelData.id
+                                size: BusyIndicatorSize.Small
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: modelData.localPath
+                                           ? Qt.openUrlExternally("file://" + modelData.localPath)
+                                           : downloadMediaFor(modelData.id)
                             }
                         }
 
@@ -876,7 +939,22 @@ ApplicationWindow {
                                 anchors.centerIn: parent
                                 spacing: Theme.paddingMedium
                                 Label { text: "🎵"; font.pixelSize: Theme.fontSizeLarge }
-                                Label { text: "Audio · " + formatSize(modelData.fileSize); font.pixelSize: Theme.fontSizeSmall; color: Theme.secondaryColor }
+                                Label { text: "Audio · " + formatSize(modelData.fileSize) + (modelData.localPath ? "" : " · tap to download"); font.pixelSize: Theme.fontSizeSmall; color: Theme.secondaryColor }
+                            }
+
+                            BusyIndicator {
+                                anchors.right: parent.right
+                                anchors.rightMargin: Theme.paddingMedium
+                                anchors.verticalCenter: parent.verticalCenter
+                                running: downloadingId === modelData.id
+                                size: BusyIndicatorSize.Small
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: modelData.localPath
+                                           ? Qt.openUrlExternally("file://" + modelData.localPath)
+                                           : downloadMediaFor(modelData.id)
                             }
                         }
 
@@ -893,8 +971,23 @@ ApplicationWindow {
                                 Label { text: "📄"; font.pixelSize: Theme.fontSizeLarge }
                                 Column {
                                     Label { text: modelData.fileName || "Document"; font.pixelSize: Theme.fontSizeSmall }
-                                    Label { text: formatSize(modelData.fileSize); font.pixelSize: Theme.fontSizeExtraSmall; color: Theme.secondaryColor }
+                                    Label { text: formatSize(modelData.fileSize) + (modelData.localPath ? "" : " · tap to download"); font.pixelSize: Theme.fontSizeExtraSmall; color: Theme.secondaryColor }
                                 }
+                            }
+
+                            BusyIndicator {
+                                anchors.right: parent.right
+                                anchors.rightMargin: Theme.paddingMedium
+                                anchors.verticalCenter: parent.verticalCenter
+                                running: downloadingId === modelData.id
+                                size: BusyIndicatorSize.Small
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: modelData.localPath
+                                           ? Qt.openUrlExternally("file://" + modelData.localPath)
+                                           : downloadMediaFor(modelData.id)
                             }
                         }
 
@@ -904,6 +997,17 @@ ApplicationWindow {
                             height: width
                             fillMode: Image.PreserveAspectFit
                             source: modelData.localPath ? "file://" + modelData.localPath : ""
+                            Label {
+                                anchors.centerIn: parent
+                                visible: !modelData.localPath
+                                text: downloadingId === modelData.id ? "…" : "🙂⬇"
+                                font.pixelSize: Theme.fontSizeLarge
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: !modelData.localPath
+                                onClicked: downloadMediaFor(modelData.id)
+                            }
                         }
 
                         Rectangle {
@@ -927,6 +1031,15 @@ ApplicationWindow {
                             font.pixelSize: Theme.fontSizeExtraSmall
                             color: Theme.secondaryColor
                             anchors.right: modelData.fromMe ? parent.right : undefined
+                        }
+
+                        Label {
+                            visible: downloadError !== "" && downloadingId === "" && modelData.id === lastDownloadFailId
+                            width: parent.width
+                            text: downloadError
+                            wrapMode: Text.Wrap
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: Theme.errorColor
                         }
                     }
                 }

@@ -3,6 +3,7 @@ package main
 import (
     "context"
     "encoding/hex"
+    "encoding/base64"
     "encoding/json"
     "fmt"
     "io"
@@ -52,6 +53,9 @@ var avatarsDir string
 // Data files in current working directory
 var messagesFile = "messages.enc"
 var contactsFile = "contacts.enc"
+var rawMediaFile = "rawmedia.enc"
+var rawMedia = make(map[string]string) // msgID -> base64(proto waE2E.Message)
+var rawMediaMutex sync.RWMutex
 var avatarsFile = "avatars.enc"
 
 var mimeTypes = map[string]string{
@@ -201,6 +205,56 @@ func loadMessages() {
         return
     }
     fmt.Printf("📂 Loaded %d messages (encrypted)\n", len(messages))
+}
+
+func loadRawMedia() {
+    rawMediaMutex.Lock()
+    defer rawMediaMutex.Unlock()
+    if err := LoadEncrypted(rawMediaFile, &rawMedia); err == nil {
+        fmt.Printf("📂 Loaded %d pending media keys\n", len(rawMedia))
+    }
+}
+
+func saveRawMedia() {
+    rawMediaMutex.RLock()
+    defer rawMediaMutex.RUnlock()
+    if err := SaveEncrypted(rawMediaFile, rawMedia); err != nil {
+        fmt.Printf("⚠️ Failed to save media keys: %v\n", err)
+    }
+}
+
+func stashRawMedia(msgID string, msg *waE2E.Message) {
+    data, err := proto.Marshal(msg)
+    if err != nil {
+        return
+    }
+    rawMediaMutex.Lock()
+    rawMedia[msgID] = base64.StdEncoding.EncodeToString(data)
+    rawMediaMutex.Unlock()
+    go saveRawMedia()
+}
+
+// extractMedia liefert Typ, Mime, Dateiname, Groesse, Caption und den
+// downloadbaren Teil einer Nachricht - fuer Live- und History-Pfad.
+func extractMedia(msg *waE2E.Message) (mediaType, mimeType, fileName string, fileSize uint64, caption string, dl whatsmeow.DownloadableMessage) {
+    switch {
+    case msg.GetImageMessage() != nil:
+        m := msg.GetImageMessage()
+        return "image", m.GetMimetype(), "", m.GetFileLength(), m.GetCaption(), m
+    case msg.GetVideoMessage() != nil:
+        m := msg.GetVideoMessage()
+        return "video", m.GetMimetype(), "", m.GetFileLength(), m.GetCaption(), m
+    case msg.GetAudioMessage() != nil:
+        m := msg.GetAudioMessage()
+        return "audio", m.GetMimetype(), "", m.GetFileLength(), "", m
+    case msg.GetDocumentMessage() != nil:
+        m := msg.GetDocumentMessage()
+        return "document", m.GetMimetype(), m.GetFileName(), m.GetFileLength(), m.GetCaption(), m
+    case msg.GetStickerMessage() != nil:
+        m := msg.GetStickerMessage()
+        return "sticker", m.GetMimetype(), "", m.GetFileLength(), "", m
+    }
+    return "", "", "", 0, "", nil
 }
 
 func saveMessages() {
@@ -489,6 +543,9 @@ func eventHandler(evt interface{}) {
             }
             if path, err := downloadMedia(v.Info.ID, msg.ImageMessage, mimeType, ""); err == nil {
                 localPath = path
+            } else {
+                fmt.Printf("⚠️ Media download failed (%s), keeping key for retry: %v\n", v.Info.ID, err)
+                stashRawMedia(v.Info.ID, msg)
             }
         }
         
@@ -501,6 +558,9 @@ func eventHandler(evt interface{}) {
             }
             if path, err := downloadMedia(v.Info.ID, msg.VideoMessage, mimeType, ""); err == nil {
                 localPath = path
+            } else {
+                fmt.Printf("⚠️ Media download failed (%s), keeping key for retry: %v\n", v.Info.ID, err)
+                stashRawMedia(v.Info.ID, msg)
             }
         }
         
@@ -510,6 +570,9 @@ func eventHandler(evt interface{}) {
             fileSize = msg.AudioMessage.GetFileLength()
             if path, err := downloadMedia(v.Info.ID, msg.AudioMessage, mimeType, ""); err == nil {
                 localPath = path
+            } else {
+                fmt.Printf("⚠️ Media download failed (%s), keeping key for retry: %v\n", v.Info.ID, err)
+                stashRawMedia(v.Info.ID, msg)
             }
         }
         
@@ -523,6 +586,9 @@ func eventHandler(evt interface{}) {
             }
             if path, err := downloadMedia(v.Info.ID, msg.DocumentMessage, mimeType, fileName); err == nil {
                 localPath = path
+            } else {
+                fmt.Printf("⚠️ Media download failed (%s), keeping key for retry: %v\n", v.Info.ID, err)
+                stashRawMedia(v.Info.ID, msg)
             }
         }
         
@@ -531,6 +597,9 @@ func eventHandler(evt interface{}) {
             mimeType = msg.StickerMessage.GetMimetype()
             if path, err := downloadMedia(v.Info.ID, msg.StickerMessage, mimeType, ""); err == nil {
                 localPath = path
+            } else {
+                fmt.Printf("⚠️ Media download failed (%s), keeping key for retry: %v\n", v.Info.ID, err)
+                stashRawMedia(v.Info.ID, msg)
             }
         }
         
@@ -659,13 +728,22 @@ func eventHandler(evt interface{}) {
                 } else if msg.ExtendedTextMessage != nil {
                     text = msg.ExtendedTextMessage.GetText()
                 }
-                if text != "" {
+                mediaType, mimeType, fileName, fileSize, caption, _ := extractMedia(msg)
+                if caption != "" {
+                    text = caption
+                }
+                if text != "" || mediaType != "" {
                     fromMe := hm.Message.GetKey().GetFromMe()
                     ts := int64(hm.Message.GetMessageTimestamp())
                     msgID := hm.Message.GetKey().GetID()
+                    if mediaType != "" {
+                        stashRawMedia(msgID, msg)
+                    }
                     addMessage(Message{
                         ID: msgID, Sender: chatJid, Text: text, Timestamp: ts,
                         FromMe: fromMe, ChatJID: chatJid,
+                        MediaType: mediaType, MimeType: mimeType,
+                        FileName: fileName, FileSize: fileSize,
                     })
                 }
             }
@@ -829,6 +907,7 @@ func main() {
     
     // Load encrypted data files
     loadMessages()
+    loadRawMedia()
     loadContactsFromDisk()
     loadAvatarsFromDisk()
 
@@ -911,6 +990,7 @@ func main() {
         os.Remove("wa.db-wal")
         os.Remove(messagesFile)
         os.Remove(contactsFile)
+        os.Remove(rawMediaFile)
         os.Remove(avatarsFile)
         os.RemoveAll(avatarsDir)
         os.MkdirAll(avatarsDir, 0755)
@@ -1043,6 +1123,73 @@ func main() {
             return
         }
         w.Write([]byte("ok"))
+    })
+
+    http.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
+        msgID := r.URL.Query().Get("id")
+        if msgID == "" {
+            http.Error(w, "missing id", 400)
+            return
+        }
+        // Schon vorhanden?
+        msgMutex.RLock()
+        var target *Message
+        for i := range messages {
+            if messages[i].ID == msgID {
+                target = &messages[i]
+                break
+            }
+        }
+        msgMutex.RUnlock()
+        if target == nil {
+            http.Error(w, "unknown message", 404)
+            return
+        }
+        if target.LocalPath != "" {
+            json.NewEncoder(w).Encode(map[string]string{"path": target.LocalPath})
+            return
+        }
+        rawMediaMutex.RLock()
+        b64, ok := rawMedia[msgID]
+        rawMediaMutex.RUnlock()
+        if !ok {
+            http.Error(w, "no media key stored for this message", 404)
+            return
+        }
+        data, err := base64.StdEncoding.DecodeString(b64)
+        if err != nil {
+            http.Error(w, "corrupt media key", 500)
+            return
+        }
+        var full waE2E.Message
+        if err := proto.Unmarshal(data, &full); err != nil {
+            http.Error(w, "corrupt media key", 500)
+            return
+        }
+        _, mimeType, fileName, _, _, dl := extractMedia(&full)
+        if dl == nil {
+            http.Error(w, "not a downloadable message", 500)
+            return
+        }
+        path, err := downloadMedia(msgID, dl, mimeType, fileName)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("download failed: %v (media may have expired on WhatsApp servers)", err), 502)
+            return
+        }
+        msgMutex.Lock()
+        for i := range messages {
+            if messages[i].ID == msgID {
+                messages[i].LocalPath = path
+                break
+            }
+        }
+        msgMutex.Unlock()
+        go saveMessages()
+        rawMediaMutex.Lock()
+        delete(rawMedia, msgID)
+        rawMediaMutex.Unlock()
+        go saveRawMedia()
+        json.NewEncoder(w).Encode(map[string]string{"path": path})
     })
 
     http.HandleFunc("/reload", func(w http.ResponseWriter, r *http.Request) {
