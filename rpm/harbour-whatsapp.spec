@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.4.6
+Version:    0.4.7
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -45,6 +45,13 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.7-1
+- Fix wrong contact name shown on chats: local contact matching now
+  canonicalizes both numbers to full international form (using your
+  account's country code) and requires an exact match; the loose
+  suffix fallback only applies with at least 9 matching digits and
+  never overrides an exact match
+
 * Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.6-1
 - Fix chats failing to open (silently) with "TypeError: Property
   'endsWith' ... is not a function": String.endsWith is ES6 and not

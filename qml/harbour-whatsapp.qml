@@ -62,29 +62,63 @@ ApplicationWindow {
         requiredProperty: PeopleModel.PhoneNumberRequired
     }
     
-    // Find contact name from Sailfish contacts by phone number
+    // Landesvorwahl aus der eigenen Nummer ableiten (1/7 einstellig,
+    // sonst bekannte zweistellige, sonst dreistellig)
+    function ownCountryCode() {
+        if (!phone) return ""
+        var c1 = phone.charAt(0)
+        if (c1 === "1" || c1 === "7") return c1
+        var two = ["20","27","30","31","32","33","34","36","39","40","41",
+                   "43","44","45","46","47","48","49","51","52","53","54",
+                   "55","56","57","58","60","61","62","63","64","65","66",
+                   "81","82","84","86","90","91","92","93","94","95","98"]
+        var c2 = phone.substring(0, 2)
+        if (two.indexOf(c2) >= 0) return c2
+        return phone.substring(0, 3)
+    }
+
+    // Beliebige Nummer in kanonische internationale Form (JID-Nummer) wandeln
+    function toJid(raw) {
+        if (!raw) return ""
+        var n = String(raw).replace(/[^0-9+]/g, "")
+        if (n.indexOf("+") === 0) n = n.substring(1)
+        else if (n.indexOf("00") === 0) n = n.substring(2)
+        else if (n.indexOf("0") === 0) n = ownCountryCode() + n.substring(1)
+        n = n.replace(/[^0-9]/g, "")
+        return n.length >= 8 ? n : ""
+    }
+
+    // Find contact name from Sailfish contacts by phone number (jid)
     function findLocalContactName(phoneNumber) {
         if (!phoneNumber) return ""
-        // Normalize: remove +, spaces, dashes
-        var normalized = phoneNumber.replace(/[\s\-\+]/g, '').replace(/^0+/, '')
-        
+        var jid = String(phoneNumber).replace(/[^0-9]/g, "")
+        var suffixResult = ""
+
         for (var i = 0; i < peopleModel.count; i++) {
             var person = peopleModel.get(i)
             if (person && person.phoneDetails) {
                 for (var j = 0; j < person.phoneDetails.length; j++) {
-                    var pn = String(person.phoneDetails[j].normalizedNumber || person.phoneDetails[j].number || "")
-                    pn = pn.replace(/[\s\-\+]/g, '').replace(/^0+/, '')
-                    // Qt 5.6 QML kennt kein String.endsWith (ES6) - Suffix-Check via lastIndexOf
-                    var suffixMatch = (pn.length >= 6 && normalized.length >= 6) &&
-                        (pn.lastIndexOf(normalized) === pn.length - normalized.length ||
-                         normalized.lastIndexOf(pn) === normalized.length - pn.length)
-                    if (pn === normalized || suffixMatch) {
+                    var raw = person.phoneDetails[j].normalizedNumber || person.phoneDetails[j].number
+                    var cand = toJid(raw)
+                    // Exakter Treffer in kanonischer Form gewinnt sofort
+                    if (cand !== "" && cand === jid) {
                         return person.displayLabel || ""
+                    }
+                    // Fallback: Suffix-Match nur mit >= 9 Ziffern (nationale Rufnummer),
+                    // falls die Landesvorwahl-Heuristik danebenlag
+                    if (suffixResult === "") {
+                        var pn = String(raw || "").replace(/[^0-9]/g, "").replace(/^0+/, "")
+                        var shorter = pn.length < jid.length ? pn : jid
+                        var longer  = pn.length < jid.length ? jid : pn
+                        if (shorter.length >= 9 &&
+                            longer.lastIndexOf(shorter) === longer.length - shorter.length) {
+                            suffixResult = person.displayLabel || ""
+                        }
                     }
                 }
             }
         }
-        return ""
+        return suffixResult
     }
     
     // Get display name: prefer local contact, then WhatsApp name, then number
@@ -481,32 +515,6 @@ ApplicationWindow {
         id: newChatPage
         Page {
             property string searchText: ""
-
-            // Landesvorwahl aus der eigenen Nummer ableiten (1/7 einstellig,
-            // sonst bekannte zweistellige, sonst dreistellig)
-            function ownCountryCode() {
-                if (!phone) return ""
-                var c1 = phone.charAt(0)
-                if (c1 === "1" || c1 === "7") return c1
-                var two = ["20","27","30","31","32","33","34","36","39","40","41",
-                           "43","44","45","46","47","48","49","51","52","53","54",
-                           "55","56","57","58","60","61","62","63","64","65","66",
-                           "81","82","84","86","90","91","92","93","94","95","98"]
-                var c2 = phone.substring(0, 2)
-                if (two.indexOf(c2) >= 0) return c2
-                return phone.substring(0, 3)
-            }
-
-            // Beliebige Adressbuch-Nummer in eine WhatsApp-JID-Nummer wandeln
-            function toJid(raw) {
-                if (!raw) return ""
-                var n = String(raw).replace(/[^0-9+]/g, "")
-                if (n.indexOf("+") === 0) n = n.substring(1)
-                else if (n.indexOf("00") === 0) n = n.substring(2)
-                else if (n.indexOf("0") === 0) n = ownCountryCode() + n.substring(1)
-                n = n.replace(/[^0-9]/g, "")
-                return n.length >= 8 ? n : ""
-            }
 
             function filteredContacts() {
                 var merged = {}
