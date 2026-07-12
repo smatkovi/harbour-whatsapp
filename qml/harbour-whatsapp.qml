@@ -478,17 +478,69 @@ ApplicationWindow {
         Page {
             property string searchText: ""
 
+            // Landesvorwahl aus der eigenen Nummer ableiten (1/7 einstellig,
+            // sonst bekannte zweistellige, sonst dreistellig)
+            function ownCountryCode() {
+                if (!phone) return ""
+                var c1 = phone.charAt(0)
+                if (c1 === "1" || c1 === "7") return c1
+                var two = ["20","27","30","31","32","33","34","36","39","40","41",
+                           "43","44","45","46","47","48","49","51","52","53","54",
+                           "55","56","57","58","60","61","62","63","64","65","66",
+                           "81","82","84","86","90","91","92","93","94","95","98"]
+                var c2 = phone.substring(0, 2)
+                if (two.indexOf(c2) >= 0) return c2
+                return phone.substring(0, 3)
+            }
+
+            // Beliebige Adressbuch-Nummer in eine WhatsApp-JID-Nummer wandeln
+            function toJid(raw) {
+                if (!raw) return ""
+                var n = String(raw).replace(/[^0-9+]/g, "")
+                if (n.indexOf("+") === 0) n = n.substring(1)
+                else if (n.indexOf("00") === 0) n = n.substring(2)
+                else if (n.indexOf("0") === 0) n = ownCountryCode() + n.substring(1)
+                n = n.replace(/[^0-9]/g, "")
+                return n.length >= 8 ? n : ""
+            }
+
             function filteredContacts() {
-                if (!waContacts) return []
-                if (searchText === "") return waContacts
-                var s = searchText.toLowerCase()
+                var merged = {}
+                var i, c
+                // Lokales Adressbuch
+                for (i = 0; i < peopleModel.count; i++) {
+                    var person = peopleModel.get(i)
+                    if (!person || !person.phoneDetails) continue
+                    for (var j = 0; j < person.phoneDetails.length; j++) {
+                        var jid = toJid(person.phoneDetails[j].normalizedNumber
+                                        || person.phoneDetails[j].number)
+                        if (jid && !merged[jid]) {
+                            merged[jid] = { jid: jid,
+                                            name: person.displayLabel || ("+" + jid),
+                                            source: "local" }
+                        }
+                    }
+                }
+                // WhatsApp-Kontakte (gewinnen bei gleicher Nummer: bestaetigt auf WA)
+                if (waContacts) {
+                    for (i = 0; i < waContacts.length; i++) {
+                        c = waContacts[i]
+                        merged[c.jid] = { jid: c.jid,
+                                          name: (merged[c.jid] && merged[c.jid].name)
+                                                || c.name || ("+" + c.jid),
+                                          source: "whatsapp" }
+                    }
+                }
                 var result = []
-                for (var i = 0; i < waContacts.length; i++) {
-                    var c = waContacts[i]
-                    if (c.name.toLowerCase().indexOf(s) >= 0 || c.jid.indexOf(s) >= 0) {
+                var s = searchText.toLowerCase()
+                for (var key in merged) {
+                    c = merged[key]
+                    if (s === "" || c.name.toLowerCase().indexOf(s) >= 0
+                                 || c.jid.indexOf(s) >= 0) {
                         result.push(c)
                     }
                 }
+                result.sort(function(a, b) { return a.name.localeCompare(b.name) })
                 return result
             }
 
@@ -605,7 +657,17 @@ ApplicationWindow {
                                 Column {
                                     anchors.verticalCenter: parent.verticalCenter
                                     
-                                    Label { text: modelData.name || "Unknown" }
+                                    Row {
+                                        spacing: Theme.paddingSmall
+                                        Label { text: modelData.name || "Unknown" }
+                                        Label {
+                                            visible: modelData.source === "whatsapp"
+                                            text: "WhatsApp"
+                                            font.pixelSize: Theme.fontSizeExtraSmall
+                                            color: "#25D366"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                    }
                                     Label {
                                         text: modelData.jid.length > 15 ? "Group" : "+" + modelData.jid
                                         font.pixelSize: Theme.fontSizeSmall
@@ -617,10 +679,12 @@ ApplicationWindow {
                     }
 
                     Label {
-                        visible: searchText === "" && waContacts.length === 0
+                        visible: searchText === "" && filteredContacts().length === 0
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
-                        text: "Enter a phone number with country code\n(e.g. 436641234567)\nto start a new conversation"
+                        text: peopleModel.count === 0
+                              ? "No contacts accessible.\nEnter a phone number with country code\n(e.g. 436641234567) to start a chat."
+                              : "Enter a phone number with country code\n(e.g. 436641234567)\nto start a new conversation"
                         wrapMode: Text.Wrap
                         horizontalAlignment: Text.AlignHCenter
                         color: Theme.secondaryColor

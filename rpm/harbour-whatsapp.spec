@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.4.3
+Version:    0.4.4
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -45,6 +45,15 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.4-1
+- "New chat" now lists your local Sailfish address book (via PeopleModel)
+  merged with your WhatsApp contacts, searchable by name or number, with
+  a WhatsApp badge on contacts known to be on WhatsApp
+- Local numbers are normalized automatically ("+43...", "0043...", and
+  national "0676..." formats all resolve to the right WhatsApp number,
+  using your own account's country code)
+- Clear hint on the "New chat" page if no contacts are accessible
+
 * Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.3-1
 - The header now shows a meaningful connection status instead of just
   "Not connected": starting, connecting, reconnecting, waiting for
