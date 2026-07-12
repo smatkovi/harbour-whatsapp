@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.4.7
+Version:    0.4.8
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -45,6 +45,13 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.8-1
+- Fix "Send image" (and "Send file") pickers showing no entries: the
+  Sailfish gallery pickers query the Tracker3 media index over D-Bus,
+  which requires the MediaIndexing Sailjail permission
+- Also request RemovableMedia so pictures and files on the SD card
+  show up in the pickers
+
 * Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.7-1
 - Fix wrong contact name shown on chats: local contact matching now
   canonicalizes both numbers to full international form (using your

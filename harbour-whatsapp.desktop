@@ -6,6 +6,6 @@ Exec=sailfish-qml harbour-whatsapp
 X-Nemo-Application-Type=silica-qt5
 
 [X-Sailjail]
-Permissions=Internet;Secrets;UserDirs;Contacts;Privileged;
+Permissions=Internet;Secrets;UserDirs;Contacts;Privileged;MediaIndexing;RemovableMedia;
 OrganizationName=harbour
 ApplicationName=harbour-whatsapp
