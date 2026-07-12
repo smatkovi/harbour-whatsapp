@@ -15,6 +15,7 @@ ApplicationWindow {
     property string connState: ""
     property string lastError: ""
     property bool paired: false
+    property var waContactsMap: ({})
     property int backendPort: 8085
     property string phone: ""
     property var chats: []
@@ -122,7 +123,38 @@ ApplicationWindow {
         return suffixResult
     }
     
-    // Get display name: prefer local contact, then WhatsApp name, then number
+    // Lokales Adressbuch + WhatsApp-Kontakte zusammenfuehren
+    function mergedContacts() {
+        var merged = {}
+        var i, c
+        for (i = 0; i < peopleModel.count; i++) {
+            var person = peopleModel.get(i)
+            if (!person || !person.phoneDetails) continue
+            for (var j = 0; j < person.phoneDetails.length; j++) {
+                var jid = toJid(person.phoneDetails[j].normalizedNumber
+                                || person.phoneDetails[j].number)
+                if (jid && !merged[jid]) {
+                    merged[jid] = { jid: jid,
+                                    name: person.displayLabel || ("+" + jid),
+                                    source: "local" }
+                }
+            }
+        }
+        if (waContacts) {
+            for (i = 0; i < waContacts.length; i++) {
+                c = waContacts[i]
+                merged[c.jid] = { jid: c.jid,
+                                  name: (merged[c.jid] && merged[c.jid].name)
+                                        || c.name || ("+" + c.jid),
+                                  source: "whatsapp" }
+            }
+        }
+        var result = []
+        for (var key in merged) result.push(merged[key])
+        result.sort(function(a, b) { return a.name.localeCompare(b.name) })
+        return result
+    }
+
     function getDisplayName(jid, waName) {
         var localName = findLocalContactName(jid)
         if (localName) return localName
@@ -176,6 +208,7 @@ ApplicationWindow {
                 }
                 list.sort(function(a, b) { return a.name.localeCompare(b.name) })
                 waContacts = list
+                waContactsMap = data
             }
         }
         xhr.send()
@@ -303,6 +336,31 @@ ApplicationWindow {
                         }
                         xhr.send()
                     }
+                }
+                MenuItem {
+                    text: "Profile"
+                    visible: connected
+                    onClicked: pageStack.push(profilePage)
+                }
+                MenuItem {
+                    text: "Search"
+                    visible: connected
+                    onClicked: pageStack.push(searchPage)
+                }
+                MenuItem {
+                    text: "Channels"
+                    visible: connected
+                    onClicked: pageStack.push(channelsPage)
+                }
+                MenuItem {
+                    text: "Join via link"
+                    visible: connected
+                    onClicked: pageStack.push(joinLinkPage)
+                }
+                MenuItem {
+                    text: "New group"
+                    visible: connected
+                    onClicked: pageStack.push(newGroupPage)
                 }
                 MenuItem {
                     text: "New chat"
@@ -459,8 +517,36 @@ ApplicationWindow {
                 onClicked: pageStack.push(chatPage, { 
                     chatJid: modelData.jid, 
                     chatName: getDisplayName(modelData.jid, modelData.name),
-                    chatAvatar: modelData.avatar || ""
+                    chatAvatar: modelData.avatar || "",
+                    isChannel: modelData.isChannel === true
                 })
+
+                function chatSetting(action) {
+                    var xhr = new XMLHttpRequest()
+                    xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chatsetting?chat=" + modelData.jid + "&action=" + action)
+                    xhr.onreadystatechange = function() {
+                        if (xhr.readyState === 4) loadChats()
+                    }
+                    xhr.send()
+                }
+
+                menu: ContextMenu {
+                    MenuItem {
+                        text: modelData.pinned ? "Unpin" : "Pin"
+                        visible: modelData.jid !== "status"
+                        onClicked: chatSetting(modelData.pinned ? "unpin" : "pin")
+                    }
+                    MenuItem {
+                        text: modelData.muted ? "Unmute" : "Mute"
+                        visible: modelData.jid !== "status"
+                        onClicked: chatSetting(modelData.muted ? "unmute" : "mute")
+                    }
+                    MenuItem {
+                        text: modelData.archived ? "Unarchive" : "Archive"
+                        visible: modelData.jid !== "status"
+                        onClicked: chatSetting(modelData.archived ? "unarchive" : "archive")
+                    }
+                }
 
                 Row {
                     x: Theme.horizontalPageMargin
@@ -485,10 +571,14 @@ ApplicationWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         
                         Label {
-                            text: getDisplayName(modelData.jid, modelData.name)
+                            text: (modelData.pinned ? "📌 " : "")
+                                  + getDisplayName(modelData.jid, modelData.name)
+                                  + (modelData.muted ? " 🔇" : "")
+                                  + (modelData.archived ? " · archived" : "")
                             font.pixelSize: Theme.fontSizeMedium
                             truncationMode: TruncationMode.Fade
                             width: parent.width
+                            opacity: modelData.archived ? Theme.opacityLow : 1.0
                         }
                         Label {
                             // keep this strictly single-line: multi-line last
@@ -522,47 +612,675 @@ ApplicationWindow {
     }
 
     Component {
+        id: profilePhotoPicker
+        ImagePickerPage {
+            onSelectedContentPropertiesChanged: {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/setphoto?file="
+                         + encodeURIComponent(selectedContentProperties.filePath))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        profileStatus = xhr.status === 200 ? "Photo updated"
+                                       : "Photo failed: " + xhr.responseText
+                    }
+                }
+                xhr.send()
+            }
+        }
+    }
+
+    property string profileStatus: ""
+
+    Component {
+        id: profilePage
+        Page {
+            property bool loaded: false
+
+            Component.onCompleted: {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/profile")
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
+                        var d = JSON.parse(xhr.responseText)
+                        nameField.text = d.name || ""
+                        aboutField.text = d.about || ""
+                        loaded = true
+                    }
+                }
+                xhr.send()
+                profileStatus = ""
+            }
+
+            SilicaFlickable {
+                anchors.fill: parent
+                contentHeight: profCol.height
+
+                Column {
+                    id: profCol
+                    width: parent.width
+                    spacing: Theme.paddingLarge
+
+                    PageHeader { title: "Profile" }
+
+                    TextField {
+                        id: nameField
+                        width: parent.width
+                        label: "Name"
+                        placeholderText: "Your name"
+                    }
+
+                    TextField {
+                        id: aboutField
+                        width: parent.width
+                        label: "About"
+                        placeholderText: "Hey there! I am using WhatsApp."
+                    }
+
+                    Button {
+                        text: "Save"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        enabled: loaded && nameField.text !== ""
+                        onClicked: {
+                            profileStatus = ""
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/setprofile?name="
+                                     + encodeURIComponent(nameField.text)
+                                     + "&hasAbout=1&about=" + encodeURIComponent(aboutField.text))
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) {
+                                    profileStatus = xhr.status === 200 ? "Profile saved"
+                                                   : "Failed: " + xhr.responseText
+                                }
+                            }
+                            xhr.send()
+                        }
+                    }
+
+                    Button {
+                        text: "Change profile photo"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        onClicked: pageStack.push(profilePhotoPicker)
+                    }
+
+                    Label {
+                        visible: profileStatus !== ""
+                        text: profileStatus
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        color: profileStatus.indexOf("Failed") === 0 || profileStatus.indexOf("Photo failed") === 0
+                               ? Theme.errorColor : Theme.highlightColor
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: "Name and photo are visible to your contacts. Changes may take a moment to propagate."
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: groupPhotoPicker
+        ImagePickerPage {
+            property string groupJid: ""
+            onSelectedContentPropertiesChanged: {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/photo?chat=" + groupJid
+                         + "&file=" + encodeURIComponent(selectedContentProperties.filePath))
+                xhr.send()
+            }
+        }
+    }
+
+    Component {
+        id: groupInfoPage
+        Page {
+            id: giPage
+            property string groupJid: ""
+            property string groupName: ""
+            property var participants: []
+            property string inviteLink: ""
+            property string giStatus: ""
+            property var subgroups: []
+
+            function loadInfo() {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/info?chat=" + groupJid)
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
+                        var d = JSON.parse(xhr.responseText)
+                        groupName = d.name || ""
+                        participants = d.participants || []
+                        gnameField.text = groupName
+                    } else if (xhr.readyState === 4) {
+                        giStatus = xhr.responseText
+                    }
+                }
+                xhr.send()
+            }
+
+            function groupCall(params, cb) {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + params)
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        giStatus = xhr.status === 200 ? "OK" : xhr.responseText
+                        if (cb) cb(xhr)
+                        loadInfo()
+                    }
+                }
+                xhr.send()
+            }
+
+            Component.onCompleted: {
+                loadInfo()
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/subgroups?chat=" + groupJid)
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
+                        subgroups = JSON.parse(xhr.responseText) || []
+                    }
+                }
+                xhr.send()
+            }
+
+            SilicaFlickable {
+                anchors.fill: parent
+                contentHeight: giCol.height
+
+                PullDownMenu {
+                    MenuItem {
+                        text: "Leave group"
+                        onClicked: leaveRemorse.execute("Leaving group", function() {
+                            groupCall("/group/leave?chat=" + groupJid, function() { pageStack.pop(pageStack.previousPage()) })
+                        })
+                    }
+                    MenuItem {
+                        text: "Change group photo"
+                        onClicked: pageStack.push(groupPhotoPicker, { groupJid: groupJid })
+                    }
+                    MenuItem {
+                        text: "Get invite link"
+                        onClicked: groupCall("/group/invitelink?chat=" + groupJid, function(xhr) {
+                            if (xhr.status === 200) {
+                                inviteLink = JSON.parse(xhr.responseText).link
+                                Clipboard.text = inviteLink
+                                giStatus = "Invite link copied to clipboard"
+                            }
+                        })
+                    }
+                }
+
+                RemorsePopup { id: leaveRemorse }
+
+                Column {
+                    id: giCol
+                    width: parent.width
+                    spacing: Theme.paddingMedium
+
+                    PageHeader { title: groupName || "Group info" }
+
+                    Row {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        spacing: Theme.paddingMedium
+
+                        TextField {
+                            id: gnameField
+                            width: parent.width - renameBtn.width - Theme.paddingMedium
+                            label: "Group name"
+                        }
+                        IconButton {
+                            id: renameBtn
+                            icon.source: "image://theme/icon-m-accept"
+                            anchors.verticalCenter: parent.verticalCenter
+                            enabled: gnameField.text !== "" && gnameField.text !== groupName
+                            onClicked: groupCall("/group/rename?chat=" + groupJid + "&name=" + encodeURIComponent(gnameField.text))
+                        }
+                    }
+
+                    Label {
+                        visible: inviteLink !== ""
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: inviteLink
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.highlightColor
+                        wrapMode: Text.WrapAnywhere
+                    }
+
+                    Label {
+                        visible: giStatus !== "" && giStatus !== "OK"
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: giStatus
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryHighlightColor
+                        wrapMode: Text.Wrap
+                    }
+
+                    Row {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        spacing: Theme.paddingMedium
+
+                        TextField {
+                            id: addField
+                            width: parent.width - addBtn.width - Theme.paddingMedium
+                            label: "Add participant"
+                            placeholderText: "436641234567"
+                            inputMethodHints: Qt.ImhDigitsOnly
+                        }
+                        IconButton {
+                            id: addBtn
+                            icon.source: "image://theme/icon-m-add"
+                            anchors.verticalCenter: parent.verticalCenter
+                            enabled: addField.text.length > 6
+                            onClicked: {
+                                groupCall("/group/participants?chat=" + groupJid + "&action=add&numbers=" + addField.text)
+                                addField.text = ""
+                            }
+                        }
+                    }
+
+                    SectionHeader {
+                        visible: subgroups.length > 0
+                        text: "Community groups (" + subgroups.length + ")"
+                    }
+
+                    Repeater {
+                        model: subgroups
+                        ListItem {
+                            width: giCol.width
+                            contentHeight: Theme.itemSizeSmall
+                            onClicked: pageStack.replace(chatPage, { chatJid: modelData.jid, chatName: modelData.name })
+                            Label {
+                                x: Theme.horizontalPageMargin
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.name
+                                color: Theme.highlightColor
+                            }
+                        }
+                    }
+
+                    SectionHeader { text: "Participants (" + participants.length + ")" }
+
+                    Repeater {
+                        model: participants
+                        ListItem {
+                            width: giCol.width
+                            contentHeight: Theme.itemSizeSmall
+                            menu: ContextMenu {
+                                MenuItem {
+                                    text: "Remove from group"
+                                    onClicked: groupCall("/group/participants?chat=" + giPage.groupJid + "&action=remove&numbers=" + modelData.number)
+                                }
+                            }
+                            Label {
+                                x: Theme.horizontalPageMargin
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: (getDisplayName(modelData.number, modelData.name))
+                                      + (modelData.isAdmin ? " · admin" : "")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: searchPage
+        Page {
+            id: spPage
+            property var results: []
+            property string scopeJid: ""
+            property string scopeName: ""
+
+            function doSearch() {
+                if (spField.text.trim().length < 2) {
+                    results = []
+                    return
+                }
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/search?q=" + encodeURIComponent(spField.text.trim())
+                         + (scopeJid !== "" ? "&chat=" + scopeJid : ""))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        results = xhr.status === 200 ? (JSON.parse(xhr.responseText) || []) : []
+                    }
+                }
+                xhr.send()
+            }
+
+            Timer {
+                id: searchDebounce
+                interval: 300
+                repeat: false
+                onTriggered: doSearch()
+            }
+
+            Column {
+                id: spHeader
+                width: parent.width
+                PageHeader { title: scopeName !== "" ? "Search in " + scopeName : "Search" }
+                SearchField {
+                    id: spField
+                    width: parent.width
+                    placeholderText: scopeName !== "" ? "Search in this chat" : "Search chats and messages"
+                    focus: true
+                    onTextChanged: searchDebounce.restart()
+                }
+            }
+
+            SilicaListView {
+                anchors.top: spHeader.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                clip: true
+                model: results
+
+                delegate: ListItem {
+                    contentHeight: Theme.itemSizeMedium
+                    onClicked: {
+                        if (spPage.scopeJid !== "" && modelData.msgId) {
+                            // zurueck zum Chat und zur Nachricht springen
+                            var prev = pageStack.previousPage(spPage)
+                            if (prev && prev.scrollToMsg) prev.scrollToMsg(modelData.msgId)
+                            pageStack.pop()
+                        } else {
+                            pageStack.push(chatPage, {
+                                chatJid: modelData.chatJid,
+                                chatName: modelData.chatName
+                            })
+                        }
+                    }
+                    Column {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*Theme.horizontalPageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        Row {
+                            spacing: Theme.paddingSmall
+                            width: parent.width
+                            Label {
+                                text: modelData.chatName
+                                font.pixelSize: Theme.fontSizeMedium
+                                color: Theme.highlightColor
+                            }
+                            Label {
+                                text: formatTime(modelData.timestamp)
+                                font.pixelSize: Theme.fontSizeExtraSmall
+                                color: Theme.secondaryColor
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
+                        Label {
+                            width: parent.width
+                            text: modelData.snippet || ""
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.secondaryColor
+                            truncationMode: TruncationMode.Fade
+                            maximumLineCount: 1
+                        }
+                    }
+                }
+
+                ViewPlaceholder {
+                    enabled: results.length === 0
+                    text: spField.text.trim().length < 2 ? "Search" : "No results"
+                    hintText: spField.text.trim().length < 2
+                              ? "Type at least two characters" : "Try different keywords"
+                }
+            }
+        }
+    }
+
+    Component {
+        id: channelsPage
+        Page {
+            property var channels: []
+            property string chStatus: ""
+
+            function loadChannels() {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channels")
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) channels = JSON.parse(xhr.responseText) || []
+                        else chStatus = xhr.responseText
+                    }
+                }
+                xhr.send()
+            }
+
+            Component.onCompleted: loadChannels()
+
+            SilicaListView {
+                anchors.fill: parent
+                model: channels
+
+                header: Column {
+                    width: parent ? parent.width : Screen.width
+                    PageHeader { title: "Channels" }
+                    Label {
+                        visible: chStatus !== ""
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: chStatus
+                        color: Theme.errorColor
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        wrapMode: Text.Wrap
+                    }
+                }
+
+                delegate: ListItem {
+                    contentHeight: Theme.itemSizeMedium
+                    onClicked: {
+                        var xhr = new XMLHttpRequest()
+                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/messages?jid=" + modelData.jid)
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState === 4) {
+                                loadChats()
+                                pageStack.push(chatPage, { chatJid: modelData.jid, chatName: modelData.name, isChannel: true })
+                            }
+                        }
+                        xhr.send()
+                    }
+                    menu: ContextMenu {
+                        MenuItem {
+                            text: "Unfollow"
+                            onClicked: {
+                                var xhr = new XMLHttpRequest()
+                                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/unfollow?jid=" + modelData.jid)
+                                xhr.onreadystatechange = function() {
+                                    if (xhr.readyState === 4) loadChannels()
+                                }
+                                xhr.send()
+                            }
+                        }
+                    }
+                    Column {
+                        x: Theme.horizontalPageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        Label { text: modelData.name }
+                        Label {
+                            text: modelData.subscribers + " subscribers"
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: Theme.secondaryColor
+                        }
+                    }
+                }
+
+                ViewPlaceholder {
+                    enabled: channels.length === 0 && chStatus === ""
+                    text: "No channels"
+                    hintText: "Follow a channel via 'Join via link'"
+                }
+            }
+        }
+    }
+
+    Component {
+        id: joinLinkPage
+        Dialog {
+            id: jlDialog
+            canAccept: linkField.text.indexOf("chat.whatsapp.com") >= 0
+                       || linkField.text.indexOf("whatsapp.com/channel") >= 0
+            property string jlStatus: ""
+
+            onAccepted: {
+                var isChannel = linkField.text.indexOf("/channel/") >= 0
+                var ep = isChannel ? "/channel/follow?link=" : "/group/join?link="
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + ep + encodeURIComponent(linkField.text.trim()))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        loadChats()
+                        loadWAContacts()
+                    }
+                }
+                xhr.send()
+            }
+
+            Column {
+                width: parent.width
+                DialogHeader { title: "Join group or channel" }
+                TextField {
+                    id: linkField
+                    width: parent.width
+                    label: "Invite link"
+                    placeholderText: "https://chat.whatsapp.com/… or https://whatsapp.com/channel/…"
+                    inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
+                    Component.onCompleted: {
+                        // Zwischenablage vorbefuellen, wenn sie einen Link enthaelt
+                        if (Clipboard.hasText && (Clipboard.text.indexOf("whatsapp.com") >= 0)) {
+                            text = Clipboard.text
+                        }
+                    }
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2*x
+                    text: "Paste a group invite link (chat.whatsapp.com/…) or a channel link (whatsapp.com/channel/…). Tip: scan QR codes with a scanner app and copy the link."
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                    wrapMode: Text.Wrap
+                }
+            }
+        }
+    }
+
+    Component {
+        id: newGroupPage
+        Dialog {
+            id: ngDialog
+            property var selected: ({})
+            property string ngSearch: ""
+            canAccept: ngNameText !== "" && selectedCount() > 0
+            property string ngNameText: ""
+
+            function ngFiltered() {
+                var all = mergedContacts()
+                if (ngSearch === "") return all
+                var q = ngSearch.toLowerCase()
+                var result = []
+                for (var i = 0; i < all.length; i++) {
+                    if (all[i].name.toLowerCase().indexOf(q) >= 0
+                        || all[i].jid.indexOf(q) >= 0) {
+                        result.push(all[i])
+                    }
+                }
+                return result
+            }
+
+            function selectedCount() {
+                var n = 0
+                for (var k in selected) if (selected[k]) n++
+                return n
+            }
+
+            onAccepted: {
+                var nums = []
+                for (var k in selected) if (selected[k]) nums.push(k)
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/create?name="
+                         + encodeURIComponent(ngNameText) + "&participants=" + nums.join(","))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) loadChats()
+                }
+                xhr.send()
+            }
+
+            // Kopfbereich fest ausserhalb des ListView, damit ein Modellwechsel
+            // beim Tippen weder Felder noch Tastaturfokus zerstoert
+            Column {
+                id: ngHeader
+                width: parent.width
+                DialogHeader { title: "Create group" }
+                TextField {
+                    id: ngName
+                    width: parent.width
+                    label: "Group name"
+                    placeholderText: "Group name (max 25 chars)"
+                    text: ngDialog.ngNameText
+                    onTextChanged: ngDialog.ngNameText = text
+                }
+                SearchField {
+                    id: ngSearchField
+                    width: parent.width
+                    placeholderText: "Search contacts"
+                    onTextChanged: ngDialog.ngSearch = text
+                }
+                SectionHeader {
+                    text: "Select participants"
+                          + (ngDialog.selectedCount() > 0 ? " (" + ngDialog.selectedCount() + " selected)" : "")
+                }
+            }
+
+            SilicaListView {
+                anchors.top: ngHeader.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                clip: true
+                model: ngFiltered()
+
+                delegate: TextSwitch {
+                    text: modelData.name || ("+" + modelData.jid)
+                    checked: ngDialog.selected[modelData.jid] === true
+                    automaticCheck: false
+                    onClicked: {
+                        var sel = ngDialog.selected
+                        sel[modelData.jid] = !sel[modelData.jid]
+                        ngDialog.selected = sel
+                        checked = sel[modelData.jid]
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
         id: newChatPage
         Page {
             property string searchText: ""
 
             function filteredContacts() {
-                var merged = {}
-                var i, c
-                // Lokales Adressbuch
-                for (i = 0; i < peopleModel.count; i++) {
-                    var person = peopleModel.get(i)
-                    if (!person || !person.phoneDetails) continue
-                    for (var j = 0; j < person.phoneDetails.length; j++) {
-                        var jid = toJid(person.phoneDetails[j].normalizedNumber
-                                        || person.phoneDetails[j].number)
-                        if (jid && !merged[jid]) {
-                            merged[jid] = { jid: jid,
-                                            name: person.displayLabel || ("+" + jid),
-                                            source: "local" }
-                        }
-                    }
-                }
-                // WhatsApp-Kontakte (gewinnen bei gleicher Nummer: bestaetigt auf WA)
-                if (waContacts) {
-                    for (i = 0; i < waContacts.length; i++) {
-                        c = waContacts[i]
-                        merged[c.jid] = { jid: c.jid,
-                                          name: (merged[c.jid] && merged[c.jid].name)
-                                                || c.name || ("+" + c.jid),
-                                          source: "whatsapp" }
-                    }
-                }
+                var all = mergedContacts()
+                if (searchText === "") return all
                 var result = []
-                var s = searchText.toLowerCase()
-                for (var key in merged) {
-                    c = merged[key]
-                    if (s === "" || c.name.toLowerCase().indexOf(s) >= 0
-                                 || c.jid.indexOf(s) >= 0) {
+                var q = searchText.toLowerCase()
+                for (var i = 0; i < all.length; i++) {
+                    var c = all[i]
+                    if (c.name.toLowerCase().indexOf(q) >= 0 || c.jid.indexOf(q) >= 0) {
                         result.push(c)
                     }
                 }
-                result.sort(function(a, b) { return a.name.localeCompare(b.name) })
                 return result
             }
 
@@ -725,6 +1443,90 @@ ApplicationWindow {
             property string chatName: ""
             property string chatAvatar: ""
             property var msgs: []
+            property bool isChannel: false
+            property bool isGroupChat: chatJid.length > 15 && !isChannel
+            property string replyToId: ""
+            property string replyToText: ""
+            property string replyToSender: ""
+
+            property string editingId: ""
+            property string highlightMsgId: ""
+
+            function scrollToMsg(msgId) {
+                for (var i = 0; i < msgs.length; i++) {
+                    if (msgs[i].id === msgId) {
+                        msgList.positionViewAtIndex(i, ListView.Center)
+                        highlightMsgId = msgId
+                        highlightClear.restart()
+                        return
+                    }
+                }
+            }
+
+            Timer {
+                id: highlightClear
+                interval: 2000
+                repeat: false
+                onTriggered: highlightMsgId = ""
+            }
+
+            function blockAction(action) {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/block?jid=" + chatJid + "&action=" + action)
+                xhr.send()
+            }
+
+            function reactTo(msgId, msgSender, emoji) {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/react?chat=" + chatJid
+                         + "&id=" + encodeURIComponent(msgId)
+                         + "&sender=" + encodeURIComponent(msgSender)
+                         + "&emoji=" + encodeURIComponent(emoji))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) load()
+                }
+                xhr.send()
+            }
+
+            function revokeMessage(msgId) {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/revoke?chat=" + chatJid
+                         + "&id=" + encodeURIComponent(msgId))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) load()
+                }
+                xhr.send()
+            }
+
+            function reactionText(reactions) {
+                if (!reactions) return ""
+                var counts = {}
+                for (var who in reactions) {
+                    var e = reactions[who]
+                    counts[e] = (counts[e] || 0) + 1
+                }
+                var parts = []
+                for (var emoji in counts) {
+                    parts.push(counts[emoji] > 1 ? emoji + counts[emoji] : emoji)
+                }
+                return parts.join(" ")
+            }
+
+            function senderDisplay(number) {
+                if (!number) return ""
+                var n = findLocalContactName(number)
+                if (n) return n
+                if (waContactsMap[number]) return waContactsMap[number]
+                return "+" + number
+            }
+
+            function senderColor(number) {
+                var palette = ["#e57373", "#64b5f6", "#81c784", "#ffb74d",
+                               "#ba68c8", "#4dd0e1", "#f06292", "#a1887f"]
+                var h = 0
+                for (var i = 0; i < number.length; i++) h = (h * 31 + number.charCodeAt(i)) & 0x7fffffff
+                return palette[h % palette.length]
+            }
 
             function load() {
                 var xhr = new XMLHttpRequest()
@@ -739,11 +1541,27 @@ ApplicationWindow {
 
             function send() {
                 if (input.text === "") return
+                var url
+                if (editingId !== "") {
+                    url = "http://127.0.0.1:" + backendPort + "/edit?chat=" + chatJid
+                        + "&id=" + encodeURIComponent(editingId)
+                        + "&text=" + encodeURIComponent(input.text)
+                } else {
+                    url = "http://127.0.0.1:" + backendPort + "/send?to=" + chatJid
+                        + "&text=" + encodeURIComponent(input.text)
+                    if (replyToId !== "") {
+                        url += "&quoteId=" + encodeURIComponent(replyToId)
+                            + "&quoteSender=" + encodeURIComponent(replyToSender)
+                            + "&quoteText=" + encodeURIComponent(replyToText)
+                    }
+                }
                 var xhr = new XMLHttpRequest()
-                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/send?to=" + chatJid + "&text=" + encodeURIComponent(input.text))
+                xhr.open("GET", url)
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState === 4 && xhr.status === 200) {
                         input.text = ""
+                        editingId = ""
+                        replyToId = ""; replyToText = ""; replyToSender = ""
                         load()
                         loadChats()
                     }
@@ -804,9 +1622,79 @@ ApplicationWindow {
                 Component.onCompleted: positionTimer.start()
 
                 PullDownMenu {
-                    MenuItem { text: "Send file"; onClicked: pageStack.push(filePicker) }
-                    MenuItem { text: "Send image"; onClicked: pageStack.push(imagePicker) }
+                    MenuItem {
+                        text: "Refresh channel"
+                        visible: isChannel
+                        onClicked: {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/messages?jid=" + chatJid)
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) load()
+                            }
+                            xhr.send()
+                        }
+                    }
+                    MenuItem {
+                        text: "Unfollow channel"
+                        visible: isChannel
+                        onClicked: blockRemorse.execute("Unfollowing channel", function() {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/unfollow?jid=" + chatJid)
+                            xhr.send()
+                        })
+                    }
+                    MenuItem {
+                        text: "Search in chat"
+                        onClicked: pageStack.push(searchPage, { scopeJid: chatJid, scopeName: chatName })
+                    }
+                    MenuItem {
+                        text: "Load older messages"
+                        visible: chatJid !== "status" && !isChannel && !isChannel
+                        onClicked: {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/loadolder?chat=" + chatJid)
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) {
+                                    downloadError = xhr.responseText
+                                    lastDownloadFailId = ""
+                                    if (xhr.status === 200) reloadTimer.start()
+                                }
+                            }
+                            xhr.send()
+                        }
+                    }
+                    MenuItem {
+                        text: "Group info"
+                        visible: isGroupChat
+                        onClicked: pageStack.push(groupInfoPage, { groupJid: chatJid })
+                    }
+                    MenuItem {
+                        text: "Block contact"
+                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        onClicked: blockRemorse.execute("Blocking +" + chatJid, function() { blockAction("block") })
+                    }
+                    MenuItem {
+                        text: "Unblock contact"
+                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        onClicked: blockAction("unblock")
+                    }
+                    MenuItem {
+                        text: "Call +" + chatJid
+                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        onClicked: Qt.openUrlExternally("tel:+" + chatJid)
+                    }
+                    MenuItem { text: "Send file"; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(filePicker) }
+                    MenuItem { text: "Send image"; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(imagePicker) }
                     MenuItem { text: "Refresh"; onClicked: load() }
+                }
+
+                RemorsePopup { id: blockRemorse }
+
+                Timer {
+                    id: reloadTimer
+                    interval: 4000
+                    repeat: false
+                    onTriggered: { load(); loadChats() }
                 }
 
                 header: Item { height: Theme.paddingLarge }
@@ -838,8 +1726,59 @@ ApplicationWindow {
                 delegate: ListItem {
                     width: parent.width
                     contentHeight: msgContent.height + Theme.paddingSmall
+                    highlighted: down || menuOpen || modelData.id === highlightMsgId
                     
                     menu: ContextMenu {
+                        MenuItem {
+                            text: "Reply"
+                            visible: !modelData.revoked
+                            onClicked: {
+                                replyToId = modelData.id
+                                replyToText = (modelData.text || (modelData.mediaType ? "[" + modelData.mediaType + "]" : "")).substring(0, 120)
+                                replyToSender = modelData.fromMe ? "" : modelData.sender
+                            }
+                        }
+                        Row {
+                            id: reactRow
+                            height: Theme.itemSizeExtraSmall
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            spacing: Theme.paddingLarge
+                            visible: !modelData.revoked
+                            property string targetId: modelData.id
+                            property string targetSender: modelData.fromMe ? phone : modelData.sender
+                            Repeater {
+                                model: ["👍", "❤️", "😂", "😮", "😢", "🙏"]
+                                Label {
+                                    text: modelData
+                                    font.pixelSize: Theme.fontSizeLarge
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        anchors.margins: -Theme.paddingSmall
+                                        onClicked: reactTo(reactRow.targetId, reactRow.targetSender, text)
+                                    }
+                                }
+                            }
+                        }
+                        MenuItem {
+                            text: "Edit"
+                            visible: modelData.fromMe && !modelData.revoked && !modelData.mediaType && modelData.text !== ""
+                            onClicked: {
+                                editingId = modelData.id
+                                input.text = modelData.text
+                                input.forceActiveFocus()
+                            }
+                        }
+                        MenuItem {
+                            text: "Delete for everyone"
+                            visible: modelData.fromMe && !modelData.revoked
+                            onClicked: revokeMessage(modelData.id)
+                        }
+                        MenuItem {
+                            text: "Call back +" + modelData.sender
+                            visible: modelData.text && modelData.text.indexOf("\ud83d\udcde") === 0 && !modelData.fromMe
+                            onClicked: Qt.openUrlExternally("tel:+" + modelData.sender)
+                        }
                         MenuItem {
                             text: "Open"
                             visible: modelData.localPath && modelData.localPath !== ""
@@ -859,6 +1798,82 @@ ApplicationWindow {
                         anchors.left: modelData.fromMe ? undefined : parent.left
                         anchors.margins: Theme.horizontalPageMargin
                         spacing: Theme.paddingSmall
+
+                        Rectangle {
+                            visible: modelData.mediaType === "location"
+                            width: parent.width
+                            height: visible ? Theme.itemSizeMedium : 0
+                            color: Theme.rgba(Theme.primaryColor, 0.1)
+                            radius: Theme.paddingMedium
+
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: Theme.paddingMedium
+                                Label { text: "📍"; font.pixelSize: Theme.fontSizeExtraLarge }
+                                Column {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    Label { text: "Location"; font.pixelSize: Theme.fontSizeSmall }
+                                    Label {
+                                        text: "Tap to open in maps"
+                                        font.pixelSize: Theme.fontSizeExtraSmall
+                                        color: Theme.secondaryColor
+                                    }
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: Qt.openUrlExternally("geo:" + modelData.latitude + "," + modelData.longitude)
+                            }
+                        }
+
+                        Rectangle {
+                            visible: modelData.quotedId ? true : false
+                            width: parent.width
+                            height: visible ? quoteCol.height + 2*Theme.paddingSmall : 0
+                            color: Theme.rgba(Theme.highlightColor, 0.15)
+                            radius: Theme.paddingSmall
+                            border.width: 0
+
+                            Rectangle {
+                                width: 4
+                                height: parent.height
+                                color: "#25D366"
+                                radius: 2
+                            }
+
+                            Column {
+                                id: quoteCol
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: Theme.paddingMedium
+                                width: parent.width - 2*Theme.paddingMedium
+
+                                Label {
+                                    visible: modelData.quotedSender ? true : false
+                                    text: modelData.quotedSender ? senderDisplay(modelData.quotedSender) : ""
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    font.bold: true
+                                    color: Theme.highlightColor
+                                }
+                                Label {
+                                    width: parent.width
+                                    text: modelData.quotedText || ""
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    color: Theme.secondaryColor
+                                    wrapMode: Text.Wrap
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+
+                        Label {
+                            visible: isGroupChat && !modelData.fromMe
+                            text: visible ? senderDisplay(modelData.sender) : ""
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            font.bold: true
+                            color: visible ? senderColor(modelData.sender) : Theme.primaryColor
+                        }
 
                         Rectangle {
                             visible: modelData.mediaType === "image"
@@ -1037,7 +2052,14 @@ ApplicationWindow {
                         }
 
                         Label {
-                            text: formatTime(modelData.timestamp)
+                            visible: reactionText(modelData.reactions) !== ""
+                            text: reactionText(modelData.reactions)
+                            font.pixelSize: Theme.fontSizeSmall
+                            anchors.right: modelData.fromMe ? parent.right : undefined
+                        }
+
+                        Label {
+                            text: formatTime(modelData.timestamp) + (modelData.edited ? " · edited" : "")
                             font.pixelSize: Theme.fontSizeExtraSmall
                             color: Theme.secondaryColor
                             anchors.right: modelData.fromMe ? parent.right : undefined
@@ -1065,6 +2087,50 @@ ApplicationWindow {
                 id: inputCol
                 width: parent.width
                 anchors.bottom: parent.bottom
+                visible: chatJid !== "status" && !isChannel
+
+                // Banner: Antworten auf / Bearbeiten von
+                Rectangle {
+                    visible: replyToId !== "" || editingId !== ""
+                    width: parent.width
+                    height: visible ? Theme.itemSizeExtraSmall : 0
+                    color: Theme.rgba(Theme.highlightColor, 0.15)
+
+                    Rectangle { width: 4; height: parent.height; color: "#25D366" }
+
+                    Column {
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: Theme.paddingMedium
+                        width: parent.width - Theme.itemSizeSmall - 2*Theme.paddingMedium
+
+                        Label {
+                            text: editingId !== "" ? "Edit message"
+                                  : (replyToSender ? "Reply to " + senderDisplay(replyToSender) : "Reply")
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            font.bold: true
+                            color: Theme.highlightColor
+                        }
+                        Label {
+                            visible: replyToId !== ""
+                            width: parent.width
+                            text: replyToText
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: Theme.secondaryColor
+                            elide: Text.ElideRight
+                            maximumLineCount: 1
+                        }
+                    }
+
+                    IconButton {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        icon.source: "image://theme/icon-m-clear"
+                        onClicked: {
+                            replyToId = ""; replyToText = ""; replyToSender = ""
+                            if (editingId !== "") { editingId = ""; input.text = "" }
+                        }
+                    }
+                }
 
                 Row {
                     width: parent.width

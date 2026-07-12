@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.4.11
+Version:    0.7.4
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,103 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.4-1
+- Search within a chat or group: "Search in chat" in the chat pulley
+  opens a scoped search; tapping a result jumps back into the chat,
+  scrolls to the matching message and briefly highlights it
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.3-1
+- Search (main pulley): full-text search across chat names and all
+  stored message texts with debounced live results - chat matches
+  first, then messages newest-first with highlighted-context snippets;
+  tap a result to open the chat
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.2-1
+- Fix keyboard closing after every letter in the group-creation
+  contact search: filtering swaps the list model, which recreates the
+  ListView header and destroyed the focused search field. Name and
+  search fields now live in a fixed header above the list
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.1-1
+- Group creation: search field to filter the contact list by name or
+  number; selection is kept while filtering and the participant count
+  is shown in the section header
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.0-1
+- Channels (WhatsApp newsletters): browse your subscribed channels
+  (main pulley > Channels), read their messages in a read-only chat
+  with media support, refresh on demand, follow via invite link and
+  unfollow
+- "Join via link" in the main pulley accepts both group invite links
+  (chat.whatsapp.com/...) and channel links (whatsapp.com/channel/...)
+  and prefills from the clipboard - scan QR codes with any scanner app
+  and copy the link
+- Communities: the group info page of a community lists its linked
+  groups, tap to open them
+- Group creation now offers the full merged contact list (local
+  address book + WhatsApp contacts) instead of only WhatsApp contacts
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.6.0-1
+- Load older messages: pulley entry in every chat asks your phone for
+  the 50 messages before the oldest known one (on-demand history sync,
+  phone must be online). Repeat to page further back - this also
+  recovers media in chats paired with pre-0.4.9 versions
+- Pin, mute and archive chats via long-press in the chat list, synced
+  to your other devices via app state; pinned chats sort first,
+  archived last with markers in the list
+- Block and unblock contacts from the chat pulley menu
+- Group management: create groups (name + participant selection),
+  group info page with participant list, add/remove participants,
+  rename, change group photo, copy invite link, leave group
+- WhatsApp status updates now collect in a read-only "Status updates"
+  pseudo-chat instead of producing a broken chat entry
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.5.2-1
+- Media retry: when a tapped download fails because the media expired
+  on WhatsApp's servers (404/410), the app now asks your phone to
+  re-upload it (SendMediaRetryReceipt). Once the phone responds, the
+  refreshed direct path is used to download automatically; if the app
+  was quicker than the phone, just tap again. Requires the phone to
+  be online
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.5.1-1
+- Edit your own profile: push name, about text and profile photo
+  (Profile entry in the main pulley menu). Photos are converted to
+  JPEG automatically; new /profile, /setprofile and /setphoto
+  endpoints
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.5.0-1
+- Reactions: incoming reactions are shown aggregated under the bubble;
+  react yourself via long-press (six common emojis)
+- Replies/quotes: quoted messages are shown in a WhatsApp-style box;
+  reply via long-press > Reply with a banner above the input field
+- Edit and "Delete for everyone" for own messages via long-press;
+  incoming edits ("edited" marker) and deletions are applied too
+- Location messages show as a tile; tapping opens the coordinates via
+  geo: URI in your maps app (e.g. Pure Maps). Contact cards, polls and
+  group invites are rendered as text instead of being silently dropped
+- All of the above also applies to history-synced chats where possible
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.14-1
+- "Call +<number>" in the chat page pulley menu (1:1 chats) starts a
+  regular cellular call via the Sailfish Phone app - the practical
+  answer to WhatsApp calls, which cannot be taken on Sailfish
+- "Call back" in the context menu of missed-call entries
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.13-1
+- Group chats now show the sender's name above each message bubble,
+  in a stable per-sender color (WhatsApp style). Names resolve via
+  local address book, then WhatsApp push name, then phone number
+- History sync now stores the actual group participant as sender
+  instead of the group JID
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.12-1
+- Incoming WhatsApp calls are now logged in the chat: "Missed call"
+  or "Incoming call (answered on your phone)", for 1:1 and group
+  calls. whatsmeow only receives call signaling - actually taking
+  calls on Sailfish is not possible, but missed calls are no longer
+  silently invisible
+
 * Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.11-1
 - The pairing form (phone number field + "Start pairing") is now only
   shown when the device is actually not linked. While an existing

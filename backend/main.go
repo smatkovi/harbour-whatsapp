@@ -18,9 +18,17 @@ import (
     "time"
     "os/signal"
 
+    "bytes"
+    "image"
+    _ "image/gif"
+    "image/jpeg"
+    _ "image/png"
+
     _ "github.com/mutecomm/go-sqlcipher/v4"
     "go.mau.fi/whatsmeow"
+    "go.mau.fi/whatsmeow/appstate"
     "go.mau.fi/whatsmeow/proto/waE2E"
+    "go.mau.fi/whatsmeow/proto/waMmsRetry"
     "go.mau.fi/whatsmeow/store/sqlstore"
     "go.mau.fi/whatsmeow/types"
     "go.mau.fi/whatsmeow/types/events"
@@ -58,6 +66,108 @@ var contactsFile = "contacts.enc"
 var rawMediaFile = "rawmedia.enc"
 var rawMedia = make(map[string]string) // msgID -> base64(proto waE2E.Message)
 var rawMediaMutex sync.RWMutex
+var activeCalls = make(map[string]bool) // CallID -> accepted
+var activeCallsMutex sync.Mutex
+var pendingRetries = make(map[string][]byte) // msgID -> mediaKey
+var pendingRetriesMutex sync.Mutex
+
+type ChatSettings struct {
+    Pinned   bool `json:"pinned,omitempty"`
+    Muted    bool `json:"muted,omitempty"`
+    Archived bool `json:"archived,omitempty"`
+    IsChannel bool `json:"isChannel,omitempty"`
+}
+
+var chatSettings = make(map[string]*ChatSettings) // chatJid -> settings
+var chatSettingsMutex sync.RWMutex
+var chatSettingsFile = "chatsettings.enc"
+var knownChannels = make(map[string]bool) // chatJid(user) -> true
+var knownChannelsMutex sync.RWMutex
+var knownChannelsFile = "channels.enc"
+
+func loadKnownChannels() {
+    knownChannelsMutex.Lock()
+    defer knownChannelsMutex.Unlock()
+    LoadEncrypted(knownChannelsFile, &knownChannels)
+}
+
+func saveKnownChannels() {
+    knownChannelsMutex.RLock()
+    defer knownChannelsMutex.RUnlock()
+    SaveEncrypted(knownChannelsFile, knownChannels)
+}
+
+func markChannel(jid string) {
+    knownChannelsMutex.Lock()
+    knownChannels[jid] = true
+    knownChannelsMutex.Unlock()
+    go saveKnownChannels()
+}
+
+// importNewsletterMessages holt Nachrichten eines Kanals und legt sie im
+// normalen Nachrichtenspeicher ab (Dedup ueber addMessage).
+func importNewsletterMessages(jid types.JID, count int) (int, error) {
+    msgs, err := client.GetNewsletterMessages(ctx, jid, &whatsmeow.GetNewsletterMessagesParams{Count: count})
+    if err != nil {
+        return 0, err
+    }
+    n := 0
+    for _, nm := range msgs {
+        if nm.Message == nil {
+            continue
+        }
+        text := nm.Message.GetConversation()
+        if text == "" {
+            text = nm.Message.GetExtendedTextMessage().GetText()
+        }
+        mediaType, mimeType, fileName, fileSize, caption, _ := extractMedia(nm.Message)
+        if caption != "" {
+            text = caption
+        }
+        var lat, lon float64
+        if text == "" && mediaType == "" {
+            text, mediaType, lat, lon = specialInfo(nm.Message)
+        }
+        if text == "" && mediaType == "" {
+            continue
+        }
+        if mediaType != "" {
+            stashRawMedia(string(nm.MessageID), nm.Message)
+        }
+        addMessage(Message{
+            ID: string(nm.MessageID), Sender: jid.User, Text: text,
+            Timestamp: nm.Timestamp.Unix(), FromMe: false, ChatJID: jid.User,
+            MediaType: mediaType, MimeType: mimeType, FileName: fileName,
+            FileSize: fileSize, Latitude: lat, Longitude: lon,
+        })
+        n++
+    }
+    markChannel(jid.User)
+    return n, nil
+}
+
+func loadChatSettings() {
+    chatSettingsMutex.Lock()
+    defer chatSettingsMutex.Unlock()
+    LoadEncrypted(chatSettingsFile, &chatSettings)
+}
+
+func saveChatSettings() {
+    chatSettingsMutex.RLock()
+    defer chatSettingsMutex.RUnlock()
+    SaveEncrypted(chatSettingsFile, chatSettings)
+}
+
+func getChatSettings(jid string) *ChatSettings {
+    chatSettingsMutex.Lock()
+    defer chatSettingsMutex.Unlock()
+    cs, ok := chatSettings[jid]
+    if !ok {
+        cs = &ChatSettings{}
+        chatSettings[jid] = cs
+    }
+    return cs
+}
 var avatarsFile = "avatars.enc"
 
 var mimeTypes = map[string]string{
@@ -124,10 +234,22 @@ type Message struct {
     FileName  string `json:"fileName,omitempty"`
     FileSize  uint64 `json:"fileSize,omitempty"`
     LocalPath string `json:"localPath,omitempty"`
+    Latitude  float64 `json:"latitude,omitempty"`
+    Longitude float64 `json:"longitude,omitempty"`
+    QuotedID     string `json:"quotedId,omitempty"`
+    QuotedText   string `json:"quotedText,omitempty"`
+    QuotedSender string `json:"quotedSender,omitempty"`
+    Reactions map[string]string `json:"reactions,omitempty"` // Nummer -> Emoji
+    Edited  bool `json:"edited,omitempty"`
+    Revoked bool `json:"revoked,omitempty"`
 }
 
 type Chat struct {
     JID         string `json:"jid"`
+    Pinned   bool `json:"pinned,omitempty"`
+    Muted    bool `json:"muted,omitempty"`
+    Archived bool `json:"archived,omitempty"`
+    IsChannel bool `json:"isChannel,omitempty"`
     Name        string `json:"name"`
     LastMessage string `json:"lastMessage"`
     LastTime    int64  `json:"lastTime"`
@@ -448,6 +570,9 @@ func loadContacts() {
 }
 
 func getContactName(jid string) string {
+    if jid == "status" {
+        return "Status updates"
+    }
     contactsMutex.RLock()
     defer contactsMutex.RUnlock()
     if name, ok := contacts[jid]; ok {
@@ -521,6 +646,160 @@ func resolvePN(jid types.JID, alt types.JID) types.JID {
     return jid
 }
 
+// getContextInfo liefert die ContextInfo (Zitate) des relevanten Teils.
+type pollLike interface {
+    GetName() string
+    GetOptions() []*waE2E.PollCreationMessage_Option
+}
+
+type mediaKeyed interface {
+    GetMediaKey() []byte
+}
+
+// requestMediaRetry bittet das Telefon, ein abgelaufenes Medium neu
+// hochzuladen. Die Antwort kommt asynchron als events.MediaRetry.
+func requestMediaRetry(m *Message, dl whatsmeow.DownloadableMessage) error {
+    mk, ok := dl.(mediaKeyed)
+    if !ok || len(mk.GetMediaKey()) == 0 {
+        return fmt.Errorf("no media key available")
+    }
+    chatJID := toChatJID(m.ChatJID)
+    senderJID := types.NewJID(m.Sender, types.DefaultUserServer)
+    info := &types.MessageInfo{
+        ID: types.MessageID(m.ID),
+        MessageSource: types.MessageSource{
+            Chat:     chatJID,
+            Sender:   senderJID,
+            IsFromMe: m.FromMe,
+        },
+    }
+    if err := client.SendMediaRetryReceipt(ctx, info, mk.GetMediaKey()); err != nil {
+        return err
+    }
+    pendingRetriesMutex.Lock()
+    pendingRetries[m.ID] = mk.GetMediaKey()
+    pendingRetriesMutex.Unlock()
+    return nil
+}
+
+// specialInfo bildet Standort/Kontakt/Umfrage/Einladung als Text ab.
+func specialInfo(msg *waE2E.Message) (text, mediaType string, lat, lon float64) {
+    if loc := msg.GetLocationMessage(); loc != nil {
+        lat, lon = loc.GetDegreesLatitude(), loc.GetDegreesLongitude()
+        text = strings.TrimSpace(loc.GetName() + " " + loc.GetAddress())
+        if text == "" {
+            text = fmt.Sprintf("%.5f, %.5f", lat, lon)
+        }
+        return "📍 " + text, "location", lat, lon
+    }
+    if loc := msg.GetLiveLocationMessage(); loc != nil {
+        return "📍 Live location", "location", loc.GetDegreesLatitude(), loc.GetDegreesLongitude()
+    }
+    if cm := msg.GetContactMessage(); cm != nil {
+        return "👤 " + cm.GetDisplayName(), "", 0, 0
+    }
+    if ca := msg.GetContactsArrayMessage(); ca != nil {
+        names := []string{}
+        for _, c := range ca.GetContacts() {
+            names = append(names, c.GetDisplayName())
+        }
+        return "👤 " + strings.Join(names, ", "), "", 0, 0
+    }
+    if p := msg.GetPollCreationMessageV3(); p != nil {
+        return pollText(p), "", 0, 0
+    }
+    if p := msg.GetPollCreationMessageV2(); p != nil {
+        return pollText(p), "", 0, 0
+    }
+    if p := msg.GetPollCreationMessage(); p != nil {
+        return pollText(p), "", 0, 0
+    }
+    if gi := msg.GetGroupInviteMessage(); gi != nil {
+        return "👥 Group invite: " + gi.GetGroupName(), "", 0, 0
+    }
+    return "", "", 0, 0
+}
+
+func toChatJID(to string) types.JID {
+    if len(to) > 15 {
+        return types.NewJID(to, types.GroupServer)
+    }
+    return types.NewJID(to, types.DefaultUserServer)
+}
+
+func pollText(p pollLike) string {
+    t := "📊 Poll: " + p.GetName()
+    for _, o := range p.GetOptions() {
+        t += "\n• " + o.GetOptionName()
+    }
+    return t
+}
+
+func getContextInfo(msg *waE2E.Message) *waE2E.ContextInfo {
+    switch {
+    case msg.GetExtendedTextMessage() != nil:
+        return msg.GetExtendedTextMessage().GetContextInfo()
+    case msg.GetImageMessage() != nil:
+        return msg.GetImageMessage().GetContextInfo()
+    case msg.GetVideoMessage() != nil:
+        return msg.GetVideoMessage().GetContextInfo()
+    case msg.GetAudioMessage() != nil:
+        return msg.GetAudioMessage().GetContextInfo()
+    case msg.GetDocumentMessage() != nil:
+        return msg.GetDocumentMessage().GetContextInfo()
+    case msg.GetStickerMessage() != nil:
+        return msg.GetStickerMessage().GetContextInfo()
+    case msg.GetLocationMessage() != nil:
+        return msg.GetLocationMessage().GetContextInfo()
+    }
+    return nil
+}
+
+// quotedSnippet extrahiert eine kurze Vorschau der zitierten Nachricht.
+func quotedSnippet(q *waE2E.Message) string {
+    if q == nil {
+        return ""
+    }
+    t := q.GetConversation()
+    if t == "" {
+        t = q.GetExtendedTextMessage().GetText()
+    }
+    if t == "" {
+        switch {
+        case q.GetImageMessage() != nil:
+            t = "🖼 " + q.GetImageMessage().GetCaption()
+        case q.GetVideoMessage() != nil:
+            t = "🎬 " + q.GetVideoMessage().GetCaption()
+        case q.GetAudioMessage() != nil:
+            t = "🎵 Audio"
+        case q.GetDocumentMessage() != nil:
+            t = "📄 " + q.GetDocumentMessage().GetFileName()
+        case q.GetStickerMessage() != nil:
+            t = "Sticker"
+        case q.GetLocationMessage() != nil:
+            t = "📍 Location"
+        }
+    }
+    if len(t) > 120 {
+        t = t[:120] + "…"
+    }
+    return strings.TrimSpace(t)
+}
+
+// updateMessage sucht eine Nachricht per Chat+ID und wendet fn an.
+func updateMessage(chatJid, msgID string, fn func(*Message)) bool {
+    msgMutex.Lock()
+    defer msgMutex.Unlock()
+    for i := range messages {
+        if messages[i].ID == msgID && (chatJid == "" || messages[i].ChatJID == chatJid) {
+            fn(&messages[i])
+            go saveMessages()
+            return true
+        }
+    }
+    return false
+}
+
 func eventHandler(evt interface{}) {
     switch v := evt.(type) {
     case *events.Message:
@@ -534,6 +813,110 @@ func eventHandler(evt interface{}) {
             text = *msg.Conversation
         } else if msg.ExtendedTextMessage != nil {
             text = msg.ExtendedTextMessage.GetText()
+        }
+
+        var latitude, longitude float64
+
+        // Reaktionen: Zielnachricht aktualisieren, keine neue Nachricht
+        if re := msg.GetReactionMessage(); re != nil {
+            targetID := re.GetKey().GetID()
+            emoji := re.GetText() // leer = Reaktion entfernt
+            reactor := resolvePN(v.Info.Sender, v.Info.SenderAlt).User
+            updateMessage("", targetID, func(m *Message) {
+                if m.Reactions == nil {
+                    m.Reactions = make(map[string]string)
+                }
+                if emoji == "" {
+                    delete(m.Reactions, reactor)
+                } else {
+                    m.Reactions[reactor] = emoji
+                }
+            })
+            return
+        }
+
+        // Protokoll: Loeschen ("fuer alle") und Bearbeiten
+        if pm := msg.GetProtocolMessage(); pm != nil {
+            switch pm.GetType() {
+            case waE2E.ProtocolMessage_REVOKE:
+                updateMessage("", pm.GetKey().GetID(), func(m *Message) {
+                    m.Revoked = true
+                    m.Text = "🚫 This message was deleted"
+                    m.MediaType = ""
+                    m.LocalPath = ""
+                })
+                return
+            case waE2E.ProtocolMessage_MESSAGE_EDIT:
+                if em := pm.GetEditedMessage(); em != nil {
+                    newText := em.GetConversation()
+                    if newText == "" {
+                        newText = em.GetExtendedTextMessage().GetText()
+                    }
+                    if newText != "" {
+                        updateMessage("", pm.GetKey().GetID(), func(m *Message) {
+                            m.Text = newText
+                            m.Edited = true
+                        })
+                    }
+                }
+                return
+            default:
+                return // andere Protokollnachrichten still ignorieren
+            }
+        }
+
+        // Standort (auch Live-Standort: erster Fix)
+        if loc := msg.GetLocationMessage(); loc != nil {
+            mediaType = "location"
+            latitude = loc.GetDegreesLatitude()
+            longitude = loc.GetDegreesLongitude()
+            text = strings.TrimSpace(loc.GetName() + " " + loc.GetAddress())
+            if text == "" {
+                text = fmt.Sprintf("%.5f, %.5f", latitude, longitude)
+            }
+            text = "📍 " + text
+        } else if loc := msg.GetLiveLocationMessage(); loc != nil {
+            mediaType = "location"
+            latitude = loc.GetDegreesLatitude()
+            longitude = loc.GetDegreesLongitude()
+            text = "📍 Live location"
+        }
+
+        // Kontakt-vCards
+        if cm := msg.GetContactMessage(); cm != nil {
+            text = "👤 " + cm.GetDisplayName()
+        } else if ca := msg.GetContactsArrayMessage(); ca != nil {
+            names := []string{}
+            for _, c := range ca.GetContacts() {
+                names = append(names, c.GetDisplayName())
+            }
+            text = "👤 " + strings.Join(names, ", ")
+        }
+
+        // Umfragen
+        if poll := msg.GetPollCreationMessageV3(); poll != nil {
+            text = pollText(poll)
+        } else if poll := msg.GetPollCreationMessageV2(); poll != nil {
+            text = pollText(poll)
+        } else if poll := msg.GetPollCreationMessage(); poll != nil {
+            text = pollText(poll)
+        }
+
+        // Gruppen-Einladung
+        if gi := msg.GetGroupInviteMessage(); gi != nil {
+            text = "👥 Group invite: " + gi.GetGroupName()
+        }
+
+        // Zitat/Antwort auslesen
+        var quotedID, quotedText, quotedSender string
+        if ci := getContextInfo(msg); ci != nil && ci.GetStanzaID() != "" {
+            quotedID = ci.GetStanzaID()
+            quotedText = quotedSnippet(ci.GetQuotedMessage())
+            if p := ci.GetParticipant(); p != "" {
+                if pj, err := types.ParseJID(p); err == nil {
+                    quotedSender = resolvePN(pj, types.EmptyJID).User
+                }
+            }
         }
         
         if msg.ImageMessage != nil {
@@ -621,6 +1004,9 @@ func eventHandler(evt interface{}) {
             chatJID = resolvePN(chatJID, alt)
         }
         chatJid := chatJID.User
+        if chatJID.Server == types.BroadcastServer && chatJID.User == "status" {
+            chatJid = "status"
+        }
         sender := senderJID.User
         if v.Info.IsFromMe {
             sender = client.Store.ID.User
@@ -637,6 +1023,8 @@ func eventHandler(evt interface{}) {
                 ID: v.Info.ID, Sender: sender, Text: text, Timestamp: v.Info.Timestamp.Unix(),
                 FromMe: v.Info.IsFromMe, ChatJID: chatJid, MediaType: mediaType,
                 MimeType: mimeType, FileName: fileName, FileSize: fileSize, LocalPath: localPath,
+                Latitude: latitude, Longitude: longitude,
+                QuotedID: quotedID, QuotedText: quotedText, QuotedSender: quotedSender,
             })
             if mediaType != "" {
                 fmt.Printf("📩 %s: [%s] %s\n", chatJid, mediaType, text)
@@ -645,6 +1033,122 @@ func eventHandler(evt interface{}) {
             }
         }
         
+    case *events.MediaRetry:
+        pendingRetriesMutex.Lock()
+        mediaKey, ok := pendingRetries[string(v.MessageID)]
+        delete(pendingRetries, string(v.MessageID))
+        pendingRetriesMutex.Unlock()
+        if !ok {
+            break
+        }
+        if v.Error != nil || v.Ciphertext == nil {
+            fmt.Printf("⚠️ Media retry failed for %s (phone offline or media gone)\n", v.MessageID)
+            break
+        }
+        retryData, err := whatsmeow.DecryptMediaRetryNotification(v, mediaKey)
+        if err != nil || retryData.GetResult() != waMmsRetry.MediaRetryNotification_SUCCESS {
+            fmt.Printf("⚠️ Media retry unsuccessful for %s: %v / %v\n", v.MessageID, err, retryData.GetResult())
+            break
+        }
+        msgID := string(v.MessageID)
+        rawMediaMutex.RLock()
+        b64, ok2 := rawMedia[msgID]
+        rawMediaMutex.RUnlock()
+        if !ok2 {
+            break
+        }
+        data, err := base64.StdEncoding.DecodeString(b64)
+        if err != nil {
+            break
+        }
+        var full waE2E.Message
+        if err := proto.Unmarshal(data, &full); err != nil {
+            break
+        }
+        // Neuen DirectPath in den downloadbaren Teil schreiben
+        newPath := retryData.GetDirectPath()
+        switch {
+        case full.GetImageMessage() != nil:
+            full.GetImageMessage().DirectPath = proto.String(newPath)
+        case full.GetVideoMessage() != nil:
+            full.GetVideoMessage().DirectPath = proto.String(newPath)
+        case full.GetAudioMessage() != nil:
+            full.GetAudioMessage().DirectPath = proto.String(newPath)
+        case full.GetDocumentMessage() != nil:
+            full.GetDocumentMessage().DirectPath = proto.String(newPath)
+        case full.GetStickerMessage() != nil:
+            full.GetStickerMessage().DirectPath = proto.String(newPath)
+        }
+        _, mimeType, fileName, _, _, dl := extractMedia(&full)
+        if dl == nil {
+            break
+        }
+        if path, err := downloadMedia(msgID, dl, mimeType, fileName); err == nil {
+            updateMessage("", msgID, func(m *Message) { m.LocalPath = path })
+            rawMediaMutex.Lock()
+            delete(rawMedia, msgID)
+            rawMediaMutex.Unlock()
+            go saveRawMedia()
+            fmt.Printf("📥 Media retry succeeded for %s\n", msgID)
+        } else {
+            // aktualisierten Proto aufheben, naechster /download-Versuch nutzt ihn
+            if nd, merr := proto.Marshal(&full); merr == nil {
+                rawMediaMutex.Lock()
+                rawMedia[msgID] = base64.StdEncoding.EncodeToString(nd)
+                rawMediaMutex.Unlock()
+                go saveRawMedia()
+            }
+            fmt.Printf("⚠️ Download after retry failed for %s: %v\n", msgID, err)
+        }
+
+    case *events.CallOffer:
+        activeCallsMutex.Lock()
+        activeCalls[v.CallID] = false
+        activeCallsMutex.Unlock()
+        fmt.Printf("📞 Incoming call from %s\n", v.From.User)
+
+    case *events.CallOfferNotice:
+        activeCallsMutex.Lock()
+        activeCalls[v.CallID] = false
+        activeCallsMutex.Unlock()
+        fmt.Printf("📞 Incoming %s call (%s) from %s\n", v.Media, v.Type, v.From.User)
+
+    case *events.CallAccept:
+        activeCallsMutex.Lock()
+        activeCalls[v.CallID] = true
+        activeCallsMutex.Unlock()
+
+    case *events.CallTerminate:
+        activeCallsMutex.Lock()
+        accepted, known := activeCalls[v.CallID]
+        delete(activeCalls, v.CallID)
+        activeCallsMutex.Unlock()
+        if !known {
+            break
+        }
+        caller := v.CallCreator
+        if caller.IsEmpty() {
+            caller = v.From
+        }
+        callerPN := resolvePN(caller, types.EmptyJID)
+        // Eigene abgehende Anrufe (am Telefon gestartet) nicht protokollieren
+        if client != nil && client.Store.ID != nil && callerPN.User == client.Store.ID.User {
+            break
+        }
+        chatJid := callerPN.User
+        if !v.GroupJID.IsEmpty() {
+            chatJid = v.GroupJID.ToNonAD().User
+        }
+        text := "📞 Missed call"
+        if accepted {
+            text = "📞 Incoming call (answered on your phone)"
+        }
+        addMessage(Message{
+            ID: "call-" + v.CallID, Sender: chatJid, Text: text,
+            Timestamp: v.Timestamp.Unix(), FromMe: false, ChatJID: chatJid,
+        })
+        fmt.Printf("%s from %s\n", text, chatJid)
+
     case *events.Connected:
         isConnected = true
         connState = "connected"
@@ -734,6 +1238,10 @@ func eventHandler(evt interface{}) {
                 if caption != "" {
                     text = caption
                 }
+                var latitude, longitude float64
+                if text == "" && mediaType == "" {
+                    text, mediaType, latitude, longitude = specialInfo(msg)
+                }
                 if text != "" || mediaType != "" {
                     fromMe := hm.Message.GetKey().GetFromMe()
                     ts := int64(hm.Message.GetMessageTimestamp())
@@ -741,11 +1249,18 @@ func eventHandler(evt interface{}) {
                     if mediaType != "" {
                         stashRawMedia(msgID, msg)
                     }
+                    sender := chatJid
+                    if p := hm.Message.GetKey().GetParticipant(); p != "" {
+                        if pj, err := types.ParseJID(p); err == nil {
+                            sender = resolvePN(pj, types.EmptyJID).User
+                        }
+                    }
                     addMessage(Message{
-                        ID: msgID, Sender: chatJid, Text: text, Timestamp: ts,
+                        ID: msgID, Sender: sender, Text: text, Timestamp: ts,
                         FromMe: fromMe, ChatJID: chatJid,
                         MediaType: mediaType, MimeType: mimeType,
                         FileName: fileName, FileSize: fileSize,
+                        Latitude: latitude, Longitude: longitude,
                     })
                 }
             }
@@ -784,10 +1299,27 @@ func getChats() []Chat {
         }
     }
     chats := make([]Chat, 0, len(chatMap))
+    chatSettingsMutex.RLock()
     for _, c := range chatMap {
+        if cs, ok := chatSettings[c.JID]; ok {
+            c.Pinned, c.Muted, c.Archived = cs.Pinned, cs.Muted, cs.Archived
+        }
+        knownChannelsMutex.RLock()
+        c.IsChannel = knownChannels[c.JID]
+        knownChannelsMutex.RUnlock()
         chats = append(chats, *c)
     }
-    sort.Slice(chats, func(i, j int) bool { return chats[i].LastTime > chats[j].LastTime })
+    chatSettingsMutex.RUnlock()
+    sort.Slice(chats, func(i, j int) bool {
+        a, b := chats[i], chats[j]
+        if a.Archived != b.Archived {
+            return !a.Archived // archivierte ans Ende
+        }
+        if a.Pinned != b.Pinned {
+            return a.Pinned // gepinnte nach vorne
+        }
+        return a.LastTime > b.LastTime
+    })
     return chats
 }
 
@@ -910,6 +1442,8 @@ func main() {
     // Load encrypted data files
     loadMessages()
     loadRawMedia()
+    loadChatSettings()
+    loadKnownChannels()
     loadContactsFromDisk()
     loadAvatarsFromDisk()
 
@@ -1076,7 +1610,26 @@ func main() {
         } else {
             jid = types.NewJID(to, "s.whatsapp.net")
         }
-        msg := &waE2E.Message{Conversation: proto.String(text)}
+        quoteID := r.URL.Query().Get("quoteId")
+        quoteSender := r.URL.Query().Get("quoteSender")
+        quoteText := r.URL.Query().Get("quoteText")
+        var msg *waE2E.Message
+        if quoteID != "" {
+            participant := quoteSender
+            if participant == "" && client.Store.ID != nil {
+                participant = client.Store.ID.User
+            }
+            msg = &waE2E.Message{ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+                Text: proto.String(text),
+                ContextInfo: &waE2E.ContextInfo{
+                    StanzaID:      proto.String(quoteID),
+                    Participant:   proto.String(participant + "@" + types.DefaultUserServer),
+                    QuotedMessage: &waE2E.Message{Conversation: proto.String(quoteText)},
+                },
+            }}
+        } else {
+            msg = &waE2E.Message{Conversation: proto.String(text)}
+        }
         resp, err := client.SendMessage(ctx, jid, msg)
         if err != nil {
             http.Error(w, err.Error(), 500)
@@ -1085,6 +1638,7 @@ func main() {
         addMessage(Message{
             ID: resp.ID, Sender: client.Store.ID.User, Text: text,
             Timestamp: time.Now().Unix(), FromMe: true, ChatJID: to,
+            QuotedID: quoteID, QuotedText: quoteText, QuotedSender: quoteSender,
         })
         w.Write([]byte("ok"))
     })
@@ -1177,6 +1731,14 @@ func main() {
         }
         path, err := downloadMedia(msgID, dl, mimeType, fileName)
         if err != nil {
+            // Abgelaufen? Telefon um Neu-Upload bitten und spaeter erneut versuchen
+            if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "410") {
+                if rerr := requestMediaRetry(target, dl); rerr == nil {
+                    w.WriteHeader(202)
+                    w.Write([]byte("media expired - requested re-upload from your phone, try again in a moment (phone must be online)"))
+                    return
+                }
+            }
             http.Error(w, fmt.Sprintf("download failed: %v (media may have expired on WhatsApp servers)", err), 502)
             return
         }
@@ -1194,6 +1756,548 @@ func main() {
         rawMediaMutex.Unlock()
         go saveRawMedia()
         json.NewEncoder(w).Encode(map[string]string{"path": path})
+    })
+
+    http.HandleFunc("/react", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        msgID := r.URL.Query().Get("id")
+        sender := r.URL.Query().Get("sender") // Absender der Zielnachricht
+        emoji := r.URL.Query().Get("emoji")   // leer = Reaktion entfernen
+        if chat == "" || msgID == "" || sender == "" {
+            http.Error(w, "chat, id and sender required", 400)
+            return
+        }
+        chatJID := toChatJID(chat)
+        senderJID := types.NewJID(sender, types.DefaultUserServer)
+        _, err := client.SendMessage(ctx, chatJID, client.BuildReaction(chatJID, senderJID, types.MessageID(msgID), emoji))
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        me := client.Store.ID.User
+        updateMessage(chat, msgID, func(m *Message) {
+            if m.Reactions == nil {
+                m.Reactions = make(map[string]string)
+            }
+            if emoji == "" {
+                delete(m.Reactions, me)
+            } else {
+                m.Reactions[me] = emoji
+            }
+        })
+        w.Write([]byte("ok"))
+    })
+
+    http.HandleFunc("/revoke", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        msgID := r.URL.Query().Get("id")
+        if chat == "" || msgID == "" {
+            http.Error(w, "chat and id required", 400)
+            return
+        }
+        chatJID := toChatJID(chat)
+        _, err := client.SendMessage(ctx, chatJID, client.BuildRevoke(chatJID, types.EmptyJID, types.MessageID(msgID)))
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        updateMessage(chat, msgID, func(m *Message) {
+            m.Revoked = true
+            m.Text = "🚫 This message was deleted"
+            m.MediaType = ""
+            m.LocalPath = ""
+        })
+        w.Write([]byte("ok"))
+    })
+
+    http.HandleFunc("/edit", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        msgID := r.URL.Query().Get("id")
+        text := r.URL.Query().Get("text")
+        if chat == "" || msgID == "" || text == "" {
+            http.Error(w, "chat, id and text required", 400)
+            return
+        }
+        chatJID := toChatJID(chat)
+        _, err := client.SendMessage(ctx, chatJID, client.BuildEdit(chatJID, types.MessageID(msgID), &waE2E.Message{Conversation: proto.String(text)}))
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        updateMessage(chat, msgID, func(m *Message) {
+            m.Text = text
+            m.Edited = true
+        })
+        w.Write([]byte("ok"))
+    })
+
+    http.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
+        name := ""
+        if client != nil && client.Store != nil {
+            name = client.Store.PushName
+        }
+        about := ""
+        if client != nil && client.Store.ID != nil {
+            own := types.NewJID(client.Store.ID.User, types.DefaultUserServer)
+            if info, err := client.GetUserInfo(ctx, []types.JID{own}); err == nil {
+                if ui, ok := info[own]; ok {
+                    about = ui.Status
+                }
+            }
+        }
+        json.NewEncoder(w).Encode(map[string]string{"name": name, "about": about})
+    })
+
+    http.HandleFunc("/setprofile", func(w http.ResponseWriter, r *http.Request) {
+        name := r.URL.Query().Get("name")
+        about := r.URL.Query().Get("about")
+        hasAbout := r.URL.Query().Get("hasAbout") == "1"
+        if name != "" && client.Store.PushName != name {
+            if err := client.SendAppState(ctx, appstate.BuildSettingPushName(name)); err != nil {
+                http.Error(w, "name: "+err.Error(), 500)
+                return
+            }
+            client.Store.PushName = name
+            client.Store.Save(ctx)
+        }
+        if hasAbout {
+            if err := client.SetStatusMessage(ctx, about); err != nil {
+                http.Error(w, "about: "+err.Error(), 500)
+                return
+            }
+        }
+        w.Write([]byte("ok"))
+    })
+
+    http.HandleFunc("/setphoto", func(w http.ResponseWriter, r *http.Request) {
+        filePath := r.URL.Query().Get("file")
+        if filePath == "" {
+            http.Error(w, "file required", 400)
+            return
+        }
+        data, err := os.ReadFile(filePath)
+        if err != nil {
+            http.Error(w, err.Error(), 400)
+            return
+        }
+        // WhatsApp erwartet JPEG: dekodieren (jpg/png/gif) und re-enkodieren
+        img, _, err := image.Decode(bytes.NewReader(data))
+        if err != nil {
+            http.Error(w, "unsupported image: "+err.Error(), 400)
+            return
+        }
+        var buf bytes.Buffer
+        if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85}); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        if _, err := client.SetGroupPhoto(ctx, types.EmptyJID, buf.Bytes()); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Write([]byte("ok"))
+    })
+
+    // Aeltere Nachrichten vom Telefon anfordern (ON_DEMAND HistorySync)
+    http.HandleFunc("/loadolder", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        if chat == "" {
+            http.Error(w, "chat required", 400)
+            return
+        }
+        // aelteste bekannte Nachricht dieses Chats suchen
+        msgMutex.RLock()
+        var oldest *Message
+        for i := range messages {
+            if messages[i].ChatJID != chat {
+                continue
+            }
+            if oldest == nil || messages[i].Timestamp < oldest.Timestamp {
+                oldest = &messages[i]
+            }
+        }
+        msgMutex.RUnlock()
+        if oldest == nil {
+            http.Error(w, "no known messages in this chat yet", 404)
+            return
+        }
+        info := &types.MessageInfo{
+            ID:        types.MessageID(oldest.ID),
+            Timestamp: time.Unix(oldest.Timestamp, 0),
+            MessageSource: types.MessageSource{
+                Chat:     toChatJID(chat),
+                IsFromMe: oldest.FromMe,
+            },
+        }
+        req := client.BuildHistorySyncRequest(info, 50)
+        if _, err := client.SendMessage(ctx, client.Store.ID.ToNonAD(), req, whatsmeow.SendRequestExtra{Peer: true}); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Write([]byte("requested 50 older messages from your phone - they will appear shortly (phone must be online)"))
+    })
+
+    // Kontakt blockieren/entblocken
+    http.HandleFunc("/block", func(w http.ResponseWriter, r *http.Request) {
+        jidStr := r.URL.Query().Get("jid")
+        action := r.URL.Query().Get("action") // block | unblock
+        if jidStr == "" || (action != "block" && action != "unblock") {
+            http.Error(w, "jid and action=block|unblock required", 400)
+            return
+        }
+        act := events.BlocklistChangeActionBlock
+        if action == "unblock" {
+            act = events.BlocklistChangeActionUnblock
+        }
+        if _, err := client.UpdateBlocklist(ctx, types.NewJID(jidStr, types.DefaultUserServer), act); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Write([]byte("ok"))
+    })
+
+    // Pin / Mute / Archive (Server-Sync per AppState + lokale Anzeige)
+    http.HandleFunc("/chatsetting", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        action := r.URL.Query().Get("action")
+        if chat == "" || action == "" {
+            http.Error(w, "chat and action required", 400)
+            return
+        }
+        jid := toChatJID(chat)
+        var patch appstate.PatchInfo
+        cs := getChatSettings(chat)
+        switch action {
+        case "pin":
+            patch = appstate.BuildPin(jid, true)
+            cs.Pinned = true
+        case "unpin":
+            patch = appstate.BuildPin(jid, false)
+            cs.Pinned = false
+        case "mute":
+            patch = appstate.BuildMute(jid, true, 0) // 0 = dauerhaft
+            cs.Muted = true
+        case "unmute":
+            patch = appstate.BuildMute(jid, false, 0)
+            cs.Muted = false
+        case "archive":
+            patch = appstate.BuildArchive(jid, true, time.Time{}, nil)
+            cs.Archived = true
+        case "unarchive":
+            patch = appstate.BuildArchive(jid, false, time.Time{}, nil)
+            cs.Archived = false
+        default:
+            http.Error(w, "unknown action", 400)
+            return
+        }
+        if err := client.SendAppState(ctx, patch); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        go saveChatSettings()
+        w.Write([]byte("ok"))
+    })
+
+    // Gruppen: erstellen / verlassen / umbenennen / Foto / Invite-Link / Teilnehmer
+    http.HandleFunc("/group/create", func(w http.ResponseWriter, r *http.Request) {
+        name := r.URL.Query().Get("name")
+        parts := r.URL.Query().Get("participants") // Kommagetrennte Nummern
+        if name == "" || parts == "" {
+            http.Error(w, "name and participants required", 400)
+            return
+        }
+        var jids []types.JID
+        for _, p := range strings.Split(parts, ",") {
+            p = strings.TrimSpace(p)
+            if p != "" {
+                jids = append(jids, types.NewJID(p, types.DefaultUserServer))
+            }
+        }
+        gi, err := client.CreateGroup(ctx, whatsmeow.ReqCreateGroup{Name: name, Participants: jids})
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        json.NewEncoder(w).Encode(map[string]string{"jid": gi.JID.User})
+    })
+
+    http.HandleFunc("/group/leave", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        if err := client.LeaveGroup(ctx, types.NewJID(chat, types.GroupServer)); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Write([]byte("ok"))
+    })
+
+    http.HandleFunc("/group/rename", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        name := r.URL.Query().Get("name")
+        if err := client.SetGroupName(ctx, types.NewJID(chat, types.GroupServer), name); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Write([]byte("ok"))
+    })
+
+    http.HandleFunc("/group/photo", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        filePath := r.URL.Query().Get("file")
+        data, err := os.ReadFile(filePath)
+        if err != nil {
+            http.Error(w, err.Error(), 400)
+            return
+        }
+        img, _, err := image.Decode(bytes.NewReader(data))
+        if err != nil {
+            http.Error(w, "unsupported image: "+err.Error(), 400)
+            return
+        }
+        var buf bytes.Buffer
+        jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85})
+        if _, err := client.SetGroupPhoto(ctx, types.NewJID(chat, types.GroupServer), buf.Bytes()); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Write([]byte("ok"))
+    })
+
+    http.HandleFunc("/group/invitelink", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        link, err := client.GetGroupInviteLink(ctx, types.NewJID(chat, types.GroupServer), false)
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        json.NewEncoder(w).Encode(map[string]string{"link": link})
+    })
+
+    http.HandleFunc("/group/info", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        gi, err := client.GetGroupInfo(ctx, types.NewJID(chat, types.GroupServer))
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        type P struct {
+            Number  string `json:"number"`
+            Name    string `json:"name"`
+            IsAdmin bool   `json:"isAdmin"`
+        }
+        var ps []P
+        contactsMutex.RLock()
+        for _, p := range gi.Participants {
+            pn := resolvePN(p.JID, p.PhoneNumber)
+            ps = append(ps, P{Number: pn.User, Name: contacts[pn.User], IsAdmin: p.IsAdmin || p.IsSuperAdmin})
+        }
+        contactsMutex.RUnlock()
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "name": gi.Name, "participants": ps,
+        })
+    })
+
+    http.HandleFunc("/group/participants", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        action := r.URL.Query().Get("action") // add | remove
+        numbers := r.URL.Query().Get("numbers")
+        var jids []types.JID
+        for _, p := range strings.Split(numbers, ",") {
+            p = strings.TrimSpace(p)
+            if p != "" {
+                jids = append(jids, types.NewJID(p, types.DefaultUserServer))
+            }
+        }
+        var change whatsmeow.ParticipantChange
+        switch action {
+        case "add":
+            change = whatsmeow.ParticipantChangeAdd
+        case "remove":
+            change = whatsmeow.ParticipantChangeRemove
+        default:
+            http.Error(w, "action=add|remove required", 400)
+            return
+        }
+        if _, err := client.UpdateGroupParticipants(ctx, types.NewJID(chat, types.GroupServer), jids, change); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Write([]byte("ok"))
+    })
+
+    // Abonnierte Kanaele auflisten
+    http.HandleFunc("/channels", func(w http.ResponseWriter, r *http.Request) {
+        metas, err := client.GetSubscribedNewsletters(ctx)
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        type C struct {
+            JID         string `json:"jid"`
+            Name        string `json:"name"`
+            Subscribers int    `json:"subscribers"`
+        }
+        var out []C
+        for _, m := range metas {
+            out = append(out, C{JID: m.ID.User, Name: m.ThreadMeta.Name.Text, Subscribers: m.ThreadMeta.SubscriberCount})
+            markChannel(m.ID.User)
+        }
+        json.NewEncoder(w).Encode(out)
+    })
+
+    // Kanalnachrichten laden (in den Nachrichtenspeicher)
+    http.HandleFunc("/channel/messages", func(w http.ResponseWriter, r *http.Request) {
+        jidStr := r.URL.Query().Get("jid")
+        if jidStr == "" {
+            http.Error(w, "jid required", 400)
+            return
+        }
+        n, err := importNewsletterMessages(types.NewJID(jidStr, types.NewsletterServer), 50)
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        json.NewEncoder(w).Encode(map[string]int{"imported": n})
+    })
+
+    // Kanal folgen per Invite-Link (https://whatsapp.com/channel/KEY)
+    http.HandleFunc("/channel/follow", func(w http.ResponseWriter, r *http.Request) {
+        link := r.URL.Query().Get("link")
+        key := link
+        if idx := strings.LastIndex(link, "/channel/"); idx >= 0 {
+            key = link[idx+len("/channel/"):]
+        }
+        key = strings.TrimSpace(strings.Trim(key, "/"))
+        if key == "" {
+            http.Error(w, "link required", 400)
+            return
+        }
+        meta, err := client.GetNewsletterInfoWithInvite(ctx, key)
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        if err := client.FollowNewsletter(ctx, meta.ID); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        importNewsletterMessages(meta.ID, 50)
+        json.NewEncoder(w).Encode(map[string]string{"jid": meta.ID.User, "name": meta.ThreadMeta.Name.Text})
+    })
+
+    http.HandleFunc("/channel/unfollow", func(w http.ResponseWriter, r *http.Request) {
+        jidStr := r.URL.Query().Get("jid")
+        if err := client.UnfollowNewsletter(ctx, types.NewJID(jidStr, types.NewsletterServer)); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Write([]byte("ok"))
+    })
+
+    // Gruppe per Invite-Link beitreten (https://chat.whatsapp.com/CODE)
+    http.HandleFunc("/group/join", func(w http.ResponseWriter, r *http.Request) {
+        link := r.URL.Query().Get("link")
+        code := link
+        if idx := strings.LastIndex(link, "/"); idx >= 0 {
+            code = link[idx+1:]
+        }
+        code = strings.TrimSpace(code)
+        if code == "" {
+            http.Error(w, "link required", 400)
+            return
+        }
+        jid, err := client.JoinGroupWithLink(ctx, code)
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        json.NewEncoder(w).Encode(map[string]string{"jid": jid.User})
+    })
+
+    // Community: verknuepfte Untergruppen
+    http.HandleFunc("/group/subgroups", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        subs, err := client.GetSubGroups(ctx, types.NewJID(chat, types.GroupServer))
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        type G struct {
+            JID  string `json:"jid"`
+            Name string `json:"name"`
+        }
+        var out []G
+        for _, g := range subs {
+            out = append(out, G{JID: g.JID.User, Name: g.Name})
+        }
+        json.NewEncoder(w).Encode(out)
+    })
+
+    // Volltextsuche ueber Nachrichten und Chatnamen
+    http.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+        q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+        chatFilter := r.URL.Query().Get("chat")
+        if len(q) < 2 {
+            http.Error(w, "query too short", 400)
+            return
+        }
+        type Hit struct {
+            ChatJID   string `json:"chatJid"`
+            ChatName  string `json:"chatName"`
+            MsgID     string `json:"msgId,omitempty"`
+            Snippet   string `json:"snippet"`
+            Timestamp int64  `json:"timestamp"`
+            Kind      string `json:"kind"` // chat | message
+        }
+        var hits []Hit
+        seenChats := make(map[string]bool)
+
+        // Chats, deren Name passt (nur ohne Chat-Filter)
+        for _, c := range getChats() {
+            if chatFilter != "" {
+                break
+            }
+            if strings.Contains(strings.ToLower(c.Name), q) || strings.Contains(c.JID, q) {
+                hits = append(hits, Hit{ChatJID: c.JID, ChatName: c.Name,
+                    Snippet: c.LastMessage, Timestamp: c.LastTime, Kind: "chat"})
+                seenChats[c.JID] = true
+            }
+        }
+
+        // Nachrichten, deren Text passt (neueste zuerst, max 50)
+        msgMutex.RLock()
+        for i := len(messages) - 1; i >= 0 && len(hits) < 60; i-- {
+            m := &messages[i]
+            if m.Revoked || m.Text == "" {
+                continue
+            }
+            if chatFilter != "" && m.ChatJID != chatFilter {
+                continue
+            }
+            if !strings.Contains(strings.ToLower(m.Text), q) {
+                continue
+            }
+            snippet := m.Text
+            if idx := strings.Index(strings.ToLower(snippet), q); idx > 40 {
+                snippet = "…" + snippet[idx-30:]
+            }
+            if len(snippet) > 140 {
+                snippet = snippet[:140] + "…"
+            }
+            hits = append(hits, Hit{ChatJID: m.ChatJID, ChatName: getContactName(m.ChatJID),
+                MsgID: m.ID, Snippet: snippet, Timestamp: m.Timestamp, Kind: "message"})
+        }
+        msgMutex.RUnlock()
+
+        sort.Slice(hits, func(i, j int) bool {
+            if hits[i].Kind != hits[j].Kind {
+                return hits[i].Kind == "chat" // Chat-Treffer zuerst
+            }
+            return hits[i].Timestamp > hits[j].Timestamp
+        })
+        if len(hits) > 50 {
+            hits = hits[:50]
+        }
+        json.NewEncoder(w).Encode(hits)
     })
 
     http.HandleFunc("/quit", func(w http.ResponseWriter, r *http.Request) {
