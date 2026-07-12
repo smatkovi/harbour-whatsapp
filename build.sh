@@ -10,9 +10,10 @@ BUILDDIR="$HOME/rpmbuild"
 if [ ! -f "$SRCDIR/wa-backend" ]; then
     echo "Building backend..."
     cd backend
+    VERSION=$(grep '^Version:' ../rpm/harbour-whatsapp.spec | awk '{print $2}')
     CGO_CFLAGS="-I/usr/include/sqlcipher" \
     CGO_LDFLAGS="-L/usr/lib64 -lsqlcipher" \
-    /usr/local/go/bin/go build -o ../wa-backend .
+    /usr/local/go/bin/go build -ldflags "-X main.version=$VERSION" -o ../wa-backend .
     cd ..
     echo "✅ Backend built"
 fi

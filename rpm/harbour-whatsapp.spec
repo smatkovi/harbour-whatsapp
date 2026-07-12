@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.4.9
+Version:    0.4.11
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -25,6 +25,7 @@ rm -rf %{buildroot}
 mkdir -p %{buildroot}/usr/share/harbour-whatsapp
 install -m 755 %{_sourcedir}/wa-backend %{buildroot}/usr/share/harbour-whatsapp/
 install -m 644 %{_sourcedir}/start_backend.py %{buildroot}/usr/share/harbour-whatsapp/
+echo %{version} > %{buildroot}/usr/share/harbour-whatsapp/VERSION
 
 # QML files
 mkdir -p %{buildroot}/usr/share/harbour-whatsapp/qml
@@ -45,6 +46,19 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.11-1
+- The pairing form (phone number field + "Start pairing") is now only
+  shown when the device is actually not linked. While an existing
+  pairing is (re)connecting after app start, a busy indicator is shown
+  instead ("paired" field added to /status)
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.10-1
+- Fix updates silently keeping the old backend running: the launcher
+  now compares the running backend's version (new "version" field in
+  /status) against the installed one and replaces stale backends
+  automatically (graceful /quit with state save, pkill fallback).
+  No more manual "pkill wa-backend" or reboot after updating.
+
 * Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.9-1
 - Media in history-synced chats: images, videos, audio, documents and
   stickers from conversations imported at pairing time now show up as

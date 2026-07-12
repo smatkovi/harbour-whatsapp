@@ -28,6 +28,8 @@ import (
     "google.golang.org/protobuf/proto"
 )
 
+var version = "dev" // per -ldflags "-X main.version=X.Y.Z" gesetzt
+
 var client *whatsmeow.Client
 var container *sqlstore.Container
 var ctx = context.Background()
@@ -932,6 +934,8 @@ func main() {
             "phone":     phone,
             "state":     connState,
             "lastError": lastError,
+            "version":   version,
+            "paired":    client != nil && client.Store.ID != nil,
         })
     })
 
@@ -1190,6 +1194,21 @@ func main() {
         rawMediaMutex.Unlock()
         go saveRawMedia()
         json.NewEncoder(w).Encode(map[string]string{"path": path})
+    })
+
+    http.HandleFunc("/quit", func(w http.ResponseWriter, r *http.Request) {
+        fmt.Println("👋 Quit requested (update?), saving and exiting...")
+        saveMessages()
+        saveContacts()
+        saveRawMedia()
+        json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+        go func() {
+            time.Sleep(300 * time.Millisecond)
+            if client != nil {
+                client.Disconnect()
+            }
+            os.Exit(0)
+        }()
     })
 
     http.HandleFunc("/reload", func(w http.ResponseWriter, r *http.Request) {

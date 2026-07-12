@@ -6,6 +6,37 @@ import pyotherside
 
 backend_process = None
 
+def installed_version():
+    try:
+        with open("/usr/share/harbour-whatsapp/VERSION") as f:
+            return f.read().strip()
+    except Exception:
+        return None
+
+def backend_version(port):
+    try:
+        import json
+        with urllib.request.urlopen("http://127.0.0.1:%d/status" % port, timeout=1) as r:
+            return json.loads(r.read().decode()).get("version")
+    except Exception:
+        return None
+
+def stop_stale_backend(port):
+    """Altes Backend beenden: erst hoeflich per /quit, dann pkill."""
+    try:
+        urllib.request.urlopen("http://127.0.0.1:%d/quit" % port, timeout=2)
+    except Exception:
+        pass  # alte Backends kennen /quit nicht
+    for _ in range(20):
+        try:
+            urllib.request.urlopen("http://127.0.0.1:%d/status" % port, timeout=1)
+            time.sleep(0.1)
+        except Exception:
+            return True  # Port frei
+    subprocess.call(["pkill", "-f", "wa-backend"])
+    time.sleep(0.5)
+    return True
+
 def find_backend_port():
     """Return the port of a running backend, or None."""
     data_dir = os.path.expanduser("~/.local/share/harbour/harbour-whatsapp")
@@ -47,8 +78,15 @@ def start():
     # Check if already running (scan the port range the backend may use)
     port = find_backend_port()
     if port:
-        pyotherside.send('backendReady', True, port)
-        return True
+        want = installed_version()
+        have = backend_version(port)
+        if want is not None and have != want:
+            # veraltetes Backend von vor dem Update -> ersetzen
+            stop_stale_backend(port)
+            port = None
+        else:
+            pyotherside.send('backendReady', True, port)
+            return True
     
     # Start backend
     if backend_process is None or backend_process.poll() is not None:

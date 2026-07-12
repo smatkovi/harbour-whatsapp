@@ -14,6 +14,7 @@ ApplicationWindow {
     property string pairErrorMsg: ""
     property string connState: ""
     property string lastError: ""
+    property bool paired: false
     property int backendPort: 8085
     property string phone: ""
     property var chats: []
@@ -142,6 +143,7 @@ ApplicationWindow {
                 phone = data.phone || ""
                 connState = data.state || ""
                 lastError = data.lastError || ""
+                paired = data.paired === true
                 if (connected && !wasConnected) {
                     loadChats()
                     loadWAContacts()
@@ -330,8 +332,16 @@ ApplicationWindow {
                     }
                 }
 
+                // Verbunden wird gerade (Verknuepfung existiert): nur Spinner
+                BusyIndicator {
+                    running: !connected && paired
+                    visible: running
+                    size: BusyIndicatorSize.Medium
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
                 Column {
-                    visible: !connected
+                    visible: !connected && !paired
                     width: parent.width
                     spacing: Theme.paddingLarge
 
