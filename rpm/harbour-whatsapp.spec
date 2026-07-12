@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.4.5
+Version:    0.4.6
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -45,6 +45,15 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.6-1
+- Fix chats failing to open (silently) with "TypeError: Property
+  'endsWith' ... is not a function": String.endsWith is ES6 and not
+  available in the Qt 5.6 QML engine on Sailfish OS; contact name
+  matching now uses a compatible suffix check and also handles
+  numeric phoneDetails values
+- Suffix matching of phone numbers now requires at least 6 digits on
+  both sides, avoiding false contact-name matches on short numbers
+
 * Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.5-1
 - Fix local address book contacts not showing up on the "New chat" page
   ("No contacts accessible"): the app now requests the Privileged

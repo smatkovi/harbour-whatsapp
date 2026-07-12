@@ -72,9 +72,13 @@ ApplicationWindow {
             var person = peopleModel.get(i)
             if (person && person.phoneDetails) {
                 for (var j = 0; j < person.phoneDetails.length; j++) {
-                    var pn = person.phoneDetails[j].normalizedNumber || person.phoneDetails[j].number
+                    var pn = String(person.phoneDetails[j].normalizedNumber || person.phoneDetails[j].number || "")
                     pn = pn.replace(/[\s\-\+]/g, '').replace(/^0+/, '')
-                    if (pn === normalized || pn.endsWith(normalized) || normalized.endsWith(pn)) {
+                    // Qt 5.6 QML kennt kein String.endsWith (ES6) - Suffix-Check via lastIndexOf
+                    var suffixMatch = (pn.length >= 6 && normalized.length >= 6) &&
+                        (pn.lastIndexOf(normalized) === pn.length - normalized.length ||
+                         normalized.lastIndexOf(pn) === normalized.length - pn.length)
+                    if (pn === normalized || suffixMatch) {
                         return person.displayLabel || ""
                     }
                 }
