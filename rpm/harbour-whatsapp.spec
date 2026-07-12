@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.4.4
+Version:    0.4.5
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -45,6 +45,14 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.5-1
+- Fix local address book contacts not showing up on the "New chat" page
+  ("No contacts accessible"): the app now requests the Privileged
+  permission in addition to Contacts, like other Sailjail apps with
+  working contact access (e.g. Fernschreiber). Without it, qtcontacts
+  only sees the non-privileged contacts database, which is empty on
+  many installations. Sandboxing stays fully enabled.
+
 * Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.4.4-1
 - "New chat" now lists your local Sailfish address book (via PeopleModel)
   merged with your WhatsApp contacts, searchable by name or number, with
