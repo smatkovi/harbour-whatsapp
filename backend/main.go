@@ -6,6 +6,7 @@ import (
     "encoding/json"
     "fmt"
     "io"
+    "net"
     "net/http"
     "os"
     "path/filepath"
@@ -37,6 +38,8 @@ var avatars = make(map[string]string)
 var avatarsMutex sync.RWMutex
 var pairCode string
 var isConnected bool
+var connState = "starting"   // starting|connecting|waiting_for_pair|connected|reconnecting|logged_out|error
+var lastError string
 
 // Paths - homeDir for media, current dir for data
 var homeDir string
@@ -444,6 +447,24 @@ func addMessage(m Message) {
     go saveMessages()
 }
 
+// resolvePN maps a @lid JID to the corresponding phone-number JID if known,
+// so chats are always keyed by phone number and never split into duplicates.
+func resolvePN(jid types.JID, alt types.JID) types.JID {
+    jid = jid.ToNonAD()
+    if jid.Server != types.HiddenUserServer {
+        return jid
+    }
+    if !alt.IsEmpty() && alt.Server == types.DefaultUserServer {
+        return alt.ToNonAD()
+    }
+    if client != nil {
+        if pn, err := client.Store.LIDs.GetPNForLID(context.Background(), jid); err == nil && !pn.IsEmpty() {
+            return pn.ToNonAD()
+        }
+    }
+    return jid
+}
+
 func eventHandler(evt interface{}) {
     switch v := evt.(type) {
     case *events.Message:
@@ -513,8 +534,23 @@ func eventHandler(evt interface{}) {
             }
         }
         
-        chatJid := v.Info.Chat.User
-        sender := v.Info.Sender.User
+        // WhatsApp increasingly addresses DMs with @lid JIDs instead of the
+        // phone number JID. Without resolving LID -> phone number, incoming
+        // messages get keyed under a different chat ID and show up as a new,
+        // separate chat instead of the existing one.
+        chatJID := v.Info.Chat.ToNonAD()
+        senderJID := resolvePN(v.Info.Sender, v.Info.SenderAlt)
+        if chatJID.Server == types.HiddenUserServer {
+            var alt types.JID
+            if v.Info.IsFromMe {
+                alt = v.Info.RecipientAlt
+            } else {
+                alt = v.Info.SenderAlt
+            }
+            chatJID = resolvePN(chatJID, alt)
+        }
+        chatJid := chatJID.User
+        sender := senderJID.User
         if v.Info.IsFromMe {
             sender = client.Store.ID.User
         }
@@ -540,6 +576,8 @@ func eventHandler(evt interface{}) {
         
     case *events.Connected:
         isConnected = true
+        connState = "connected"
+        lastError = ""
         fmt.Println("✅ Connected")
         go func() {
             time.Sleep(2 * time.Second)
@@ -548,18 +586,58 @@ func eventHandler(evt interface{}) {
         
     case *events.PairSuccess:
         isConnected = true
+        connState = "connected"
+        lastError = ""
         pairCode = ""
         fmt.Println("✅ Paired!")
         
     case *events.LoggedOut:
         isConnected = false
+        connState = "logged_out"
+        lastError = "Logged out by server"
         pairCode = ""
         fmt.Println("❌ Logged out by server")
+
+    case *events.Disconnected:
+        isConnected = false
+        connState = "reconnecting"
+        fmt.Println("🔌 Disconnected, reconnecting...")
+
+    case *events.ConnectFailure:
+        isConnected = false
+        connState = "error"
+        lastError = fmt.Sprintf("Connect failure: %s", v.Reason.String())
+        fmt.Printf("❌ %s\n", lastError)
+
+    case *events.ClientOutdated:
+        isConnected = false
+        connState = "error"
+        lastError = "Client outdated - app update required"
+        fmt.Println("❌ Client outdated")
+
+    case *events.StreamReplaced:
+        isConnected = false
+        connState = "error"
+        lastError = "Stream replaced - logged in elsewhere?"
+        fmt.Println("❌ Stream replaced")
+
+    case *events.TemporaryBan:
+        isConnected = false
+        connState = "error"
+        lastError = fmt.Sprintf("Temporary ban: %s (expires %s)", v.Code.String(), v.Expire.String())
+        fmt.Printf("❌ %s\n", lastError)
+
+    case *events.KeepAliveTimeout:
+        connState = "reconnecting"
+        fmt.Println("⚠️ Keepalive timeout")
         
     case *events.HistorySync:
         fmt.Printf("📜 History sync: %d conversations\n", len(v.Data.Conversations))
         for _, conv := range v.Data.Conversations {
             jidStr := conv.GetID()
+            if parsed, err := types.ParseJID(jidStr); err == nil {
+                jidStr = resolvePN(parsed, types.EmptyJID).String()
+            }
             name := conv.GetName()
             if name != "" {
                 contactsMutex.Lock()
@@ -756,8 +834,10 @@ func main() {
 
     if client.Store.ID == nil {
         fmt.Println("📱 No device ID - need to pair")
+        connState = "waiting_for_pair"
     } else {
         fmt.Println("📱 Device ID found, connecting...")
+        connState = "connecting"
     }
     go client.Connect()
 
@@ -771,6 +851,8 @@ func main() {
             "connected": isConnected,
             "pairCode":  pairCode,
             "phone":     phone,
+            "state":     connState,
+            "lastError": lastError,
         })
     })
 
@@ -968,8 +1050,28 @@ func main() {
         w.Write([]byte("ok"))
     })
 
-    fmt.Println("🚀 Backend running on http://localhost:8085")
-    go http.ListenAndServe(":8085", nil)
+    // Bind to loopback only (the API exposes all messages - it must never be
+    // reachable from the network). Try a small port range so a busy port no
+    // longer makes the backend fail silently; write the chosen port to a file
+    // for the launcher/UI to pick up.
+    var listener net.Listener
+    var port int
+    for p := 8085; p <= 8089; p++ {
+        l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
+        if err == nil {
+            listener = l
+            port = p
+            break
+        }
+        fmt.Printf("⚠️ Port %d unavailable: %v\n", p, err)
+    }
+    if listener == nil {
+        fmt.Println("❌ No free port in 8085-8089, exiting")
+        os.Exit(1)
+    }
+    os.WriteFile("backend.port", []byte(fmt.Sprintf("%d", port)), 0600)
+    fmt.Printf("🚀 Backend running on http://127.0.0.1:%d\n", port)
+    go http.Serve(listener, nil)
 
     c := make(chan os.Signal, 1)
     signal.Notify(c, os.Interrupt, syscall.SIGTERM)

@@ -11,6 +11,10 @@ ApplicationWindow {
 
     property bool connected: false
     property string pairCode: ""
+    property string pairErrorMsg: ""
+    property string connState: ""
+    property string lastError: ""
+    property int backendPort: 8085
     property string phone: ""
     property var chats: []
     property var waContacts: []
@@ -22,12 +26,15 @@ ApplicationWindow {
         Component.onCompleted: {
             addImportPath(Qt.resolvedUrl('..'))
             
-            setHandler('backendReady', function(success) {
+            setHandler('backendReady', function(success, port) {
                 if (success) {
-                    console.log("Backend ready")
+                    if (port) backendPort = port
+                    console.log("Backend ready on port " + backendPort)
                     checkStatus()
                 } else {
                     console.log("Backend failed to start")
+                    pairErrorMsg = "Backend failed to start. Please check " +
+                        "~/.local/share/harbour/harbour-whatsapp/backend.log"
                 }
             })
             
@@ -87,7 +94,7 @@ ApplicationWindow {
 
     function checkStatus() {
         var xhr = new XMLHttpRequest()
-        xhr.open("GET", "http://localhost:8085/status")
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/status")
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4 && xhr.status === 200) {
                 var data = JSON.parse(xhr.responseText)
@@ -95,6 +102,8 @@ ApplicationWindow {
                 connected = data.connected
                 pairCode = data.pairCode || ""
                 phone = data.phone || ""
+                connState = data.state || ""
+                lastError = data.lastError || ""
                 if (connected && !wasConnected) {
                     loadChats()
                     loadWAContacts()
@@ -106,7 +115,7 @@ ApplicationWindow {
 
     function loadChats() {
         var xhr = new XMLHttpRequest()
-        xhr.open("GET", "http://localhost:8085/chats")
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chats")
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4 && xhr.status === 200) {
                 chats = JSON.parse(xhr.responseText) || []
@@ -117,7 +126,7 @@ ApplicationWindow {
 
     function loadWAContacts() {
         var xhr = new XMLHttpRequest()
-        xhr.open("GET", "http://localhost:8085/contacts")
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/contacts")
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4 && xhr.status === 200) {
                 var data = JSON.parse(xhr.responseText) || {}
@@ -134,7 +143,7 @@ ApplicationWindow {
 
     function doLogout() {
         var xhr = new XMLHttpRequest()
-        xhr.open("GET", "http://localhost:8085/logout")
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/logout")
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4) {
                 connected = false
@@ -206,7 +215,7 @@ ApplicationWindow {
                 id: avatarImage
                 anchors.fill: parent
                 fillMode: Image.PreserveAspectCrop
-                source: jid ? "http://localhost:8085/avatar/" + jid : ""
+                source: jid ? "http://127.0.0.1:" + backendPort + "/avatar/" + jid : ""
                 visible: status === Image.Ready
                 
                 layer.enabled: true
@@ -245,7 +254,7 @@ ApplicationWindow {
                     visible: connected
                     onClicked: {
                         var xhr = new XMLHttpRequest()
-                        xhr.open("GET", "http://localhost:8085/reload")
+                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/reload")
                         xhr.onreadystatechange = function() {
                             if (xhr.readyState === 4) {
                                 loadWAContacts()
@@ -269,7 +278,18 @@ ApplicationWindow {
 
                 PageHeader { 
                     title: "WhatsApp"
-                    description: connected ? "+" + phone : "Not connected"
+                    description: {
+                        if (connected) return "+" + phone
+                        switch (connState) {
+                        case "starting":         return "Starting backend\u2026"
+                        case "connecting":       return "Connecting\u2026"
+                        case "reconnecting":     return "Reconnecting\u2026"
+                        case "waiting_for_pair": return "Not paired \u2013 enter phone number below"
+                        case "logged_out":       return "Logged out \u2013 pair again"
+                        case "error":            return lastError !== "" ? lastError : "Connection error"
+                        default:                 return "Not connected"
+                        }
+                    }
                 }
 
                 Column {
@@ -286,15 +306,32 @@ ApplicationWindow {
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
+                    Label {
+                        visible: pairErrorMsg !== ""
+                        width: parent.width - 2*Theme.horizontalPageMargin
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: pairErrorMsg
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.errorColor
+                    }
+
                     Button {
                         text: "Start pairing"
                         anchors.horizontalCenter: parent.horizontalCenter
                         onClicked: {
                             var xhr = new XMLHttpRequest()
-                            xhr.open("GET", "http://localhost:8085/pair?phone=" + phoneField.text)
+                            var normalizedPhone = phoneField.text.replace(/[^0-9]/g, "").replace(/^00/, "")
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/pair?phone=" + normalizedPhone)
                             xhr.onreadystatechange = function() {
-                                if (xhr.readyState === 4 && xhr.status === 200) {
-                                    pairCode = JSON.parse(xhr.responseText).code
+                                if (xhr.readyState === 4) {
+                                    if (xhr.status === 200) {
+                                        pairErrorMsg = ""
+                                        pairCode = JSON.parse(xhr.responseText).code
+                                    } else {
+                                        pairCode = ""
+                                        pairErrorMsg = "Pairing failed (" + xhr.status + "): " + xhr.responseText
+                                    }
                                 }
                             }
                             xhr.send()
@@ -406,10 +443,14 @@ ApplicationWindow {
                             width: parent.width
                         }
                         Label {
-                            text: modelData.lastMessage ? ((modelData.fromMe ? "You: " : "") + modelData.lastMessage) : ""
+                            // keep this strictly single-line: multi-line last
+                            // messages used to overflow the fixed-height list
+                            // item and paint over the next chat entry
+                            text: modelData.lastMessage ? ((modelData.fromMe ? "You: " : "") + modelData.lastMessage.replace(/\n/g, " ")) : ""
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.secondaryColor
                             truncationMode: TruncationMode.Fade
+                            maximumLineCount: 1
                             width: parent.width
                         }
                     }
@@ -601,7 +642,7 @@ ApplicationWindow {
 
             function load() {
                 var xhr = new XMLHttpRequest()
-                xhr.open("GET", "http://localhost:8085/messages?jid=" + chatJid)
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/messages?jid=" + chatJid)
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState === 4 && xhr.status === 200) {
                         msgs = JSON.parse(xhr.responseText) || []
@@ -613,7 +654,7 @@ ApplicationWindow {
             function send() {
                 if (input.text === "") return
                 var xhr = new XMLHttpRequest()
-                xhr.open("GET", "http://localhost:8085/send?to=" + chatJid + "&text=" + encodeURIComponent(input.text))
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/send?to=" + chatJid + "&text=" + encodeURIComponent(input.text))
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState === 4 && xhr.status === 200) {
                         input.text = ""
@@ -626,7 +667,7 @@ ApplicationWindow {
 
             function sendFile(path) {
                 var xhr = new XMLHttpRequest()
-                xhr.open("POST", "http://localhost:8085/sendmedia?to=" + chatJid + "&file=" + encodeURIComponent(path) + "&caption=")
+                xhr.open("POST", "http://127.0.0.1:" + backendPort + "/sendmedia?to=" + chatJid + "&file=" + encodeURIComponent(path) + "&caption=")
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState === 4) {
                         load()
@@ -664,8 +705,17 @@ ApplicationWindow {
                 model: msgs
                 verticalLayoutDirection: ListView.TopToBottom
                 clip: true
-                onCountChanged: positionViewAtEnd()
-                Component.onCompleted: positionViewAtEnd()
+                // positionViewAtEnd() directly in onCountChanged/onCompleted does not
+                // work reliably: the view is not laid out yet at that point.
+                // Delay via Timer so the last chat bubble is always visible.
+                Timer {
+                    id: positionTimer
+                    interval: 200
+                    repeat: false
+                    onTriggered: msgList.positionViewAtIndex(msgList.count - 1, ListView.End)
+                }
+                onCountChanged: positionTimer.start()
+                Component.onCompleted: positionTimer.start()
 
                 PullDownMenu {
                     MenuItem { text: "Send file"; onClicked: pageStack.push(filePicker) }
