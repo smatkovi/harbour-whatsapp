@@ -664,6 +664,32 @@ ApplicationWindow {
     Component {
         id: settingsPage
         Page {
+            property var downloadPrefs: ({})
+            property var storageInfo: ({})
+
+            function loadStorage() {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/storage")
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
+                        storageInfo = JSON.parse(xhr.responseText) || {}
+                    }
+                }
+                xhr.send()
+            }
+
+            Component.onCompleted: {
+                loadStorage()
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/prefs")
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
+                        downloadPrefs = JSON.parse(xhr.responseText) || {}
+                    }
+                }
+                xhr.send()
+            }
+
             SilicaFlickable {
                 anchors.fill: parent
                 contentHeight: setCol.height
@@ -688,17 +714,116 @@ ApplicationWindow {
                         }
                     }
 
+                    SectionHeader { text: "Automatic downloads" }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: "Applies to incoming messages. Tapping a placeholder always downloads, regardless of these settings."
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                        wrapMode: Text.Wrap
+                    }
+
+                    Repeater {
+                        model: [
+                            { key: "image",    label: "Images",           def: "always" },
+                            { key: "sticker",  label: "Stickers",         def: "always" },
+                            { key: "video",    label: "Videos",           def: "wifi" },
+                            { key: "audio",    label: "Audio",            def: "wifi" },
+                            { key: "document", label: "Documents",        def: "wifi" },
+                            { key: "avatar",   label: "Profile pictures", def: "always" }
+                        ]
+                        ComboBox {
+                            width: setCol.width
+                            label: modelData.label
+                            property string prefKey: "autodl_" + modelData.key
+                            currentIndex: {
+                                var v = downloadPrefs[prefKey] || modelData.def
+                                return v === "always" ? 0 : (v === "wifi" ? 1 : 2)
+                            }
+                            menu: ContextMenu {
+                                MenuItem { text: "Always" }
+                                MenuItem { text: "Wi-Fi only" }
+                                MenuItem { text: "Never" }
+                            }
+                            onCurrentIndexChanged: {
+                                var v = currentIndex === 0 ? "always" : (currentIndex === 1 ? "wifi" : "never")
+                                if (downloadPrefs[prefKey] !== v) {
+                                    var p = downloadPrefs
+                                    p[prefKey] = v
+                                    downloadPrefs = p
+                                    setPref(prefKey, v)
+                                }
+                            }
+                        }
+                    }
+
+                    SectionHeader { text: "Storage" }
+
+                    Repeater {
+                        id: storageRepeater
+                        model: [
+                            { key: "images",    label: "Images & stickers" },
+                            { key: "videos",    label: "Videos" },
+                            { key: "audio",     label: "Audio" },
+                            { key: "documents", label: "Documents" },
+                            { key: "avatars",   label: "Profile pictures" }
+                        ]
+                        ListItem {
+                            width: setCol.width
+                            contentHeight: Theme.itemSizeSmall
+                            menu: ContextMenu {
+                                MenuItem {
+                                    text: "Delete all " + modelData.label.toLowerCase()
+                                    onClicked: remorseAction("Deleting " + modelData.label.toLowerCase(), function() {
+                                        var xhr = new XMLHttpRequest()
+                                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/storage/clear?type=" + modelData.key)
+                                        xhr.onreadystatechange = function() {
+                                            if (xhr.readyState === 4) loadStorage()
+                                        }
+                                        xhr.send()
+                                    })
+                                }
+                            }
+                            Label {
+                                x: Theme.horizontalPageMargin
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.label
+                            }
+                            Label {
+                                anchors.right: parent.right
+                                anchors.rightMargin: Theme.horizontalPageMargin
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: storageInfo[modelData.key]
+                                      ? formatSize(storageInfo[modelData.key].bytes) + " (" + storageInfo[modelData.key].files + ")"
+                                      : "…"
+                                color: Theme.secondaryColor
+                                font.pixelSize: Theme.fontSizeSmall
+                            }
+                        }
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: "Long-press a row to delete. Deleted chat media shows the download placeholder again and can be re-downloaded."
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                        wrapMode: Text.Wrap
+                    }
+
                     SectionHeader { text: "Sailjail permissions" }
 
                     Label {
                         id: permStatus
                         property bool granted: false
+                        property bool mediaGranted: false
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
-                        text: granted
-                              ? "Contacts permission: granted (remove it below if unwanted)"
-                              : "Contacts permission: not granted - suggestions stay empty until you grant it below and restart the app"
-                        color: granted ? Theme.highlightColor : Theme.secondaryHighlightColor
+                        text: "Contacts permission: " + (granted ? "granted" : "not granted")
+                              + "\nMedia storage permission: " + (mediaGranted ? "granted" : "not granted")
+                        color: Theme.highlightColor
                         font.pixelSize: Theme.fontSizeSmall
                         wrapMode: Text.Wrap
 
@@ -707,7 +832,9 @@ ApplicationWindow {
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/permcheck")
                             xhr.onreadystatechange = function() {
                                 if (xhr.readyState === 4 && xhr.status === 200) {
-                                    granted = JSON.parse(xhr.responseText).contactsPermission === true
+                                    var p = JSON.parse(xhr.responseText)
+                                    granted = p.contactsPermission === true
+                                    mediaGranted = p.mediaPermission === true
                                 }
                             }
                             xhr.send()
@@ -719,10 +846,12 @@ ApplicationWindow {
                         width: parent.width - 2*x
                         text: "Sailfish OS has no runtime permission dialogs, and the app "
                             + "cannot edit its own desktop file from inside the sandbox. "
-                            + "The app therefore ships WITHOUT the Contacts permission. "
-                            + "To grant or revoke it, tap a command below to copy it, then "
-                            + "run it in Terminal and restart the app. Updates will not "
-                            + "overwrite your choice."
+                            + "The app therefore ships with MINIMAL permissions (Internet, "
+                            + "Secrets). Tap a command below to copy it, run it in Terminal, "
+                            + "then restart the app. Updates will not overwrite your choice.\n\n"
+                            + "Without media storage permission, received media is saved "
+                            + "inside the app's private data folder (not visible in Gallery) "
+                            + "and the image/file pickers will appear empty."
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
                         wrapMode: Text.Wrap
@@ -732,7 +861,7 @@ ApplicationWindow {
                         width: parent.width
                         height: grantLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sh -c \"grep -q 'Contacts;' /usr/share/applications/harbour-whatsapp.desktop || sed -i '/^Permissions=/s/Permissions=/Permissions=Contacts;Privileged;/' /usr/share/applications/harbour-whatsapp.desktop\""
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Contacts;/!s/$/Contacts;/; /Privileged;/!s/$/Privileged;/}' /usr/share/applications/harbour-whatsapp.desktop"
                             copiedHint.text = "Grant command copied - paste in Terminal"
                         }
                         Label {
@@ -750,7 +879,7 @@ ApplicationWindow {
                         width: parent.width
                         height: revokeLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sed -i 's/Contacts;Privileged;//' /usr/share/applications/harbour-whatsapp.desktop"
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Contacts;//g; s/Privileged;//g}' /usr/share/applications/harbour-whatsapp.desktop"
                             copiedHint.text = "Revoke command copied - paste in Terminal"
                         }
                         Label {
@@ -759,6 +888,42 @@ ApplicationWindow {
                             width: parent.width - 2*x
                             anchors.verticalCenter: parent.verticalCenter
                             text: "▸ Copy command to REVOKE contacts permission"
+                            color: Theme.secondaryHighlightColor
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
+                    BackgroundItem {
+                        width: parent.width
+                        height: grantMediaLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /UserDirs;/!s/$/UserDirs;/; /MediaIndexing;/!s/$/MediaIndexing;/; /RemovableMedia;/!s/$/RemovableMedia;/}' /usr/share/applications/harbour-whatsapp.desktop"
+                            copiedHint.text = "Media grant command copied - paste in Terminal"
+                        }
+                        Label {
+                            id: grantMediaLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "▸ Copy command to GRANT media storage permission"
+                            color: Theme.highlightColor
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
+                    BackgroundItem {
+                        width: parent.width
+                        height: revokeMediaLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/UserDirs;//g; s/MediaIndexing;//g; s/RemovableMedia;//g}' /usr/share/applications/harbour-whatsapp.desktop"
+                            copiedHint.text = "Media revoke command copied - paste in Terminal"
+                        }
+                        Label {
+                            id: revokeMediaLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "▸ Copy command to REVOKE media storage permission"
                             color: Theme.secondaryHighlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }

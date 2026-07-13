@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.7.6
+Version:    0.8.0
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,49 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.0-1
+- Per-type automatic download policy (Settings): Images, Stickers,
+  Videos, Audio, Documents and Profile pictures can each be set to
+  Always / Wi-Fi only / Never. Wi-Fi detection via the default route;
+  defaults: images/stickers/avatars always, the rest Wi-Fi only.
+  Tap-to-download always works regardless of the policy
+- Storage overview (Settings): per-category size and file count, with
+  long-press to delete a category (remorse timer). Deleted chat media
+  reverts to the download placeholder and can be re-fetched; deleting
+  profile pictures re-queues them
+- Fix a latent double-RUnlock crash in avatar caching (triggered when
+  a cached avatar file disappeared at runtime)
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.9-1
+- Fix avatars and media disappearing after revoking the media storage
+  permission: files downloaded earlier live under ~/Pictures etc.,
+  which becomes invisible to the sandbox. On startup the backend now
+  validates all stored paths, re-queues inaccessible avatars (they are
+  re-fetched automatically into the private data folder) and clears
+  inaccessible media paths so chats show the download placeholder
+  again
+- Media keys are no longer discarded after a successful download, so
+  such media can simply be downloaded again by tapping
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.8-1
+- More robust permission grant/revoke commands: each permission token
+  is now added or removed individually on the Permissions line only,
+  independent of order and adjacency, idempotent, and tolerant of
+  hand-edited lines (missing trailing semicolon, partial states,
+  legacy token order from older installs). Verified against a nine-
+  case test matrix
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.7-1
+- Minimal permissions by default: the app now ships with only
+  Internet and Secrets. Media storage (UserDirs, MediaIndexing,
+  RemovableMedia) is opt-in like contacts, with status display and
+  tap-to-copy grant/revoke commands on the Settings page
+- Without the media permission the app stays fully functional:
+  received media is stored inside the app's private data folder
+  (media/ next to the message database) instead of ~/Pictures etc.,
+  it is just not visible in Gallery and the system pickers for
+  sending images/files appear empty
+
 * Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.6-1
 - Privacy-first permissions: the app now ships WITHOUT the Contacts
   and Privileged Sailjail permissions. The Settings page shows whether

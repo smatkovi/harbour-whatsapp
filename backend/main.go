@@ -286,7 +286,20 @@ func initPaths() {
     audioDir = filepath.Join(homeDir, "Music", "WhatsApp")
     documentsDir = filepath.Join(homeDir, "Documents", "WhatsApp")
     avatarsDir = filepath.Join(homeDir, "Pictures", "WhatsApp", "avatars")
-    
+
+    // Ohne UserDirs-Permission sind ~/Pictures etc. in der Sandbox
+    // unsichtbar - dann in den privaten Datenordner ausweichen
+    if !dirWritable(picturesDir) {
+        cwd, _ := os.Getwd()
+        base := filepath.Join(cwd, "media")
+        picturesDir = filepath.Join(base, "Pictures")
+        videosDir = filepath.Join(base, "Videos")
+        audioDir = filepath.Join(base, "Music")
+        documentsDir = filepath.Join(base, "Documents")
+        avatarsDir = filepath.Join(base, "Pictures", "avatars")
+        fmt.Println("📁 No UserDirs permission - storing media in app data dir:", base)
+    }
+
     os.MkdirAll(picturesDir, 0755)
     os.MkdirAll(videosDir, 0755)
     os.MkdirAll(audioDir, 0755)
@@ -481,13 +494,18 @@ func getMediaDir(mimeType string) string {
 
 func downloadAvatar(jid string) string {
     avatarsMutex.RLock()
-    if path, ok := avatars[jid]; ok {
-        avatarsMutex.RUnlock()
+    path, ok := avatars[jid]
+    avatarsMutex.RUnlock()
+    if ok {
         if _, err := os.Stat(path); err == nil {
-            return path
+            return path // Cache-Treffer: unabhaengig von der Download-Policy
         }
     }
-    avatarsMutex.RUnlock()
+
+    // Nur der eigentliche Netz-Download unterliegt der Policy
+    if !shouldAutoDownload("avatar") {
+        return ""
+    }
 
     if client == nil || !client.IsConnected() {
         return ""
@@ -516,7 +534,7 @@ func downloadAvatar(jid string) string {
         return ""
     }
 
-    path := filepath.Join(avatarsDir, jid+".jpg")
+    path = filepath.Join(avatarsDir, jid+".jpg")
     err = os.WriteFile(path, data, 0644)
     if err != nil {
         return ""
@@ -729,6 +747,97 @@ func specialInfo(msg *waE2E.Message) (text, mediaType string, lat, lon float64) 
     return "", "", 0, 0
 }
 
+// validateStoredPaths entfernt Verweise auf Dateien, die (z.B. nach dem
+// Entzug der UserDirs-Permission) in der Sandbox nicht mehr sichtbar sind.
+func validateStoredPaths() {
+    removedAv := 0
+    avatarsMutex.Lock()
+    for jid, p := range avatars {
+        if _, err := os.Stat(p); err != nil {
+            delete(avatars, jid)
+            removedAv++
+        }
+    }
+    avatarsMutex.Unlock()
+    if removedAv > 0 {
+        go saveAvatars()
+    }
+
+    cleared := 0
+    msgMutex.Lock()
+    for i := range messages {
+        if messages[i].LocalPath == "" {
+            continue
+        }
+        if _, err := os.Stat(messages[i].LocalPath); err != nil {
+            messages[i].LocalPath = ""
+            cleared++
+        }
+    }
+    msgMutex.Unlock()
+    if cleared > 0 {
+        go saveMessages()
+    }
+    if removedAv > 0 || cleared > 0 {
+        fmt.Printf("🧹 Path validation: %d avatars re-queued, %d media paths cleared (files not accessible in sandbox)\n", removedAv, cleared)
+    }
+}
+
+// onWifi ermittelt ueber die Default-Route, ob WLAN aktiv ist.
+// wlan*/wlp* -> WiFi; rmnet*/ccmni*/wwan*/rndis* -> Mobilfunk.
+func onWifi() bool {
+    data, err := os.ReadFile("/proc/net/route")
+    if err != nil {
+        return true // im Zweifel nicht blockieren
+    }
+    for _, line := range strings.Split(string(data), "\n")[1:] {
+        f := strings.Fields(line)
+        if len(f) >= 2 && f[1] == "00000000" { // Default-Route
+            iface := f[0]
+            return strings.HasPrefix(iface, "wlan") || strings.HasPrefix(iface, "wlp")
+        }
+    }
+    return true
+}
+
+// shouldAutoDownload prueft die Nutzer-Policy fuer einen Medientyp.
+// Werte: "always" | "wifi" | "never"; Downloads per Antippen sind
+// davon unabhaengig immer erlaubt.
+func shouldAutoDownload(kind string) bool {
+    prefsMutex.RLock()
+    policy := prefs["autodl_"+kind]
+    prefsMutex.RUnlock()
+    if policy == "" {
+        // Defaults: kleine Typen immer, grosse nur im WLAN
+        switch kind {
+        case "image", "sticker", "avatar":
+            policy = "always"
+        default:
+            policy = "wifi"
+        }
+    }
+    switch policy {
+    case "never":
+        return false
+    case "wifi":
+        return onWifi()
+    default:
+        return true
+    }
+}
+
+func dirWritable(dir string) bool {
+    if err := os.MkdirAll(dir, 0755); err != nil {
+        return false
+    }
+    probe := filepath.Join(dir, ".probe")
+    if err := os.WriteFile(probe, []byte("x"), 0644); err != nil {
+        return false
+    }
+    os.Remove(probe)
+    return true
+}
+
 func toChatJID(to string) types.JID {
     if len(to) > 15 {
         return types.NewJID(to, types.GroupServer)
@@ -935,7 +1044,9 @@ func eventHandler(evt interface{}) {
             if c := msg.ImageMessage.GetCaption(); c != "" {
                 text = c
             }
-            if path, err := downloadMedia(v.Info.ID, msg.ImageMessage, mimeType, ""); err == nil {
+            if !shouldAutoDownload("image") {
+                stashRawMedia(v.Info.ID, msg)
+            } else if path, err := downloadMedia(v.Info.ID, msg.ImageMessage, mimeType, ""); err == nil {
                 localPath = path
             } else {
                 fmt.Printf("⚠️ Media download failed (%s), keeping key for retry: %v\n", v.Info.ID, err)
@@ -950,7 +1061,9 @@ func eventHandler(evt interface{}) {
             if c := msg.VideoMessage.GetCaption(); c != "" {
                 text = c
             }
-            if path, err := downloadMedia(v.Info.ID, msg.VideoMessage, mimeType, ""); err == nil {
+            if !shouldAutoDownload("video") {
+                stashRawMedia(v.Info.ID, msg)
+            } else if path, err := downloadMedia(v.Info.ID, msg.VideoMessage, mimeType, ""); err == nil {
                 localPath = path
             } else {
                 fmt.Printf("⚠️ Media download failed (%s), keeping key for retry: %v\n", v.Info.ID, err)
@@ -962,7 +1075,9 @@ func eventHandler(evt interface{}) {
             mediaType = "audio"
             mimeType = msg.AudioMessage.GetMimetype()
             fileSize = msg.AudioMessage.GetFileLength()
-            if path, err := downloadMedia(v.Info.ID, msg.AudioMessage, mimeType, ""); err == nil {
+            if !shouldAutoDownload("audio") {
+                stashRawMedia(v.Info.ID, msg)
+            } else if path, err := downloadMedia(v.Info.ID, msg.AudioMessage, mimeType, ""); err == nil {
                 localPath = path
             } else {
                 fmt.Printf("⚠️ Media download failed (%s), keeping key for retry: %v\n", v.Info.ID, err)
@@ -978,7 +1093,9 @@ func eventHandler(evt interface{}) {
             if c := msg.DocumentMessage.GetCaption(); c != "" {
                 text = c
             }
-            if path, err := downloadMedia(v.Info.ID, msg.DocumentMessage, mimeType, fileName); err == nil {
+            if !shouldAutoDownload("document") {
+                stashRawMedia(v.Info.ID, msg)
+            } else if path, err := downloadMedia(v.Info.ID, msg.DocumentMessage, mimeType, fileName); err == nil {
                 localPath = path
             } else {
                 fmt.Printf("⚠️ Media download failed (%s), keeping key for retry: %v\n", v.Info.ID, err)
@@ -989,7 +1106,9 @@ func eventHandler(evt interface{}) {
         if msg.StickerMessage != nil {
             mediaType = "sticker"
             mimeType = msg.StickerMessage.GetMimetype()
-            if path, err := downloadMedia(v.Info.ID, msg.StickerMessage, mimeType, ""); err == nil {
+            if !shouldAutoDownload("sticker") {
+                stashRawMedia(v.Info.ID, msg)
+            } else if path, err := downloadMedia(v.Info.ID, msg.StickerMessage, mimeType, ""); err == nil {
                 localPath = path
             } else {
                 fmt.Printf("⚠️ Media download failed (%s), keeping key for retry: %v\n", v.Info.ID, err)
@@ -1454,6 +1573,7 @@ func main() {
     loadChatSettings()
     loadKnownChannels()
     loadPrefs()
+    validateStoredPaths()
     loadContactsFromDisk()
     loadAvatarsFromDisk()
 
@@ -1761,10 +1881,8 @@ func main() {
         }
         msgMutex.Unlock()
         go saveMessages()
-        rawMediaMutex.Lock()
-        delete(rawMedia, msgID)
-        rawMediaMutex.Unlock()
-        go saveRawMedia()
+        // Medien-Schluessel bewusst behalten: erlaubt erneuten Download,
+        // falls die Datei spaeter unzugaenglich wird
         json.NewEncoder(w).Encode(map[string]string{"path": path})
     })
 
@@ -2347,8 +2465,108 @@ func main() {
 
     http.HandleFunc("/permcheck", func(w http.ResponseWriter, r *http.Request) {
         data, err := os.ReadFile("/usr/share/applications/harbour-whatsapp.desktop")
-        granted := err == nil && strings.Contains(string(data), "Contacts;") && strings.Contains(string(data), "Privileged;")
-        json.NewEncoder(w).Encode(map[string]bool{"contactsPermission": granted})
+        d := string(data)
+        contacts := err == nil && strings.Contains(d, "Contacts;") && strings.Contains(d, "Privileged;")
+        media := err == nil && strings.Contains(d, "UserDirs;") && strings.Contains(d, "MediaIndexing;") && strings.Contains(d, "RemovableMedia;")
+        json.NewEncoder(w).Encode(map[string]bool{"contactsPermission": contacts, "mediaPermission": media})
+    })
+
+    http.HandleFunc("/storage", func(w http.ResponseWriter, r *http.Request) {
+        type Cat struct {
+            Bytes int64 `json:"bytes"`
+            Files int   `json:"files"`
+        }
+        dirSize := func(dirs ...string) Cat {
+            var c Cat
+            seen := make(map[string]bool)
+            for _, d := range dirs {
+                if d == "" || seen[d] {
+                    continue
+                }
+                seen[d] = true
+                filepath.Walk(d, func(p string, info os.FileInfo, err error) error {
+                    if err == nil && !info.IsDir() {
+                        c.Bytes += info.Size()
+                        c.Files++
+                    }
+                    return nil
+                })
+            }
+            return c
+        }
+        // Avatare separat, Bilder ohne avatars-Unterordner
+        av := dirSize(avatarsDir)
+        pics := dirSize(picturesDir)
+        pics.Bytes -= av.Bytes
+        pics.Files -= av.Files
+        if pics.Bytes < 0 {
+            pics.Bytes, pics.Files = 0, 0
+        }
+        json.NewEncoder(w).Encode(map[string]Cat{
+            "images":    pics,
+            "videos":    dirSize(videosDir),
+            "audio":     dirSize(audioDir),
+            "documents": dirSize(documentsDir),
+            "avatars":   av,
+        })
+    })
+
+    http.HandleFunc("/storage/clear", func(w http.ResponseWriter, r *http.Request) {
+        t := r.URL.Query().Get("type")
+        var dirs []string
+        var mediaTypes []string
+        switch t {
+        case "images":
+            dirs = []string{picturesDir}
+            mediaTypes = []string{"image", "sticker"}
+        case "videos":
+            dirs = []string{videosDir}
+            mediaTypes = []string{"video"}
+        case "audio":
+            dirs = []string{audioDir}
+            mediaTypes = []string{"audio"}
+        case "documents":
+            dirs = []string{documentsDir}
+            mediaTypes = []string{"document"}
+        case "avatars":
+            dirs = []string{avatarsDir}
+        default:
+            http.Error(w, "type=images|videos|audio|documents|avatars required", 400)
+            return
+        }
+        removed := 0
+        for _, d := range dirs {
+            filepath.Walk(d, func(p string, info os.FileInfo, err error) error {
+                if err != nil || info.IsDir() {
+                    return nil
+                }
+                if t == "images" && strings.HasPrefix(p, avatarsDir) {
+                    return nil // Avatare nicht mit Bildern loeschen
+                }
+                if os.Remove(p) == nil {
+                    removed++
+                }
+                return nil
+            })
+        }
+        if t == "avatars" {
+            avatarsMutex.Lock()
+            avatars = make(map[string]string)
+            avatarsMutex.Unlock()
+            go saveAvatars()
+        } else {
+            msgMutex.Lock()
+            for i := range messages {
+                for _, mt := range mediaTypes {
+                    if messages[i].MediaType == mt {
+                        messages[i].LocalPath = ""
+                    }
+                }
+            }
+            msgMutex.Unlock()
+            go saveMessages()
+        }
+        json.NewEncoder(w).Encode(map[string]int{"removed": removed})
     })
 
     http.HandleFunc("/quit", func(w http.ResponseWriter, r *http.Request) {
