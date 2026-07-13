@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.8.21
+Version:    0.8.29
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,74 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.29-1
+- App state diagnostics: after the (error-free) full sync still
+  yielded 0 contacts, log the stored patch versions - version > 0
+  with 0 contacts proves the server-side app state itself is empty,
+  consistent with the phone having been freshly re-connected: the
+  phone needs to re-upload its contact list before any companion
+  device (including WhatsApp Web) can see names or reach contacts
+  with status posts
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.28-1
+- Fix own statuses reaching nobody: whatsmeow does not perform the
+  initial app state sync automatically - it must be requested by the
+  client (as mautrix-whatsapp does after login). With the contact
+  store empty (3 contacts, 0 with full name on the affected device),
+  the status fan-out list was empty. When the store has no named
+  contacts on connect, a full app state sync (contact list, pins,
+  mutes, archive states) is now requested from the phone and the
+  resulting contact counts are logged
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.27-1
+- Status media presentation: feed images are no longer cropped into a
+  low strip - they render aspect-fit on a black card up to 60% of the
+  screen height; tapping an image opens a fullscreen viewer (black
+  background, caption overlaid, tap to close), videos open in the
+  media player as before
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.26-1
+- Diagnostics for status reach: on connect, log how many contacts the
+  whatsmeow store knows (own statuses are only fanned out to contacts
+  with a full name - after a fresh pairing this can be near zero until
+  the app-state sync from the phone completes). Also documents the
+  reception latency after re-pairing: contacts' phones only include a
+  newly linked device in their status fan-out after refreshing its
+  device list, typically when they next message you
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.25-1
+- Image/video statuses now support a caption: after picking media, a
+  preview dialog asks for an optional caption before posting - the
+  WhatsApp way of putting text on a full-image status (solid-colour
+  backgrounds remain the text-status variant)
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.24-1
+- Delete your own status: cross icon next to your status in the feed
+  revokes it for everyone (WhatsApp does not support editing statuses,
+  only delete + repost). Revoked statuses disappear from the feed
+- Background colour picker for text statuses (WhatsApp-style palette)
+- Reception diagnostics: undecryptable incoming messages are now
+  logged with sender/chat, status broadcasts specially flagged, to
+  pin down why contact statuses are not appearing
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.23-1
+- Post image and video statuses: "Post image or video" in the Status
+  page pulley opens the content picker; media is uploaded and sent to
+  the status broadcast, distributed per your status privacy settings,
+  and shown immediately in your own feed. Incoming media statuses were
+  already displayed via the regular media pipeline (auto/tap-to-
+  download)
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.22-1
+- Post your own text status: pulley menu on the Status page, delivered
+  according to your WhatsApp status privacy settings; appears in your
+  own feed immediately. This doubles as the end-to-end test for status
+  reception (own statuses are echoed to linked devices)
+- Every incoming status broadcast is now logged as a camera line in
+  backend.log to make reception diagnosable
+- Note: polls in 1:1 chats are official WhatsApp behaviour, the
+  compose option there is intentional
+
 * Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.21-1
 - The daemon finally told us in plain words what was wrong: "SQLCipher
   plugin only supports collection names with alphanumeric Latin-1

@@ -12,6 +12,7 @@ import (
     "os"
     "path/filepath"
     "sort"
+    "strconv"
     "strings"
     "sync"
     "syscall"
@@ -1204,6 +1205,8 @@ func eventHandler(evt interface{}) {
         chatJid := chatJID.User
         if chatJID.Server == types.BroadcastServer && chatJID.User == "status" {
             chatJid = "status"
+            fmt.Printf("📸 Status update from %s (media=%s, text=%d chars)\n",
+                senderJID.User, mediaType, len(text))
         }
         sender := senderJID.User
         if v.Info.IsFromMe {
@@ -1348,6 +1351,14 @@ func eventHandler(evt interface{}) {
         })
         fmt.Printf("%s from %s\n", text, chatJid)
 
+    case *events.UndecryptableMessage:
+        tag := ""
+        if v.Info.Chat.Server == types.BroadcastServer && v.Info.Chat.User == "status" {
+            tag = " [STATUS!]"
+        }
+        fmt.Printf("🔓 Undecryptable message%s from %s in %s (type=%s) - retry receipt sent\n",
+            tag, v.Info.Sender.User, v.Info.Chat.String(), v.Info.Type)
+
     case *events.Connected:
         // Available-Presence senden: ohne sie stellt WhatsApp keine
         // Status-Broadcasts (Stories) an dieses Geraet zu. Nebenwirkung wie
@@ -1370,6 +1381,60 @@ func eventHandler(evt interface{}) {
         go func() {
             time.Sleep(2 * time.Second)
             loadContacts()
+            // Diagnose: wie viele Kontakte kennt der whatsmeow-Store?
+            // Eigene Status gehen nur an Kontakte mit FullName - nach einem
+            // frischen Pairing kann der Store leer sein, bis der App-State-
+            // Sync vom Telefon durch ist.
+            countContacts := func() (int, int) {
+                all, cerr := client.Store.Contacts.GetAllContacts(ctx)
+                if cerr != nil {
+                    return -1, -1
+                }
+                withName := 0
+                for _, c := range all {
+                    if len(c.FullName) > 0 {
+                        withName++
+                    }
+                }
+                return len(all), withName
+            }
+            total, withName := countContacts()
+            fmt.Printf("📇 whatsmeow contact store: %d contacts, %d with full name (status reach)\n",
+                total, withName)
+            // Der initiale App-State-Sync (Kontaktliste, Pin/Mute/Archiv vom
+            // Telefon) passiert in whatsmeow NICHT automatisch - er muss
+            // explizit angefordert werden (wie es auch mautrix-whatsapp nach
+            // dem Login tut). Ohne ihn bleibt der Kontakt-Store leer und
+            // eigene Status erreichen niemanden.
+            if withName == 0 {
+                fmt.Println("📇 Contact store empty - requesting full app state sync from phone...")
+                for _, name := range []appstate.WAPatchName{
+                    appstate.WAPatchCriticalBlock,
+                    appstate.WAPatchCriticalUnblockLow,
+                    appstate.WAPatchRegularHigh,
+                    appstate.WAPatchRegular,
+                    appstate.WAPatchRegularLow,
+                } {
+                    if serr := client.FetchAppState(ctx, name, true, false); serr != nil {
+                        fmt.Printf("📇 app state sync %s failed: %v\n", name, serr)
+                    }
+                }
+                total, withName = countContacts()
+                fmt.Printf("📇 after app state sync: %d contacts, %d with full name\n", total, withName)
+                // Beweissicherung: gespeicherte Patch-Versionen. Version > 0
+                // bei 0 Kontakten bedeutet: Patches kamen an und wurden
+                // angewendet, der serverseitige App-State enthaelt aber
+                // schlicht (noch) keine Kontakte - das Telefon muss seine
+                // Daten erst hochladen (z.B. nach frischer Neuverbindung).
+                for _, name := range []appstate.WAPatchName{
+                    appstate.WAPatchCriticalUnblockLow,
+                    appstate.WAPatchRegular,
+                } {
+                    if v, _, verr := client.Store.AppState.GetAppStateVersion(ctx, string(name)); verr == nil {
+                        fmt.Printf("📇 app state %s stored version: %d\n", name, v)
+                    }
+                }
+            }
         }()
         
     case *events.PairSuccess:
@@ -1569,7 +1634,9 @@ func sendMedia(to string, filePath string, caption string) error {
     fileName := filepath.Base(filePath)
     mimeType := getMimeType(fileName)
     var jid types.JID
-    if len(to) > 15 {
+    if to == "status" {
+        jid = types.StatusBroadcastJID // eigener Medien-Status
+    } else if len(to) > 15 {
         jid = types.NewJID(to, "g.us")
     } else {
         jid = types.NewJID(to, "s.whatsapp.net")
@@ -1921,6 +1988,72 @@ func main() {
             json.NewEncoder(w).Encode(messages)
             msgMutex.RUnlock()
         }
+    })
+
+    // Eigenen Status loeschen (Revoke, wie "fuer alle loeschen")
+    http.HandleFunc("/status/delete", func(w http.ResponseWriter, r *http.Request) {
+        id := r.URL.Query().Get("id")
+        if id == "" {
+            http.Error(w, "id required", 400)
+            return
+        }
+        revoke := client.BuildRevoke(types.StatusBroadcastJID, types.EmptyJID, id)
+        if _, err := client.SendMessage(context.Background(), types.StatusBroadcastJID, revoke); err != nil {
+            fmt.Printf("📸 Status delete failed: %v\n", err)
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        fmt.Printf("📸 Status deleted (id=%s)\n", id)
+        updateMessage("status", id, func(m *Message) {
+            m.Revoked = true
+            m.Text = ""
+            m.MediaType = ""
+            m.LocalPath = ""
+        })
+        json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+    })
+
+    // Eigenen Text-Status posten. WhatsApp verteilt ihn serverseitig
+    // gemaess der Status-Privatsphaere des Kontos (wie vom Telefon aus).
+    http.HandleFunc("/status/post", func(w http.ResponseWriter, r *http.Request) {
+        text := r.URL.Query().Get("text")
+        if text == "" {
+            http.Error(w, "text required", 400)
+            return
+        }
+        bg := uint32(0xFF075E54) // WhatsApp-Gruen als Standard-Hintergrund
+        if bgHex := r.URL.Query().Get("bg"); bgHex != "" {
+            if v, perr := strconv.ParseUint(bgHex, 16, 32); perr == nil {
+                bg = uint32(v)
+            }
+        }
+        fg := uint32(0xFFFFFFFF)
+        font := waE2E.ExtendedTextMessage_SYSTEM
+        msg := &waE2E.Message{
+            ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+                Text:           &text,
+                BackgroundArgb: &bg,
+                TextArgb:       &fg,
+                Font:           &font,
+            },
+        }
+        resp, err := client.SendMessage(context.Background(), types.StatusBroadcastJID, msg)
+        if err != nil {
+            fmt.Printf("📸 Status post failed: %v\n", err)
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        fmt.Printf("📸 Status posted (id=%s)\n", resp.ID)
+        // Lokal ablegen, damit er sofort im eigenen Feed erscheint
+        addMessage(Message{
+            ID:        resp.ID,
+            ChatJID:   "status",
+            Sender:    client.Store.ID.User,
+            Text:      text,
+            Timestamp: resp.Timestamp.Unix(),
+            FromMe:    true,
+        })
+        json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "id": resp.ID})
     })
 
     http.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {

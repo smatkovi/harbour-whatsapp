@@ -1601,6 +1601,53 @@ ApplicationWindow {
     }
 
     Component {
+        id: statusPostDialog
+        Dialog {
+            property string statusText: textArea.text
+            property string statusBg: bgRepeater.model[bgRow.selected]
+            canAccept: textArea.text.trim().length > 0
+            Column {
+                width: parent.width
+                DialogHeader { title: "Post status" }
+                TextArea {
+                    id: textArea
+                    width: parent.width
+                    placeholderText: "Your status update\u2026"
+                    label: "Visible according to your WhatsApp status privacy"
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    text: "Background"
+                    color: Theme.secondaryHighlightColor
+                    font.pixelSize: Theme.fontSizeSmall
+                }
+                Row {
+                    id: bgRow
+                    property int selected: 0
+                    x: Theme.horizontalPageMargin
+                    spacing: Theme.paddingMedium
+                    Repeater {
+                        id: bgRepeater
+                        // AARRGGBB, an WhatsApps Text-Status-Palette angelehnt
+                        model: ["FF075E54", "FF128C7E", "FF3949AB", "FF8E24AA",
+                                "FFD81B60", "FFE65100", "FF546E7A", "FF212121"]
+                        Rectangle {
+                            width: Theme.itemSizeExtraSmall
+                            height: Theme.itemSizeExtraSmall
+                            radius: width / 2
+                            color: "#" + modelData.substring(2)
+                            border.width: bgRow.selected === index ? 4 : 0
+                            border.color: Theme.highlightColor
+                            MouseArea { anchors.fill: parent; onClicked: bgRow.selected = index }
+                        }
+                    }
+                }
+                Item { width: 1; height: Theme.paddingLarge }
+            }
+        }
+    }
+
+    Component {
         id: statusPage
         Page {
             id: stPage
@@ -1613,6 +1660,7 @@ ApplicationWindow {
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState === 4 && xhr.status === 200) {
                         var list = JSON.parse(xhr.responseText) || []
+                        list = list.filter(function(m) { return !m.revoked })
                         list.sort(function(a, b) { return b.timestamp - a.timestamp })
                         statuses = list
                     }
@@ -1633,6 +1681,64 @@ ApplicationWindow {
                 xhr.send()
             }
 
+            RemorsePopup { id: deleteRemorse }
+
+            function sendStatusMedia(path, caption) {
+                var xhr = new XMLHttpRequest()
+                xhr.open("POST", "http://127.0.0.1:" + backendPort
+                         + "/sendmedia?to=status&file=" + encodeURIComponent(path)
+                         + "&caption=" + encodeURIComponent(caption || ""))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) loadStatuses()
+                }
+                xhr.send()
+            }
+
+            Component {
+                id: statusMediaPicker
+                ContentPickerPage {
+                    title: "Select image or video"
+                    onSelectedContentPropertiesChanged: {
+                        // Erst Caption abfragen, dann posten - wie bei WhatsApp
+                        var dlg = pageStack.push(statusCaptionDialog,
+                                                 { mediaPath: selectedContentProperties.filePath })
+                        dlg.accepted.connect(function() {
+                            stPage.sendStatusMedia(dlg.mediaPath, dlg.captionText)
+                        })
+                    }
+                }
+            }
+
+            Component {
+                id: statusCaptionDialog
+                Dialog {
+                    property string mediaPath: ""
+                    property string captionText: captionArea.text
+                    canAccept: true // Caption ist optional
+                    Column {
+                        width: parent.width
+                        DialogHeader {
+                            title: "Post to status"
+                            acceptText: "Post"
+                        }
+                        Image {
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*Theme.horizontalPageMargin
+                            height: Math.min(width * 0.6, Screen.height * 0.3)
+                            source: mediaPath
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                        }
+                        TextArea {
+                            id: captionArea
+                            width: parent.width
+                            placeholderText: "Add a caption\u2026 (optional)"
+                            label: "Caption"
+                        }
+                    }
+                }
+            }
+
             onStatusChanged: if (status === PageStatus.Active) loadStatuses()
             Component.onCompleted: loadStatuses()
 
@@ -1642,6 +1748,26 @@ ApplicationWindow {
 
                 PullDownMenu {
                     MenuItem { text: "Refresh"; onClicked: loadStatuses() }
+                    MenuItem {
+                        text: "Post image or video"
+                        onClicked: pageStack.push(statusMediaPicker)
+                    }
+                    MenuItem {
+                        text: "Post status"
+                        onClicked: {
+                            var dlg = pageStack.push(statusPostDialog)
+                            dlg.accepted.connect(function() {
+                                var xhr = new XMLHttpRequest()
+                                xhr.open("GET", "http://127.0.0.1:" + backendPort
+                                         + "/status/post?text=" + encodeURIComponent(dlg.statusText)
+                                         + "&bg=" + dlg.statusBg)
+                                xhr.onreadystatechange = function() {
+                                    if (xhr.readyState === 4) loadStatuses()
+                                }
+                                xhr.send()
+                            })
+                        }
+                    }
                 }
 
                 header: PageHeader { title: "Status updates" }
@@ -1666,6 +1792,22 @@ ApplicationWindow {
                             font.pixelSize: Theme.fontSizeExtraSmall
                             anchors.verticalCenter: parent.verticalCenter
                         }
+                        IconButton {
+                            visible: modelData.fromMe === true
+                            icon.source: "image://theme/icon-s-clear-opaque-cross"
+                            width: Theme.itemSizeExtraSmall * 0.7
+                            height: width
+                            anchors.verticalCenter: parent.verticalCenter
+                            onClicked: deleteRemorse.execute("Deleting status", function() {
+                                var xhr = new XMLHttpRequest()
+                                xhr.open("GET", "http://127.0.0.1:" + backendPort
+                                         + "/status/delete?id=" + encodeURIComponent(modelData.id))
+                                xhr.onreadystatechange = function() {
+                                    if (xhr.readyState === 4) loadStatuses()
+                                }
+                                xhr.send()
+                            })
+                        }
                     }
 
                     Label {
@@ -1680,14 +1822,21 @@ ApplicationWindow {
                         visible: modelData.mediaType === "image" || modelData.mediaType === "video"
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*Theme.horizontalPageMargin
-                        height: visible ? width * 0.6 : 0
-                        color: Theme.rgba(Theme.primaryColor, 0.1)
+                        height: visible ? (modelData.localPath && modelData.mediaType === "image"
+                                           ? Math.min(feedImage.implicitHeight > 0 && feedImage.implicitWidth > 0
+                                                      ? width * feedImage.implicitHeight / feedImage.implicitWidth
+                                                      : width * 0.6,
+                                                      Screen.height * 0.6)
+                                           : width * 0.6) : 0
+                        color: modelData.localPath ? "black" : Theme.rgba(Theme.primaryColor, 0.1)
                         radius: Theme.paddingMedium
 
                         Image {
+                            id: feedImage
                             anchors.fill: parent
                             anchors.margins: 2
-                            fillMode: Image.PreserveAspectCrop
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
                             source: modelData.localPath && modelData.mediaType === "image"
                                     ? "file://" + modelData.localPath : ""
                         }
@@ -1703,9 +1852,17 @@ ApplicationWindow {
                         }
                         MouseArea {
                             anchors.fill: parent
-                            onClicked: modelData.localPath
-                                       ? Qt.openUrlExternally("file://" + modelData.localPath)
-                                       : stPage.downloadStatus(modelData.id)
+                            onClicked: {
+                                if (!modelData.localPath) {
+                                    stPage.downloadStatus(modelData.id)
+                                } else if (modelData.mediaType === "image") {
+                                    pageStack.push(statusFullscreen,
+                                                   { imagePath: modelData.localPath,
+                                                     caption: modelData.text || "" })
+                                } else {
+                                    Qt.openUrlExternally("file://" + modelData.localPath)
+                                }
+                            }
                         }
                     }
                 }
@@ -1715,6 +1872,48 @@ ApplicationWindow {
                     text: "No status updates"
                     hintText: "Status updates from your contacts appear here for 24 hours"
                 }
+            }
+        }
+    }
+
+    Component {
+        id: statusFullscreen
+        Page {
+            property string imagePath: ""
+            property string caption: ""
+            allowedOrientations: Orientation.All
+            backgroundColor: "black"
+
+            SilicaFlickable {
+                anchors.fill: parent
+                contentWidth: width
+                contentHeight: height
+
+                Image {
+                    anchors.fill: parent
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    source: "file://" + imagePath
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: pageStack.pop()
+                }
+            }
+
+            Label {
+                visible: caption !== ""
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: Theme.paddingLarge
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2*Theme.horizontalPageMargin
+                text: caption
+                wrapMode: Text.Wrap
+                color: "white"
+                horizontalAlignment: Text.AlignHCenter
+                style: Text.Outline
+                styleColor: "black"
             }
         }
     }
