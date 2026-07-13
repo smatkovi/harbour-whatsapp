@@ -251,6 +251,10 @@ type Message struct {
     Reactions map[string]string `json:"reactions,omitempty"` // Nummer -> Emoji
     Edited  bool `json:"edited,omitempty"`
     Revoked bool `json:"revoked,omitempty"`
+    PollName     string              `json:"pollName,omitempty"`
+    PollOptions  []string            `json:"pollOptions,omitempty"`
+    PollMultiple bool                `json:"pollMultiple,omitempty"`
+    PollVoters   map[string][]string `json:"pollVoters,omitempty"` // Nummer -> gewaehlte Optionen
 }
 
 type Chat struct {
@@ -677,6 +681,39 @@ func resolvePN(jid types.JID, alt types.JID) types.JID {
 type pollLike interface {
     GetName() string
     GetOptions() []*waE2E.PollCreationMessage_Option
+    GetSelectableOptionsCount() uint32
+}
+
+func extractPoll(msg *waE2E.Message) (name string, options []string, multiple bool, ok bool) {
+    var p pollLike
+    switch {
+    case msg.GetPollCreationMessageV3() != nil:
+        p = msg.GetPollCreationMessageV3()
+    case msg.GetPollCreationMessageV2() != nil:
+        p = msg.GetPollCreationMessageV2()
+    case msg.GetPollCreationMessage() != nil:
+        p = msg.GetPollCreationMessage()
+    default:
+        return "", nil, false, false
+    }
+    for _, o := range p.GetOptions() {
+        options = append(options, o.GetOptionName())
+    }
+    return p.GetName(), options, p.GetSelectableOptionsCount() != 1, true
+}
+
+// matchPollOptions uebersetzt Options-Hashes einer Stimme zurueck in Namen.
+func matchPollOptions(hashes [][]byte, options []string) []string {
+    known := whatsmeow.HashPollOptions(options)
+    var out []string
+    for _, h := range hashes {
+        for i, k := range known {
+            if bytes.Equal(h, k) {
+                out = append(out, options[i])
+            }
+        }
+    }
+    return out
 }
 
 type mediaKeyed interface {
@@ -1011,13 +1048,34 @@ func eventHandler(evt interface{}) {
             text = "👤 " + strings.Join(names, ", ")
         }
 
-        // Umfragen
-        if poll := msg.GetPollCreationMessageV3(); poll != nil {
-            text = pollText(poll)
-        } else if poll := msg.GetPollCreationMessageV2(); poll != nil {
-            text = pollText(poll)
-        } else if poll := msg.GetPollCreationMessage(); poll != nil {
-            text = pollText(poll)
+        // Umfragen: strukturiert ablegen
+        var pollName string
+        var pollOptions []string
+        var pollMultiple bool
+        if n, opts, multi, ok := extractPoll(msg); ok {
+            pollName, pollOptions, pollMultiple = n, opts, multi
+            mediaType = "poll"
+            text = "📊 " + n
+        }
+
+        // Eingehende Poll-Stimme: Zielumfrage aktualisieren, keine neue Nachricht
+        if pu := msg.GetPollUpdateMessage(); pu != nil {
+            voter := resolvePN(v.Info.Sender, v.Info.SenderAlt).User
+            targetID := pu.GetPollCreationMessageKey().GetID()
+            if vote, err := client.DecryptPollVote(ctx, v); err == nil {
+                updateMessage("", targetID, func(m *Message) {
+                    if m.PollVoters == nil {
+                        m.PollVoters = make(map[string][]string)
+                    }
+                    m.PollVoters[voter] = matchPollOptions(vote.GetSelectedOptions(), m.PollOptions)
+                    if len(m.PollVoters[voter]) == 0 {
+                        delete(m.PollVoters, voter) // Stimme zurueckgezogen
+                    }
+                })
+            } else {
+                fmt.Printf("⚠️ Could not decrypt poll vote for %s: %v\n", targetID, err)
+            }
+            return
         }
 
         // Gruppen-Einladung
@@ -1153,6 +1211,7 @@ func eventHandler(evt interface{}) {
                 MimeType: mimeType, FileName: fileName, FileSize: fileSize, LocalPath: localPath,
                 Latitude: latitude, Longitude: longitude,
                 QuotedID: quotedID, QuotedText: quotedText, QuotedSender: quotedSender,
+                PollName: pollName, PollOptions: pollOptions, PollMultiple: pollMultiple,
             })
             if mediaType != "" {
                 fmt.Printf("📩 %s: [%s] %s\n", chatJid, mediaType, text)
@@ -1370,6 +1429,14 @@ func eventHandler(evt interface{}) {
                 if text == "" && mediaType == "" {
                     text, mediaType, latitude, longitude = specialInfo(msg)
                 }
+                var pollName string
+                var pollOptions []string
+                var pollMultiple bool
+                if n, opts, multi, ok := extractPoll(msg); ok {
+                    pollName, pollOptions, pollMultiple = n, opts, multi
+                    mediaType = "poll"
+                    text = "📊 " + n
+                }
                 if text != "" || mediaType != "" {
                     fromMe := hm.Message.GetKey().GetFromMe()
                     ts := int64(hm.Message.GetMessageTimestamp())
@@ -1389,6 +1456,7 @@ func eventHandler(evt interface{}) {
                         MediaType: mediaType, MimeType: mimeType,
                         FileName: fileName, FileSize: fileSize,
                         Latitude: latitude, Longitude: longitude,
+                        PollName: pollName, PollOptions: pollOptions, PollMultiple: pollMultiple,
                     })
                 }
             }
@@ -2181,7 +2249,19 @@ func main() {
             http.Error(w, err.Error(), 500)
             return
         }
-        json.NewEncoder(w).Encode(map[string]string{"jid": gi.JID.User})
+        gjid := gi.JID.ToNonAD().User
+        // Gruppenname merken und System-Eintrag anlegen, damit die neue
+        // Gruppe sofort in der Chatliste erscheint
+        contactsMutex.Lock()
+        contacts[gjid] = name
+        contactsMutex.Unlock()
+        go saveContacts()
+        addMessage(Message{
+            ID: "groupcreate-" + gjid, Sender: client.Store.ID.User,
+            Text: "👥 Group \"" + name + "\" created",
+            Timestamp: time.Now().Unix(), FromMe: true, ChatJID: gjid,
+        })
+        json.NewEncoder(w).Encode(map[string]string{"jid": gjid})
     })
 
     http.HandleFunc("/group/leave", func(w http.ResponseWriter, r *http.Request) {
@@ -2276,8 +2356,12 @@ func main() {
             change = whatsmeow.ParticipantChangeAdd
         case "remove":
             change = whatsmeow.ParticipantChangeRemove
+        case "promote":
+            change = whatsmeow.ParticipantChangePromote
+        case "demote":
+            change = whatsmeow.ParticipantChangeDemote
         default:
-            http.Error(w, "action=add|remove required", 400)
+            http.Error(w, "action=add|remove|promote|demote required", 400)
             return
         }
         if _, err := client.UpdateGroupParticipants(ctx, types.NewJID(chat, types.GroupServer), jids, change); err != nil {
@@ -2567,6 +2651,100 @@ func main() {
             go saveMessages()
         }
         json.NewEncoder(w).Encode(map[string]int{"removed": removed})
+    })
+
+    http.HandleFunc("/pollvote", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        msgID := r.URL.Query().Get("id")
+        optsParam := r.URL.Query().Get("options") // ||-getrennt, leer = Stimme zurueckziehen
+        if chat == "" || msgID == "" {
+            http.Error(w, "chat and id required", 400)
+            return
+        }
+        msgMutex.RLock()
+        var target *Message
+        for i := range messages {
+            if messages[i].ID == msgID && messages[i].ChatJID == chat {
+                target = &messages[i]
+                break
+            }
+        }
+        msgMutex.RUnlock()
+        if target == nil || target.MediaType != "poll" {
+            http.Error(w, "unknown poll", 404)
+            return
+        }
+        var selected []string
+        if optsParam != "" {
+            selected = strings.Split(optsParam, "||")
+        }
+        pollInfo := &types.MessageInfo{
+            ID: types.MessageID(msgID),
+            MessageSource: types.MessageSource{
+                Chat:     toChatJID(chat),
+                Sender:   types.NewJID(target.Sender, types.DefaultUserServer),
+                IsFromMe: target.FromMe,
+            },
+        }
+        voteMsg, err := client.BuildPollVote(ctx, pollInfo, selected)
+        if err != nil {
+            http.Error(w, "cannot vote on this poll: "+err.Error()+" (polls imported from history have no message secret)", 500)
+            return
+        }
+        if _, err := client.SendMessage(ctx, toChatJID(chat), voteMsg); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        me := client.Store.ID.User
+        updateMessage(chat, msgID, func(m *Message) {
+            if m.PollVoters == nil {
+                m.PollVoters = make(map[string][]string)
+            }
+            if len(selected) == 0 {
+                delete(m.PollVoters, me)
+            } else {
+                m.PollVoters[me] = selected
+            }
+        })
+        w.Write([]byte("ok"))
+    })
+
+    http.HandleFunc("/poll/create", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        name := strings.TrimSpace(r.URL.Query().Get("name"))
+        optsParam := r.URL.Query().Get("options") // ||-getrennt
+        multiple := r.URL.Query().Get("multiple") == "1"
+        var options []string
+        for _, o := range strings.Split(optsParam, "||") {
+            if o = strings.TrimSpace(o); o != "" {
+                options = append(options, o)
+            }
+        }
+        if chat == "" || name == "" || len(options) < 2 {
+            http.Error(w, "chat, name and at least 2 options required", 400)
+            return
+        }
+        if len(options) > 12 {
+            http.Error(w, "at most 12 options", 400)
+            return
+        }
+        selectable := 1
+        if multiple {
+            selectable = 0 // 0 = beliebig viele
+        }
+        msg := client.BuildPollCreation(name, options, selectable)
+        resp, err := client.SendMessage(ctx, toChatJID(chat), msg)
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        addMessage(Message{
+            ID: resp.ID, Sender: client.Store.ID.User,
+            Text: "📊 " + name, Timestamp: time.Now().Unix(),
+            FromMe: true, ChatJID: chat, MediaType: "poll",
+            PollName: name, PollOptions: options, PollMultiple: multiple,
+        })
+        w.Write([]byte("ok"))
     })
 
     http.HandleFunc("/quit", func(w http.ResponseWriter, r *http.Request) {

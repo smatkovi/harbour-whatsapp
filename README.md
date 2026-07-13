@@ -11,6 +11,15 @@ group management, channels (newsletters), communities, missed-call log with
 GSM call-back, global and in-chat full-text search, profile editing, and a
 storage manager.
 
+## How this was made
+
+This app was developed with the help of a large language model ("AI",
+Claude by Anthropic). The architecture decisions, testing on real
+hardware, bug reports and the choices about what to build were made by
+me; the model was used as a coding assistant. Every release is tested
+on-device before publishing. Issues and patches are welcome regardless
+of how any particular line came to exist.
+
 ## Permissions (important!)
 
 The app ships with **minimal Sailjail permissions** (`Internet;Secrets;`).

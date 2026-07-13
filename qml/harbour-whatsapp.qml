@@ -61,6 +61,7 @@ ApplicationWindow {
     // Sailfish Contacts: nur instanziiert, wenn der Opt-in aktiv ist -
     // ohne Einstellung wird die Kontaktdatenbank nie angefasst
     property bool contactsOptIn: false
+    property string globalNotice: ""
 
     Loader {
         id: peopleLoader
@@ -428,6 +429,16 @@ ApplicationWindow {
                     visible: running
                     size: BusyIndicatorSize.Medium
                     anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                Label {
+                    visible: globalNotice !== ""
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2*x
+                    text: globalNotice
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: globalNotice.indexOf("failed") >= 0 ? Theme.errorColor : Theme.highlightColor
                 }
 
                 Column {
@@ -1057,6 +1068,188 @@ ApplicationWindow {
     }
 
     Component {
+        id: createPollPage
+        Dialog {
+            id: cpDialog
+            property string targetChat: ""
+            property var optionTexts: ["", ""]
+            canAccept: {
+                if (cpName.text.trim() === "") return false
+                var filled = 0
+                for (var i = 0; i < optionTexts.length; i++) {
+                    if (optionTexts[i].trim() !== "") filled++
+                }
+                return filled >= 2
+            }
+
+            onAccepted: {
+                var opts = []
+                for (var i = 0; i < optionTexts.length; i++) {
+                    if (optionTexts[i].trim() !== "") opts.push(optionTexts[i].trim())
+                }
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/poll/create?chat=" + targetChat
+                         + "&name=" + encodeURIComponent(cpName.text.trim())
+                         + "&options=" + encodeURIComponent(opts.join("||"))
+                         + "&multiple=" + (cpMulti.checked ? "1" : "0"))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4 && xhr.status !== 200) {
+                        globalNotice = "Poll creation failed: " + xhr.responseText
+                    }
+                }
+                xhr.send()
+            }
+
+            SilicaFlickable {
+                anchors.fill: parent
+                contentHeight: cpCol.height
+
+                Column {
+                    id: cpCol
+                    width: parent.width
+
+                    DialogHeader { title: "Create poll" }
+
+                    TextField {
+                        id: cpName
+                        width: parent.width
+                        label: "Question"
+                        placeholderText: "Ask something…"
+                    }
+
+                    Repeater {
+                        model: cpDialog.optionTexts.length
+                        TextField {
+                            width: cpCol.width
+                            label: "Option " + (index + 1)
+                            placeholderText: "Option " + (index + 1)
+                            text: cpDialog.optionTexts[index]
+                            onTextChanged: {
+                                var a = cpDialog.optionTexts
+                                if (a[index] !== text) {
+                                    a[index] = text
+                                    cpDialog.optionTexts = a
+                                }
+                            }
+                        }
+                    }
+
+                    Button {
+                        text: "Add option"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        enabled: cpDialog.optionTexts.length < 12
+                        onClicked: {
+                            var a = cpDialog.optionTexts
+                            a.push("")
+                            cpDialog.optionTexts = a
+                        }
+                    }
+
+                    TextSwitch {
+                        id: cpMulti
+                        text: "Allow multiple answers"
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: addParticipantsPage
+        Dialog {
+            id: apDialog
+            property string groupJid: ""
+            property var existingNumbers: ({})
+            property var onDone: null
+            property var selected: ({})
+            property string apSearch: ""
+            canAccept: selectedCount() > 0
+
+            function selectedCount() {
+                var n = 0
+                for (var k in selected) if (selected[k]) n++
+                return n
+            }
+
+            function candidates() {
+                var all = mergedContacts()
+                var q = apSearch.toLowerCase()
+                var result = []
+                for (var i = 0; i < all.length; i++) {
+                    var c = all[i]
+                    if (existingNumbers[c.jid]) continue   // schon in der Gruppe
+                    if (apSearch !== ""
+                        && c.name.toLowerCase().indexOf(q) < 0
+                        && c.jid.indexOf(q) < 0) continue
+                    result.push(c)
+                }
+                return result
+            }
+
+            onAccepted: {
+                var nums = []
+                for (var k in selected) if (selected[k]) nums.push(k)
+                if (nums.length === 0) return
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/participants?chat="
+                         + groupJid + "&action=add&numbers=" + nums.join(","))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status !== 200) globalNotice = "Add failed: " + xhr.responseText
+                        if (onDone) onDone()
+                    }
+                }
+                xhr.send()
+            }
+
+            Column {
+                id: apHeader
+                width: parent.width
+                DialogHeader { title: "Add participants" }
+                SearchField {
+                    id: apSearchField
+                    width: parent.width
+                    placeholderText: "Search contacts"
+                    onTextChanged: apDialog.apSearch = text
+                }
+                SectionHeader {
+                    text: apDialog.selectedCount() > 0
+                          ? "Selected: " + apDialog.selectedCount()
+                          : "Tap to select"
+                }
+            }
+
+            SilicaListView {
+                anchors.top: apHeader.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                clip: true
+                model: apDialog.candidates()
+
+                delegate: TextSwitch {
+                    text: modelData.name || ("+" + modelData.jid)
+                    description: "+" + modelData.jid
+                    checked: apDialog.selected[modelData.jid] === true
+                    automaticCheck: false
+                    onClicked: {
+                        var sel = apDialog.selected
+                        sel[modelData.jid] = !sel[modelData.jid]
+                        apDialog.selected = sel
+                        checked = sel[modelData.jid]
+                    }
+                }
+
+                ViewPlaceholder {
+                    enabled: apDialog.candidates().length === 0
+                    text: contactsOptIn ? "No contacts" : "Address book suggestions are off"
+                    hintText: contactsOptIn ? "" : "Enable them in Settings, or use the number field"
+                }
+            }
+        }
+    }
+
+    Component {
         id: groupPhotoPicker
         ImagePickerPage {
             property string groupJid: ""
@@ -1220,6 +1413,22 @@ ApplicationWindow {
                         }
                     }
 
+                    Button {
+                        text: "Add from contacts"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        onClicked: {
+                            var existing = {}
+                            for (var i = 0; i < participants.length; i++) {
+                                existing[participants[i].number] = true
+                            }
+                            pageStack.push(addParticipantsPage, {
+                                groupJid: giPage.groupJid,
+                                existingNumbers: existing,
+                                onDone: function() { loadInfo() }
+                            })
+                        }
+                    }
+
                     SectionHeader {
                         visible: subgroups.length > 0
                         text: "Community groups (" + subgroups.length + ")"
@@ -1246,18 +1455,35 @@ ApplicationWindow {
                         model: participants
                         ListItem {
                             width: giCol.width
-                            contentHeight: Theme.itemSizeSmall
+                            contentHeight: Theme.itemSizeMedium
                             menu: ContextMenu {
+                                MenuItem {
+                                    text: "Call +" + modelData.number
+                                    onClicked: Qt.openUrlExternally("tel:+" + modelData.number)
+                                }
+                                MenuItem {
+                                    text: modelData.isAdmin ? "Remove admin rights" : "Make admin"
+                                    onClicked: groupCall("/group/participants?chat=" + giPage.groupJid
+                                               + "&action=" + (modelData.isAdmin ? "demote" : "promote")
+                                               + "&numbers=" + modelData.number)
+                                }
                                 MenuItem {
                                     text: "Remove from group"
                                     onClicked: groupCall("/group/participants?chat=" + giPage.groupJid + "&action=remove&numbers=" + modelData.number)
                                 }
                             }
-                            Label {
+                            Column {
                                 x: Theme.horizontalPageMargin
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: (getDisplayName(modelData.number, modelData.name))
-                                      + (modelData.isAdmin ? " · admin" : "")
+                                Label {
+                                    text: (getDisplayName(modelData.number, modelData.name))
+                                          + (modelData.isAdmin ? " · admin" : "")
+                                }
+                                Label {
+                                    text: "+" + modelData.number
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    color: Theme.secondaryColor
+                                }
                             }
                         }
                     }
@@ -1540,11 +1766,17 @@ ApplicationWindow {
             onAccepted: {
                 var nums = []
                 for (var k in selected) if (selected[k]) nums.push(k)
+                globalNotice = "Creating group…"
                 var xhr = new XMLHttpRequest()
                 xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/create?name="
                          + encodeURIComponent(ngNameText) + "&participants=" + nums.join(","))
                 xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4) loadChats()
+                    if (xhr.readyState === 4) {
+                        globalNotice = xhr.status === 200
+                            ? "Group \"" + ngNameText + "\" created"
+                            : "Group creation failed: " + xhr.responseText
+                        loadChats()
+                    }
                 }
                 xhr.send()
             }
@@ -1585,6 +1817,7 @@ ApplicationWindow {
 
                 delegate: TextSwitch {
                     text: modelData.name || ("+" + modelData.jid)
+                    description: "+" + modelData.jid
                     checked: ngDialog.selected[modelData.jid] === true
                     automaticCheck: false
                     onClicked: {
@@ -1999,6 +2232,11 @@ ApplicationWindow {
                         }
                     }
                     MenuItem {
+                        text: "Create poll"
+                        visible: chatJid !== "status" && !isChannel
+                        onClicked: pageStack.push(createPollPage, { targetChat: chatJid })
+                    }
+                    MenuItem {
                         text: "Group info"
                         visible: isGroupChat
                         onClicked: pageStack.push(groupInfoPage, { groupJid: chatJid })
@@ -2133,6 +2371,104 @@ ApplicationWindow {
                         anchors.left: modelData.fromMe ? undefined : parent.left
                         anchors.margins: Theme.horizontalPageMargin
                         spacing: Theme.paddingSmall
+
+                        Column {
+                            visible: modelData.mediaType === "poll"
+                            width: parent.width
+                            spacing: Theme.paddingSmall
+
+                            property var voters: modelData.pollVoters || ({})
+                            property var myVotes: voters[phone] || []
+
+                            function voteCount(opt) {
+                                var n = 0
+                                for (var who in voters) {
+                                    if (voters[who].indexOf(opt) >= 0) n++
+                                }
+                                return n
+                            }
+
+                            function totalVoters() {
+                                var n = 0
+                                for (var who in voters) n++
+                                return n
+                            }
+
+                            function sendVote(opt) {
+                                var sel
+                                if (modelData.pollMultiple) {
+                                    sel = myVotes.slice()
+                                    var idx = sel.indexOf(opt)
+                                    if (idx >= 0) sel.splice(idx, 1)
+                                    else sel.push(opt)
+                                } else {
+                                    sel = (myVotes.indexOf(opt) >= 0) ? [] : [opt]
+                                }
+                                var xhr = new XMLHttpRequest()
+                                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/pollvote?chat=" + chatJid
+                                         + "&id=" + encodeURIComponent(modelData.id)
+                                         + "&options=" + encodeURIComponent(sel.join("||")))
+                                xhr.onreadystatechange = function() {
+                                    if (xhr.readyState === 4) {
+                                        if (xhr.status !== 200) {
+                                            downloadError = xhr.responseText
+                                            lastDownloadFailId = modelData.id
+                                        }
+                                        load()
+                                    }
+                                }
+                                xhr.send()
+                            }
+
+                            Label {
+                                text: "📊 " + (modelData.pollName || "Poll")
+                                font.bold: true
+                                wrapMode: Text.Wrap
+                                width: parent.width
+                            }
+
+                            Repeater {
+                                model: modelData.pollOptions || []
+                                BackgroundItem {
+                                    width: parent.width
+                                    height: Theme.itemSizeExtraSmall
+                                    onClicked: parent.sendVote(modelData)
+
+                                    property bool mine: parent.myVotes.indexOf(modelData) >= 0
+                                    property int votes: parent.voteCount(modelData)
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: Theme.paddingSmall
+                                        color: Theme.rgba(mine ? "#25D366" : Theme.primaryColor, mine ? 0.25 : 0.08)
+                                    }
+                                    Label {
+                                        x: Theme.paddingMedium
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: parent.width - voteLbl.width - 3*Theme.paddingMedium
+                                        text: (mine ? "✓ " : "") + modelData
+                                        truncationMode: TruncationMode.Fade
+                                        font.pixelSize: Theme.fontSizeSmall
+                                    }
+                                    Label {
+                                        id: voteLbl
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: Theme.paddingMedium
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: votes
+                                        color: Theme.secondaryColor
+                                        font.pixelSize: Theme.fontSizeSmall
+                                    }
+                                }
+                            }
+
+                            Label {
+                                text: totalVoters() + (totalVoters() === 1 ? " vote" : " votes")
+                                      + (modelData.pollMultiple ? " · multiple answers allowed" : "")
+                                font.pixelSize: Theme.fontSizeExtraSmall
+                                color: Theme.secondaryColor
+                            }
+                        }
 
                         Rectangle {
                             visible: modelData.mediaType === "location"
@@ -2371,7 +2707,7 @@ ApplicationWindow {
                         }
 
                         Rectangle {
-                            visible: modelData.text && modelData.text !== ""
+                            visible: modelData.text && modelData.text !== "" && modelData.mediaType !== "poll"
                             width: Math.min(msgTxt.implicitWidth + Theme.paddingLarge * 2, parent.width)
                             height: visible ? msgTxt.height + Theme.paddingMedium * 2 : 0
                             color: modelData.fromMe ? Theme.highlightBackgroundColor : Theme.rgba(Theme.primaryColor, 0.1)

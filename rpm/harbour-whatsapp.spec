@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.8.0
+Version:    0.8.4
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,48 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.4-1
+- Add group participants from the contact list: "Add from contacts" on
+  the Group info page opens a searchable multi-select of your merged
+  contacts (address book + WhatsApp), excluding people already in the
+  group. The manual number field remains as an alternative
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.3-1
+- Create polls yourself: "Create poll" in the chat pulley (question,
+  2-12 options, optional multiple answers)
+- Group admin management: promote/demote participants to/from admin
+  via long-press on the Group info page (promote/demote actions)
+- Phone numbers are now shown when selecting contacts for a new group
+  and for each participant on the Group info page; participant
+  long-press offers "Call +<number>" for a cellular call
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.3-1
+- Create polls: "Create poll" in the chat pulley opens a dialog with
+  question, dynamically addable options (2-12) and a multiple-answers
+  switch; the poll appears as an interactive tile for all participants
+- Group admin management: long-press a participant on the Group info
+  page to promote to admin or remove admin rights (in addition to the
+  existing add/remove)
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.2-1
+- Fix newly created groups not appearing in the chat list: the list is
+  built from stored messages, and a fresh group has none. Group
+  creation now records the group name and adds a system entry
+  ("Group created"), so the group shows up immediately and can be
+  opened and written to
+- Group creation reports success or the actual error on the main page
+  (previously failures were silently swallowed)
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.1-1
+- Vote in polls: poll messages are now interactive - tap an option to
+  vote (tap again to retract; multi-answer polls toggle selections).
+  Votes are end-to-end encrypted via the poll's message secret
+  (whatsmeow BuildPollVote). Incoming votes from others are decrypted
+  and live vote counts are shown per option, with your own choice
+  highlighted
+- Limitation: polls imported via history sync carry no message secret,
+  voting on them fails with a clear error; polls received live work
+
 * Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.0-1
 - Per-type automatic download policy (Settings): Images, Stickers,
   Videos, Audio, Documents and Profile pictures can each be set to
