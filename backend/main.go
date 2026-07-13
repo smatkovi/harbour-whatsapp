@@ -863,6 +863,18 @@ func shouldAutoDownload(kind string) bool {
     }
 }
 
+// haltWithState laesst den HTTP-Server (nur /status, /reset, /quit) weiter
+// antworten, initialisiert aber nichts mehr - die UI zeigt die Erklaerung.
+func haltWithState(state, explanation string) {
+    connState = state
+    lastError = explanation
+    fmt.Println("🛑 " + state + ": " + explanation)
+    c := make(chan os.Signal, 1)
+    signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+    <-c
+    os.Exit(0)
+}
+
 func dirWritable(dir string) bool {
     if err := os.MkdirAll(dir, 0755); err != nil {
         return false
@@ -1337,6 +1349,20 @@ func eventHandler(evt interface{}) {
         fmt.Printf("%s from %s\n", text, chatJid)
 
     case *events.Connected:
+        // Available-Presence senden: ohne sie stellt WhatsApp keine
+        // Status-Broadcasts (Stories) an dieses Geraet zu. Nebenwirkung wie
+        // bei WhatsApp Web: solange verbunden, gilt das Geraet als online.
+        go func() {
+            if client.Store.PushName != "" {
+                if err := client.SendPresence(ctx, types.PresenceAvailable); err != nil {
+                    fmt.Printf("⚠️ SendPresence failed: %v\n", err)
+                } else {
+                    fmt.Println("👋 Presence: available (status updates enabled)")
+                }
+            } else {
+                fmt.Println("⚠️ No push name yet - statuses need one presence-enabled connect after pairing")
+            }
+        }()
         isConnected = true
         connState = "connected"
         lastError = ""
@@ -1497,6 +1523,9 @@ func getChats() []Chat {
     chats := make([]Chat, 0, len(chatMap))
     chatSettingsMutex.RLock()
     for _, c := range chatMap {
+        if c.JID == "status" {
+            continue // eigene Status-Seite (attached page), nicht in der Chatliste
+        }
         if cs, ok := chatSettings[c.JID]; ok {
             c.Pinned, c.Muted, c.Archived = cs.Pinned, cs.Muted, cs.Archived
         }
@@ -1608,18 +1637,129 @@ func sendMedia(to string, filePath string, caption string) error {
 func main() {
     // Initialize paths first
     initPaths()
-    
-    // Initialize Sailfish Secrets
-    if err := InitSecrets(); err != nil {
-        fmt.Printf("⚠️ Sailfish Secrets not available: %v\n", err)
-        fmt.Println("⚠️ Running without encryption (development mode)")
+
+    // Bind the HTTP port FIRST, before the (potentially slow) Secrets
+    // handshake and DB initialization. The launcher and the UI can then
+    // reach /status immediately (state "starting") instead of assuming
+    // the backend failed, and the port file always matches reality.
+    // Loopback only - the API must never be reachable from the network.
+    var listener net.Listener
+    var port int
+    for p := 8085; p <= 8089; p++ {
+        l, lerr := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
+        if lerr == nil {
+            listener = l
+            port = p
+            break
+        }
+        fmt.Printf("⚠️ Port %d unavailable: %v\n", p, lerr)
     }
+    if listener == nil {
+        fmt.Println("❌ No free port in 8085-8089, exiting")
+        os.Exit(1)
+    }
+    os.WriteFile("backend.port", []byte(fmt.Sprintf("%d", port)), 0600)
+    fmt.Printf("🚀 Backend listening on http://127.0.0.1:%d (initializing…)\n", port)
+    go http.Serve(listener, nil)
+
+    // /reset: nur im Zustand relogin_required erlaubt - loescht die lokale
+    // Datenbank, damit nach dem Neustart frisch (verschluesselt) gepairt wird
+    http.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
+        if connState != "relogin_required" {
+            http.Error(w, "reset only allowed when relogin is required", 403)
+            return
+        }
+        for _, f := range []string{"wa.db", "wa.db-wal", "wa.db-shm"} {
+            os.Remove(f)
+        }
+        fmt.Println("🗑️ Local database removed - restart backend to pair again")
+        json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+        go func() {
+            time.Sleep(300 * time.Millisecond)
+            os.Exit(0)
+        }()
+    })
+
+    // /status sofort registrieren, damit Launcher und UI den Zustand
+    // "starting" sehen, waehrend Secrets/DB noch initialisieren
+    http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        phone := ""
+        if client != nil && client.Store != nil && client.Store.ID != nil {
+            phone = client.Store.ID.User
+        }
+        state := connState
+        if client == nil && state == "" {
+            // HTTP laeuft schon, Initialisierung noch nicht fertig.
+            // Gesetzte Halt-Zustaende (relogin_required, secrets_error)
+            // duerfen NICHT ueberschrieben werden - der Client bleibt dort
+            // absichtlich nil.
+            state = "starting"
+        }
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "connected": isConnected,
+            "pairCode":  pairCode,
+            "phone":     phone,
+            "state":     state,
+            "lastError": lastError,
+            "version":   version,
+            "paired":    client != nil && client.Store != nil && client.Store.ID != nil,
+        })
+    })
+
     
-    // Get or create encryption key
+    // Initialize Sailfish Secrets. On a cold boot sailfishsecretsd may not
+    // be ready yet - retry briefly with backoff. Init and key retrieval are
+    // retried independently, so a transient key error does not force a full
+    // re-init, and the total wait is capped at ~8 s.
     var err error
-    encryptionKey, err = GetOrCreateKey()
+    secretsReady := false
+    for attempt := 0; attempt < 8; attempt++ {
+        if !secretsReady {
+            if err = InitSecrets(); err != nil {
+                fmt.Printf("⏳ Secrets init not ready (attempt %d/8): %v\n", attempt+1, err)
+                time.Sleep(time.Duration(200+attempt*250) * time.Millisecond)
+                continue
+            }
+            secretsReady = true
+        }
+        if encryptionKey, err = GetOrCreateKey(); err == nil {
+            break
+        }
+        fmt.Printf("⏳ Key not ready (attempt %d/8): %v\n", attempt+1, err)
+        time.Sleep(time.Duration(200+attempt*250) * time.Millisecond)
+    }
+    // Secrets-only-Policy: Verschluesselung kommt ausschliesslich aus
+    // Sailfish Secrets. Eine Datenbank, die ohne Secrets angelegt wurde
+    // (Klartext-SQLite-Header), wird nicht weiterbetrieben - der Nutzer
+    // wird zum Zuruecksetzen und Neu-Pairing aufgefordert. Ohne Secrets
+    // wird auch keine neue Datenbank angelegt.
+    legacyPlaintextDB := false
+    if f, ferr := os.Open("wa.db"); ferr == nil {
+        hdr := make([]byte, 16)
+        n, _ := f.Read(hdr)
+        f.Close()
+        legacyPlaintextDB = n >= 16 && bytes.HasPrefix(hdr, []byte("SQLite format 3\x00"))
+    }
+    if legacyPlaintextDB {
+        haltWithState("relogin_required",
+            "Your local database was created without Sailfish Secrets and is stored "+
+                "UNENCRYPTED. To protect your messages, this app now requires Sailfish "+
+                "Secrets. Please tap 'Reset & pair again' - this deletes the local "+
+                "database (your chats stay on your phone and will re-sync) and creates "+
+                "a new, encrypted one.")
+    }
     if err != nil {
-        fmt.Printf("⚠️ Could not get encryption key: %v\n", err)
+        if _, serr := os.Stat("wa.db"); serr == nil {
+            haltWithState("secrets_error",
+                "Sailfish Secrets is not responding ("+err.Error()+"), so the encrypted "+
+                    "database cannot be unlocked. Your data is intact. A device restart "+
+                    "usually brings the secrets service back.")
+        }
+        haltWithState("secrets_error",
+            "Sailfish Secrets is not responding ("+err.Error()+"). This app stores its "+
+                "encryption key only in Sailfish Secrets and cannot pair without it. "+
+                "A device restart usually helps.")
     }
     
     // Initialize encrypted database
@@ -1654,24 +1794,12 @@ func main() {
     }
     go client.Connect()
 
-    http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "application/json")
-        phone := ""
-        if client.Store.ID != nil {
-            phone = client.Store.ID.User
-        }
-        json.NewEncoder(w).Encode(map[string]interface{}{
-            "connected": isConnected,
-            "pairCode":  pairCode,
-            "phone":     phone,
-            "state":     connState,
-            "lastError": lastError,
-            "version":   version,
-            "paired":    client != nil && client.Store.ID != nil,
-        })
-    })
 
     http.HandleFunc("/pair", func(w http.ResponseWriter, r *http.Request) {
+        if client == nil {
+            http.Error(w, "backend still starting, try again in a moment", 503)
+            return
+        }
         phone := r.URL.Query().Get("phone")
         if phone == "" {
             http.Error(w, "phone required", 400)
@@ -2767,28 +2895,7 @@ func main() {
         w.Write([]byte("ok"))
     })
 
-    // Bind to loopback only (the API exposes all messages - it must never be
-    // reachable from the network). Try a small port range so a busy port no
-    // longer makes the backend fail silently; write the chosen port to a file
-    // for the launcher/UI to pick up.
-    var listener net.Listener
-    var port int
-    for p := 8085; p <= 8089; p++ {
-        l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
-        if err == nil {
-            listener = l
-            port = p
-            break
-        }
-        fmt.Printf("⚠️ Port %d unavailable: %v\n", p, err)
-    }
-    if listener == nil {
-        fmt.Println("❌ No free port in 8085-8089, exiting")
-        os.Exit(1)
-    }
-    os.WriteFile("backend.port", []byte(fmt.Sprintf("%d", port)), 0600)
-    fmt.Printf("🚀 Backend running on http://127.0.0.1:%d\n", port)
-    go http.Serve(listener, nil)
+    fmt.Println("✅ Initialization complete")
 
     c := make(chan os.Signal, 1)
     signal.Notify(c, os.Interrupt, syscall.SIGTERM)

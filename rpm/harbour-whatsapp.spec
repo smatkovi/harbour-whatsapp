@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.8.4
+Version:    0.8.21
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,159 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.21-1
+- The daemon finally told us in plain words what was wrong: "SQLCipher
+  plugin only supports collection names with alphanumeric Latin-1
+  characters". Collection and secret names contained hyphens
+  (harbour-whatsapp-secrets, encryption-key) and were rejected on
+  every attempt - renamed to harbourwhatsapp / encryptionkey, same
+  scheme Storeman uses ("storeman"). CollectionAlreadyExists is now
+  tolerated via the daemon error code instead of message matching
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.20-1
+- Sailfish Secrets, final piece: with transport working (0.8.19), the
+  remaining store/retrieve failures were argument marshalling - the
+  code passed structs as []interface{}, which godbus sends as variant
+  arrays "av" instead of D-Bus structs "(sss)" etc. All Secrets calls
+  now use proper Go struct types matching the daemon introspection
+  signatures exactly (Identifier, Secret, InteractionParameters, enum
+  wrappers), daemon Result codes/messages are parsed and logged, and
+  timeouts allow for the daemon's delayed replies
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.19-1
+- Hopefully the actual Secrets fix. With the read loop now running,
+  the persistent EOF pinned the cause to the message itself: godbus'
+  Object().Call() always sets a DESTINATION header field, even empty,
+  which is invalid on a peer (non-bus) connection - libdbus-based
+  servers like Qt's sailfishsecretsd drop such messages without a
+  reply (EOF). We now build the method-call message by hand without a
+  DESTINATION field, matching how Qt peer clients talk. The
+  getPluginInfo self-test is the tell
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.18-1
+- Follow-up to the Secrets fix: 0.8.17 turned the EOF into a timeout
+  because the hand-rolled handshake never started godbus' internal
+  read loop (it is only started by conn.Auth), so replies were never
+  read. Now we wrap the raw socket with dbus.NewConn (generic
+  transport, no unix-FD support advertised) and call conn.Auth with
+  EXTERNAL - this runs the real handshake without FD negotiation AND
+  starts the read loop. The getPluginInfo self-test should now pass
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.17-1
+- Very likely fix for the Sailfish Secrets EOF. Root cause found by
+  reading the sailfish-secrets daemon and godbus sources: godbus'
+  built-in Auth() always negotiates NEGOTIATE_UNIX_FD on unix sockets,
+  and Qt's QDBusServer in sailfishsecretsd handles that in a way that
+  makes godbus drop the connection right after auth succeeds - visible
+  as "ready" but EOF on the first real call. We now perform the SASL
+  EXTERNAL handshake ourselves on the raw socket (no FD negotiation)
+  and hand the authenticated socket to dbus.NewConn, whose generic
+  transport does not advertise unix-FD support. The getPluginInfo
+  self-test from 0.8.16 confirms whether this worked
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.16-1
+- Attempt to fix Sailfish Secrets EOF (secretsd dropping every real
+  request) by explicitly using EXTERNAL D-Bus authentication with the
+  process UID on the peer-to-peer socket, matching what Qt's
+  QDBusServer in sailfishsecretsd expects, instead of letting the
+  library negotiate the mechanism. Added a getPluginInfo self-test on
+  startup so backend.log distinguishes an auth/transport problem from
+  a message-marshalling one
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.15-1
+- Fix "Reset & pair again" looping straight back into relogin_required:
+  the launcher's one-time data migration from the pre-0.4.x location
+  (~/.local/share/harbour-whatsapp) kept restoring an ancient plaintext
+  wa.db whenever the current one was missing - i.e. right after every
+  reset. The migration is removed; under the Secrets-only policy those
+  legacy remnants require a fresh pairing anyway
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.14-1
+- The relogin/secrets explanations are now shown as a full wrapping
+  text block instead of being cut off in the single-line status row
+- After "Reset & pair again" the UI stays in the starting state until
+  the restarted backend reports its real state, instead of briefly
+  exposing the pairing form against a dead backend ("pairing failed
+  (0)"); unreachable/starting backends now produce a clear message
+  when pairing is attempted too early
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.13-1
+- Fix the relogin_required/secrets_error explanations from 0.8.12
+  never reaching the UI: /status overrode the state with "starting"
+  whenever the client was nil - which is exactly the case in those
+  halt states. "starting" is now only reported while no state is set
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.12-1
+- Encryption is now strictly Sailfish-Secrets-only. If the local
+  database was created without Sailfish Secrets (plaintext SQLite
+  header - the result of earlier silent "development mode" fallbacks),
+  the app stops with an explanation and a "Reset & pair again" button:
+  it deletes the local database (chats stay on the phone and re-sync)
+  and creates a new, encrypted one on the next pairing. If Sailfish
+  Secrets itself is not responding, the app explains that instead of
+  silently running unencrypted - no database is created or opened
+  without a Secrets-stored key. The silent development-mode fallback
+  is gone
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.11-1
+- Fix settings (address book opt-in, download policies) appearing to
+  reset on every app start: preferences were fetched exactly once at
+  backend handshake, which since 0.8.8 happens while the backend is
+  still in the "starting" phase before its /prefs endpoint exists -
+  the single fetch 404ed and was never retried. Preferences are now
+  (re)loaded as soon as the backend leaves the starting state
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.10-1
+- Fix ~30 s "Starting backend" hang: the Secrets discovery used the
+  process-wide shared D-Bus session connection and closed it, so from
+  the second attempt on, every retry of the 0.8.5 handshake loop
+  failed against its own closed connection and the loop always ran to
+  exhaustion. Discovery now uses a private connection; init and key
+  retrieval retry independently with shorter backoff, capped at ~8 s
+  total. Normal warm starts are back to a moment
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.9-1
+- Fix status updates never arriving: WhatsApp only delivers status
+  broadcasts (stories) to devices that announce "available" presence,
+  which the backend never did. It now sends available presence on
+  every connect - like WhatsApp Web, the device counts as online while
+  connected. Note: statuses are push-only; the page fills with what
+  contacts post from now on, there is no way to fetch past statuses
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.8-1
+- Fix "Not connected" hanging after the 0.8.5 pairing fix: the backend
+  bound its HTTP port only after the (now potentially slow) Secrets
+  handshake and DB init, so the UI could not tell "still starting"
+  from "dead" and would keep polling a port the backend never got.
+  The port is now bound first and /status responds immediately with
+  state "starting"; the UI additionally rescans ports 8085-8089 if its
+  remembered port stops answering
+- The Status page is only attached (glow indicator, swipe from the
+  right) once the connection is up
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.7-1
+- Fix white screen on startup introduced in 0.8.6: the status page
+  used Column.padding, which does not exist in QtQuick 2.0, so the
+  whole QML file failed to load. Replaced with explicit margins
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.6-1
+- Dedicated Status page as a Sailfish attached page: the main chat
+  list shows the glow indicator at the top right, swipe left to open.
+  Status updates from contacts are listed newest-first with sender,
+  time, text and media (tap to download, tap again to view); pull
+  down to refresh. The former read-only status pseudo-chat is gone
+  from the chat list
+
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.5-1
+- Fix pairing button doing nothing on the very first launch after a
+  reboot (previously a workaround was to start the app once from the
+  terminal). Root cause: on a cold start sailfishsecretsd may not be
+  ready yet, so the backend took longer than the launcher waited.
+  The backend now retries the Secrets handshake with backoff, the
+  launcher waits up to ~25 s and restarts the backend once if it exits
+  early, and a "Retry connection" button is shown if startup still
+  fails instead of an unresponsive pairing button
+
 * Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.4-1
 - Add group participants from the contact list: "Add from contacts" on
   the Group info page opens a searchable multi-select of your merged

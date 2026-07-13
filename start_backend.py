@@ -61,19 +61,12 @@ def start():
     # ~/.local/share/harbour/harbour-whatsapp - the old path was not persisted,
     # which made the login disappear on every app restart.
     data_dir = os.path.expanduser("~/.local/share/harbour/harbour-whatsapp")
-    old_dir = os.path.expanduser("~/.local/share/harbour-whatsapp")
     os.makedirs(data_dir, exist_ok=True)
-    # one-time migration of data from the old, non-persistent location
-    if not os.path.exists(os.path.join(data_dir, "wa.db")) and os.path.isdir(old_dir):
-        import shutil
-        for f in os.listdir(old_dir):
-            src = os.path.join(old_dir, f)
-            dst = os.path.join(data_dir, f)
-            if os.path.isfile(src) and not os.path.exists(dst):
-                try:
-                    shutil.copy2(src, dst)
-                except Exception:
-                    pass
+    # Die fruehere Einmal-Migration aus ~/.local/share/harbour-whatsapp ist
+    # entfernt: sie hat nach "Reset & pair again" die dort liegende uralte
+    # Klartext-wa.db immer wieder zurueckkopiert und so eine Endlosschleife
+    # mit relogin_required erzeugt. Wer noch Altdaten dort hat, paart unter
+    # der Secrets-only-Policy ohnehin neu.
     
     # Check if already running (scan the port range the backend may use)
     port = find_backend_port()
@@ -105,15 +98,33 @@ def start():
             stderr=subprocess.STDOUT
         )
         
-        # Wait for backend to be ready
-        for i in range(50):
-            port = find_backend_port()
-            if port:
-                pyotherside.send('backendReady', True, port)
-                return True
-            if backend_process.poll() is not None:
-                break  # backend exited - see backend.log
-            time.sleep(0.1)
+        # Wait for backend to be ready. Cold start after a reboot can be slow
+        # because sailfishsecretsd may still be coming up, so be patient
+        # (up to ~25 s) and retry once if the backend exits early.
+        for attempt in range(2):
+            for i in range(250):
+                port = find_backend_port()
+                if port:
+                    pyotherside.send('backendReady', True, port)
+                    return True
+                if backend_process.poll() is not None:
+                    break  # backend exited - see backend.log; maybe retry
+                time.sleep(0.1)
+            # backend died before binding the port: try one more time
+            if backend_process.poll() is not None and attempt == 0:
+                time.sleep(1.0)
+                try:
+                    log_file2 = open(log_path, "a")
+                except Exception:
+                    log_file2 = subprocess.DEVNULL
+                backend_process = subprocess.Popen(
+                    ["/usr/share/harbour-whatsapp/wa-backend"],
+                    cwd=data_dir,
+                    stdout=log_file2,
+                    stderr=subprocess.STDOUT
+                )
+                continue
+            break
     
     pyotherside.send('backendReady', False, 0)
     return False

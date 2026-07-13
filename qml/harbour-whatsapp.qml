@@ -15,6 +15,15 @@ ApplicationWindow {
     property string connState: ""
     property string lastError: ""
     property bool paired: false
+    property bool backendFailed: false
+
+    onConnectedChanged: if (mainPage) mainPage.updateAttachedStatus()
+
+    function retryBackend() {
+        backendFailed = false
+        pairErrorMsg = ""
+        call('start_backend.start', [])
+    }
     property var waContactsMap: ({})
     property int backendPort: 8085
     property string phone: ""
@@ -31,12 +40,15 @@ ApplicationWindow {
             setHandler('backendReady', function(success, port) {
                 if (success) {
                     if (port) backendPort = port
+                    backendFailed = false
                     console.log("Backend ready on port " + backendPort)
                     checkStatus()
                     loadPrefs()
                 } else {
                     console.log("Backend failed to start")
-                    pairErrorMsg = "Backend failed to start. Please check " +
+                    backendFailed = true
+                    pairErrorMsg = "Backend did not start in time. This can happen " +
+                        "on the first launch right after a reboot. Tap Retry, or see " +
                         "~/.local/share/harbour/harbour-whatsapp/backend.log"
                 }
             })
@@ -72,6 +84,8 @@ ApplicationWindow {
         }
     }
 
+    property bool prefsLoaded: false
+
     function loadPrefs() {
         var xhr = new XMLHttpRequest()
         xhr.open("GET", "http://127.0.0.1:" + backendPort + "/prefs")
@@ -79,6 +93,7 @@ ApplicationWindow {
             if (xhr.readyState === 4 && xhr.status === 200) {
                 var p = JSON.parse(xhr.responseText) || {}
                 contactsOptIn = p.contactSuggestions === "1"
+                prefsLoaded = true
             }
         }
         xhr.send()
@@ -192,10 +207,35 @@ ApplicationWindow {
     }
 
 
+    function rescanBackendPort() {
+        // Backend kann auf 8085-8089 liegen; falls der gemerkte Port tot ist
+        // (z.B. Launcher-Timeout, Backend kam spaeter auf anderem Port hoch),
+        // alle Kandidaten durchprobieren
+        for (var p = 8085; p <= 8089; p++) {
+            if (p === backendPort) continue
+            (function(port) {
+                var probe = new XMLHttpRequest()
+                probe.open("GET", "http://127.0.0.1:" + port + "/status")
+                probe.onreadystatechange = function() {
+                    if (probe.readyState === 4 && probe.status === 200) {
+                        console.log("Backend rediscovered on port " + port)
+                        backendPort = port
+                        backendFailed = false
+                        checkStatus()
+                    }
+                }
+                probe.send()
+            })(p)
+        }
+    }
+
     function checkStatus() {
         var xhr = new XMLHttpRequest()
         xhr.open("GET", "http://127.0.0.1:" + backendPort + "/status")
         xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4 && xhr.status !== 200) {
+                rescanBackendPort()
+            }
             if (xhr.readyState === 4 && xhr.status === 200) {
                 var data = JSON.parse(xhr.responseText)
                 var wasConnected = connected
@@ -205,6 +245,9 @@ ApplicationWindow {
                 connState = data.state || ""
                 lastError = data.lastError || ""
                 paired = data.paired === true
+                if (!prefsLoaded && connState !== "starting") {
+                    loadPrefs()
+                }
                 if (connected && !wasConnected) {
                     loadChats()
                     loadWAContacts()
@@ -341,6 +384,17 @@ ApplicationWindow {
     Page {
         id: mainPage
 
+        // Status-Seite als attached page: Sailfish zeigt den Glow-Indikator
+        // oben rechts, Wisch von rechts nach links oeffnet sie.
+        // Erst anhaengen, wenn die Verbindung steht - vorher gehoert der
+        // Platz dem Pairing-/Verbindungszustand.
+        function updateAttachedStatus() {
+            if (status === PageStatus.Active && connected) {
+                pageStack.pushAttached(statusPage)
+            }
+        }
+        onStatusChanged: updateAttachedStatus()
+
         SilicaListView {
             anchors.fill: parent
             model: connected ? chats : null
@@ -417,6 +471,8 @@ ApplicationWindow {
                         case "reconnecting":     return "Reconnecting\u2026"
                         case "waiting_for_pair": return "Not paired \u2013 enter phone number below"
                         case "logged_out":       return "Logged out \u2013 pair again"
+                        case "relogin_required": return "Action required \u2013 see below"
+                        case "secrets_error":    return "Sailfish Secrets problem \u2013 see below"
                         case "error":            return lastError !== "" ? lastError : "Connection error"
                         default:                 return "Not connected"
                         }
@@ -431,6 +487,51 @@ ApplicationWindow {
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
 
+                Button {
+                    text: "Retry connection"
+                    visible: backendFailed
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    onClicked: retryBackend()
+                }
+
+                Label {
+                    visible: connState === "relogin_required" || connState === "secrets_error"
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2*x
+                    text: lastError
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.highlightColor
+                }
+
+                Button {
+                    text: "Reset & pair again"
+                    visible: connState === "relogin_required"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    onClicked: resetRemorse.execute("Deleting local database", function() {
+                        var xhr = new XMLHttpRequest()
+                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/reset")
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState === 4) {
+                                connState = "starting"
+                                lastError = ""
+                                paired = false
+                                restartTimer.start()
+                            }
+                        }
+                        xhr.send()
+                    })
+                }
+
+                RemorsePopup { id: resetRemorse }
+
+                Timer {
+                    id: restartTimer
+                    interval: 1200
+                    repeat: false
+                    onTriggered: retryBackend()
+                }
+
                 Label {
                     visible: globalNotice !== ""
                     x: Theme.horizontalPageMargin
@@ -443,6 +544,9 @@ ApplicationWindow {
 
                 Column {
                     visible: !connected && !paired
+                             && connState !== "relogin_required"
+                             && connState !== "secrets_error"
+                             && connState !== "starting"
                     width: parent.width
                     spacing: Theme.paddingLarge
 
@@ -479,7 +583,11 @@ ApplicationWindow {
                                         pairCode = JSON.parse(xhr.responseText).code
                                     } else {
                                         pairCode = ""
-                                        pairErrorMsg = "Pairing failed (" + xhr.status + "): " + xhr.responseText
+                                        pairErrorMsg = xhr.status === 0
+                                            ? "Backend is restarting - please try again in a few seconds"
+                                            : (xhr.status === 503
+                                               ? "Backend is still starting - please try again in a moment"
+                                               : "Pairing failed (" + xhr.status + "): " + xhr.responseText)
                                     }
                                 }
                             }
@@ -1487,6 +1595,125 @@ ApplicationWindow {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: statusPage
+        Page {
+            id: stPage
+            property var statuses: []
+            property string downloadingId: ""
+
+            function loadStatuses() {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/messages?jid=status")
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
+                        var list = JSON.parse(xhr.responseText) || []
+                        list.sort(function(a, b) { return b.timestamp - a.timestamp })
+                        statuses = list
+                    }
+                }
+                xhr.send()
+            }
+
+            function downloadStatus(msgId) {
+                downloadingId = msgId
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/download?id=" + encodeURIComponent(msgId))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        downloadingId = ""
+                        loadStatuses()
+                    }
+                }
+                xhr.send()
+            }
+
+            onStatusChanged: if (status === PageStatus.Active) loadStatuses()
+            Component.onCompleted: loadStatuses()
+
+            SilicaListView {
+                anchors.fill: parent
+                model: statuses
+
+                PullDownMenu {
+                    MenuItem { text: "Refresh"; onClicked: loadStatuses() }
+                }
+
+                header: PageHeader { title: "Status updates" }
+
+                delegate: Column {
+                    width: parent.width
+                    spacing: Theme.paddingSmall
+
+                    Item { width: 1; height: Theme.paddingMedium }
+
+                    Row {
+                        x: Theme.horizontalPageMargin
+                        spacing: Theme.paddingMedium
+                        Label {
+                            text: getDisplayName(modelData.sender, "")
+                            color: Theme.highlightColor
+                            font.bold: true
+                        }
+                        Label {
+                            text: formatTime(modelData.timestamp)
+                            color: Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+
+                    Label {
+                        visible: modelData.text && modelData.text !== "" && modelData.mediaType !== "poll"
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*Theme.horizontalPageMargin
+                        text: modelData.text
+                        wrapMode: Text.Wrap
+                    }
+
+                    Rectangle {
+                        visible: modelData.mediaType === "image" || modelData.mediaType === "video"
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*Theme.horizontalPageMargin
+                        height: visible ? width * 0.6 : 0
+                        color: Theme.rgba(Theme.primaryColor, 0.1)
+                        radius: Theme.paddingMedium
+
+                        Image {
+                            anchors.fill: parent
+                            anchors.margins: 2
+                            fillMode: Image.PreserveAspectCrop
+                            source: modelData.localPath && modelData.mediaType === "image"
+                                    ? "file://" + modelData.localPath : ""
+                        }
+                        Label {
+                            anchors.centerIn: parent
+                            visible: !modelData.localPath && stPage.downloadingId !== modelData.id
+                            text: (modelData.mediaType === "video" ? "🎬" : "🖼") + " tap to download"
+                            color: Theme.secondaryColor
+                        }
+                        BusyIndicator {
+                            anchors.centerIn: parent
+                            running: stPage.downloadingId === modelData.id
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: modelData.localPath
+                                       ? Qt.openUrlExternally("file://" + modelData.localPath)
+                                       : stPage.downloadStatus(modelData.id)
+                        }
+                    }
+                }
+
+                ViewPlaceholder {
+                    enabled: statuses.length === 0
+                    text: "No status updates"
+                    hintText: "Status updates from your contacts appear here for 24 hours"
                 }
             }
         }
