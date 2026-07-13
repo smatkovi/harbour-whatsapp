@@ -33,6 +33,7 @@ ApplicationWindow {
                     if (port) backendPort = port
                     console.log("Backend ready on port " + backendPort)
                     checkStatus()
+                    loadPrefs()
                 } else {
                     console.log("Backend failed to start")
                     pairErrorMsg = "Backend failed to start. Please check " +
@@ -57,11 +58,35 @@ ApplicationWindow {
 
     
     
-    // Sailfish Contacts
-    PeopleModel {
-        id: peopleModel
-        filterType: PeopleModel.FilterAll
-        requiredProperty: PeopleModel.PhoneNumberRequired
+    // Sailfish Contacts: nur instanziiert, wenn der Opt-in aktiv ist -
+    // ohne Einstellung wird die Kontaktdatenbank nie angefasst
+    property bool contactsOptIn: false
+
+    Loader {
+        id: peopleLoader
+        active: contactsOptIn
+        sourceComponent: PeopleModel {
+            filterType: PeopleModel.FilterAll
+            requiredProperty: PeopleModel.PhoneNumberRequired
+        }
+    }
+
+    function loadPrefs() {
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/prefs")
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                var p = JSON.parse(xhr.responseText) || {}
+                contactsOptIn = p.contactSuggestions === "1"
+            }
+        }
+        xhr.send()
+    }
+
+    function setPref(key, value) {
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/prefs/set?key=" + key + "&value=" + encodeURIComponent(value))
+        xhr.send()
     }
     
     // Landesvorwahl aus der eigenen Nummer ableiten (1/7 einstellig,
@@ -96,8 +121,10 @@ ApplicationWindow {
         var jid = String(phoneNumber).replace(/[^0-9]/g, "")
         var suffixResult = ""
 
-        for (var i = 0; i < peopleModel.count; i++) {
-            var person = peopleModel.get(i)
+        var pm = peopleLoader.item
+        if (!pm) return ""
+        for (var i = 0; i < pm.count; i++) {
+            var person = pm.get(i)
             if (person && person.phoneDetails) {
                 for (var j = 0; j < person.phoneDetails.length; j++) {
                     var raw = person.phoneDetails[j].normalizedNumber || person.phoneDetails[j].number
@@ -127,8 +154,9 @@ ApplicationWindow {
     function mergedContacts() {
         var merged = {}
         var i, c
-        for (i = 0; i < peopleModel.count; i++) {
-            var person = peopleModel.get(i)
+        var pm = peopleLoader.item
+        for (i = 0; pm && i < pm.count; i++) {
+            var person = pm.get(i)
             if (!person || !person.phoneDetails) continue
             for (var j = 0; j < person.phoneDetails.length; j++) {
                 var jid = toJid(person.phoneDetails[j].normalizedNumber
@@ -336,6 +364,10 @@ ApplicationWindow {
                         }
                         xhr.send()
                     }
+                }
+                MenuItem {
+                    text: "Settings"
+                    onClicked: pageStack.push(settingsPage)
                 }
                 MenuItem {
                     text: "Profile"
@@ -629,12 +661,132 @@ ApplicationWindow {
         }
     }
 
+    Component {
+        id: settingsPage
+        Page {
+            SilicaFlickable {
+                anchors.fill: parent
+                contentHeight: setCol.height
+
+                Column {
+                    id: setCol
+                    width: parent.width
+                    spacing: Theme.paddingMedium
+
+                    PageHeader { title: "Settings" }
+
+                    TextSwitch {
+                        text: "Address book suggestions"
+                        description: "Show contacts from your Sailfish address book "
+                                   + "on the New chat page and in group creation. "
+                                   + "When disabled, the app never reads the contact database."
+                        checked: contactsOptIn
+                        automaticCheck: false
+                        onClicked: {
+                            contactsOptIn = !contactsOptIn
+                            setPref("contactSuggestions", contactsOptIn ? "1" : "0")
+                        }
+                    }
+
+                    SectionHeader { text: "Sailjail permissions" }
+
+                    Label {
+                        id: permStatus
+                        property bool granted: false
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: granted
+                              ? "Contacts permission: granted (remove it below if unwanted)"
+                              : "Contacts permission: not granted - suggestions stay empty until you grant it below and restart the app"
+                        color: granted ? Theme.highlightColor : Theme.secondaryHighlightColor
+                        font.pixelSize: Theme.fontSizeSmall
+                        wrapMode: Text.Wrap
+
+                        Component.onCompleted: {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/permcheck")
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4 && xhr.status === 200) {
+                                    granted = JSON.parse(xhr.responseText).contactsPermission === true
+                                }
+                            }
+                            xhr.send()
+                        }
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: "Sailfish OS has no runtime permission dialogs, and the app "
+                            + "cannot edit its own desktop file from inside the sandbox. "
+                            + "The app therefore ships WITHOUT the Contacts permission. "
+                            + "To grant or revoke it, tap a command below to copy it, then "
+                            + "run it in Terminal and restart the app. Updates will not "
+                            + "overwrite your choice."
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                        wrapMode: Text.Wrap
+                    }
+
+                    BackgroundItem {
+                        width: parent.width
+                        height: grantLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "devel-su sh -c \"grep -q 'Contacts;' /usr/share/applications/harbour-whatsapp.desktop || sed -i '/^Permissions=/s/Permissions=/Permissions=Contacts;Privileged;/' /usr/share/applications/harbour-whatsapp.desktop\""
+                            copiedHint.text = "Grant command copied - paste in Terminal"
+                        }
+                        Label {
+                            id: grantLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "▸ Copy command to GRANT contacts permission"
+                            color: Theme.highlightColor
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
+                    BackgroundItem {
+                        width: parent.width
+                        height: revokeLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "devel-su sed -i 's/Contacts;Privileged;//' /usr/share/applications/harbour-whatsapp.desktop"
+                            copiedHint.text = "Revoke command copied - paste in Terminal"
+                        }
+                        Label {
+                            id: revokeLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "▸ Copy command to REVOKE contacts permission"
+                            color: Theme.secondaryHighlightColor
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
+                    Label {
+                        id: copiedHint
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: ""
+                        visible: text !== ""
+                        color: Theme.highlightColor
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+        }
+    }
+
     property string profileStatus: ""
 
     Component {
         id: profilePage
         Page {
             property bool loaded: false
+
+            property string avatarPath: ""
 
             Component.onCompleted: {
                 var xhr = new XMLHttpRequest()
@@ -644,6 +796,7 @@ ApplicationWindow {
                         var d = JSON.parse(xhr.responseText)
                         nameField.text = d.name || ""
                         aboutField.text = d.about || ""
+                        avatarPath = d.avatar || ""
                         loaded = true
                     }
                 }
@@ -661,6 +814,21 @@ ApplicationWindow {
                     spacing: Theme.paddingLarge
 
                     PageHeader { title: "Profile" }
+
+                    Image {
+                        visible: avatarPath !== ""
+                        width: Theme.itemSizeExtraLarge * 1.5
+                        height: width
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        fillMode: Image.PreserveAspectCrop
+                        cache: false
+                        source: avatarPath !== "" ? "file://" + avatarPath : ""
+
+                        BusyIndicator {
+                            anchors.centerIn: parent
+                            running: parent.status === Image.Loading
+                        }
+                    }
 
                     TextField {
                         id: nameField
@@ -1422,9 +1590,11 @@ ApplicationWindow {
                         visible: searchText === "" && filteredContacts().length === 0
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
-                        text: peopleModel.count === 0
-                              ? "No contacts accessible.\nEnter a phone number with country code\n(e.g. 436641234567) to start a chat."
-                              : "Enter a phone number with country code\n(e.g. 436641234567)\nto start a new conversation"
+                        text: !contactsOptIn
+                              ? "Enter a phone number with country code\n(e.g. 436641234567) to start a chat.\nTip: enable address book suggestions\nin Settings."
+                              : ((peopleLoader.item && peopleLoader.item.count === 0)
+                                 ? "No contacts accessible.\nEnter a phone number with country code\n(e.g. 436641234567) to start a chat."
+                                 : "Enter a phone number with country code\n(e.g. 436641234567)\nto start a new conversation")
                         wrapMode: Text.Wrap
                         horizontalAlignment: Text.AlignHCenter
                         color: Theme.secondaryColor

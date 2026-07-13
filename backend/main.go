@@ -84,6 +84,15 @@ var chatSettingsFile = "chatsettings.enc"
 var knownChannels = make(map[string]bool) // chatJid(user) -> true
 var knownChannelsMutex sync.RWMutex
 var knownChannelsFile = "channels.enc"
+var prefs = make(map[string]string)
+var prefsMutex sync.RWMutex
+var prefsFile = "prefs.enc"
+
+func loadPrefs() {
+    prefsMutex.Lock()
+    defer prefsMutex.Unlock()
+    LoadEncrypted(prefsFile, &prefs)
+}
 
 func loadKnownChannels() {
     knownChannelsMutex.Lock()
@@ -1444,6 +1453,7 @@ func main() {
     loadRawMedia()
     loadChatSettings()
     loadKnownChannels()
+    loadPrefs()
     loadContactsFromDisk()
     loadAvatarsFromDisk()
 
@@ -1837,6 +1847,7 @@ func main() {
             name = client.Store.PushName
         }
         about := ""
+        avatar := ""
         if client != nil && client.Store.ID != nil {
             own := types.NewJID(client.Store.ID.User, types.DefaultUserServer)
             if info, err := client.GetUserInfo(ctx, []types.JID{own}); err == nil {
@@ -1844,8 +1855,42 @@ func main() {
                     about = ui.Status
                 }
             }
+            // Eigenes Profilbild holen (CDN-URL, unverschluesselt)
+            if pp, err := client.GetProfilePictureInfo(ctx, own, nil); err == nil && pp != nil && pp.URL != "" {
+                if resp, err := http.Get(pp.URL); err == nil {
+                    defer resp.Body.Close()
+                    if data, err := io.ReadAll(resp.Body); err == nil && len(data) > 0 {
+                        p := filepath.Join(avatarsDir, "own_profile_"+pp.ID+".jpg")
+                        if err := os.WriteFile(p, data, 0644); err == nil {
+                            avatar = p
+                        }
+                    }
+                }
+            }
         }
-        json.NewEncoder(w).Encode(map[string]string{"name": name, "about": about})
+        json.NewEncoder(w).Encode(map[string]string{"name": name, "about": about, "avatar": avatar})
+    })
+
+    http.HandleFunc("/prefs", func(w http.ResponseWriter, r *http.Request) {
+        prefsMutex.RLock()
+        defer prefsMutex.RUnlock()
+        json.NewEncoder(w).Encode(prefs)
+    })
+
+    http.HandleFunc("/prefs/set", func(w http.ResponseWriter, r *http.Request) {
+        key := r.URL.Query().Get("key")
+        value := r.URL.Query().Get("value")
+        if key == "" {
+            http.Error(w, "key required", 400)
+            return
+        }
+        prefsMutex.Lock()
+        prefs[key] = value
+        prefsMutex.Unlock()
+        prefsMutex.RLock()
+        SaveEncrypted(prefsFile, prefs)
+        prefsMutex.RUnlock()
+        w.Write([]byte("ok"))
     })
 
     http.HandleFunc("/setprofile", func(w http.ResponseWriter, r *http.Request) {
@@ -2298,6 +2343,12 @@ func main() {
             hits = hits[:50]
         }
         json.NewEncoder(w).Encode(hits)
+    })
+
+    http.HandleFunc("/permcheck", func(w http.ResponseWriter, r *http.Request) {
+        data, err := os.ReadFile("/usr/share/applications/harbour-whatsapp.desktop")
+        granted := err == nil && strings.Contains(string(data), "Contacts;") && strings.Contains(string(data), "Privileged;")
+        json.NewEncoder(w).Encode(map[string]bool{"contactsPermission": granted})
     })
 
     http.HandleFunc("/quit", func(w http.ResponseWriter, r *http.Request) {

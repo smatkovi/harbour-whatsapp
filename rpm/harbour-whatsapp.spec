@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.7.4
+Version:    0.7.6
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -42,10 +42,29 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 %files
 %defattr(-,root,root,-)
 /usr/share/harbour-whatsapp
-/usr/share/applications/harbour-whatsapp.desktop
+%config(noreplace) /usr/share/applications/harbour-whatsapp.desktop
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Mon Jul 13 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.6-1
+- Privacy-first permissions: the app now ships WITHOUT the Contacts
+  and Privileged Sailjail permissions. The Settings page shows whether
+  the permission is currently granted and offers tap-to-copy devel-su
+  commands to grant or revoke it (run in Terminal, restart the app)
+- The desktop file is marked config(noreplace): app updates no longer
+  overwrite your permission choice
+- Existing users: after this update, run the grant command once from
+  Settings if you want address book suggestions back
+
+* Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.5-1
+- Address book suggestions are now opt-in: new Settings page (main
+  pulley) with a switch, default off. When disabled the PeopleModel
+  is never instantiated, so the contact database is never touched.
+  Note: Sailjail permissions themselves are static (no runtime
+  permission dialogs on Sailfish OS); the Settings page explains this
+  and shows how to remove the permission entirely as root
+- Profile page now shows your current profile picture
+
 * Sun Jul 12 2026 smatkovi <smatkovi@users.noreply.github.com> 0.7.4-1
 - Search within a chat or group: "Search in chat" in the chat pulley
   opens a scoped search; tapping a result jumps back into the chat,
