@@ -166,6 +166,9 @@ func loadChatSettings() {
 }
 
 func saveChatSettings() {
+    if !storesLoaded {
+        return
+    }
     chatSettingsMutex.RLock()
     defer chatSettingsMutex.RUnlock()
     SaveEncrypted(chatSettingsFile, chatSettings)
@@ -381,6 +384,9 @@ func loadRawMedia() {
 }
 
 func saveRawMedia() {
+    if !storesLoaded {
+        return
+    }
     rawMediaMutex.RLock()
     defer rawMediaMutex.RUnlock()
     if err := SaveEncrypted(rawMediaFile, rawMedia); err != nil {
@@ -422,7 +428,16 @@ func extractMedia(msg *waE2E.Message) (mediaType, mimeType, fileName string, fil
     return "", "", "", 0, "", nil
 }
 
+// storesLoaded verhindert, dass ein Backend, das vor dem Laden der Stores
+// anhaelt (Secrets-Halt, Fehlerpfad), beim Beenden leeren Zustand ueber
+// volle Dateien schreibt - genau das hat messages.enc geleert.
+var storesLoaded bool
+
 func saveMessages() {
+    if !storesLoaded {
+        fmt.Println("💾 skip saveMessages: stores were never loaded")
+        return
+    }
     msgMutex.RLock()
     defer msgMutex.RUnlock()
     
@@ -449,6 +464,9 @@ func loadContactsFromDisk() {
 }
 
 func saveContacts() {
+    if !storesLoaded {
+        return
+    }
     contactsMutex.RLock()
     defer contactsMutex.RUnlock()
     
@@ -475,6 +493,9 @@ func loadAvatarsFromDisk() {
 }
 
 func saveAvatars() {
+    if !storesLoaded {
+        return
+    }
     avatarsMutex.RLock()
     defer avatarsMutex.RUnlock()
     
@@ -1903,11 +1924,26 @@ func main() {
     fmt.Printf("🚀 Backend listening on http://127.0.0.1:%d (initializing…)\n", port)
     go http.Serve(listener, nil)
 
+    http.HandleFunc("/quit", func(w http.ResponseWriter, r *http.Request) {
+        fmt.Println("👋 Quit requested (update?), saving and exiting...")
+        saveMessages()
+        saveContacts()
+        saveRawMedia()
+        json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+        go func() {
+            time.Sleep(300 * time.Millisecond)
+            if client != nil {
+                client.Disconnect()
+            }
+            os.Exit(0)
+        }()
+    })
+
     // /reset: nur im Zustand relogin_required erlaubt - loescht die lokale
     // Datenbank, damit nach dem Neustart frisch (verschluesselt) gepairt wird
     http.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
-        if connState != "relogin_required" {
-            http.Error(w, "reset only allowed when relogin is required", 403)
+        if connState != "relogin_required" && connState != "secrets_error" {
+            http.Error(w, "reset only allowed when relogin is required or secrets are unreachable", 403)
             return
         }
         for _, f := range []string{"wa.db", "wa.db-wal", "wa.db-shm"} {
@@ -1967,6 +2003,10 @@ func main() {
         if encryptionKey, err = GetOrCreateKey(); err == nil {
             break
         }
+        if IsOwnershipError(err) || err == ErrKeyHandoverRequested || err == ErrKeyExported {
+            // Identitaets-Konflikt bzw. Uebergabe: Retries aendern daran nichts
+            break
+        }
         fmt.Printf("⏳ Key not ready (attempt %d/8): %v\n", attempt+1, err)
         time.Sleep(time.Duration(200+attempt*250) * time.Millisecond)
     }
@@ -1990,6 +2030,31 @@ func main() {
                 "database (your chats stay on your phone and will re-sync) and creates "+
                 "a new, encrypted one.")
     }
+    if err == ErrKeyHandoverRequested {
+        haltWithState("secrets_error",
+            "The encryption key belongs to a different application identity - this "+
+                "happens if the app was once started from a Terminal or a script. "+
+                "Nothing is lost. To hand the key over automatically, start the app "+
+                "ONCE the way it was started when it last worked (for a Terminal "+
+                "that was: export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/100000/"+
+                "dbus/user_bus_socket; sailfish-qml harbour-whatsapp). That instance "+
+                "hands the key over inside Sailfish Secrets (it is never written to "+
+                "disk) and tells you. Afterwards start the app normally from the app "+
+                "grid - same messages, no re-pairing.")
+    }
+    if err == ErrKeyExported {
+        haltWithState("secrets_error",
+            "Encryption key handed over via Sailfish Secrets. Close this instance "+
+                "completely and start the app from the app grid - it will load the "+
+                "key normally. Same messages, no re-pairing.")
+    }
+    if err != nil && IsOwnershipError(err) {
+        haltWithState("secrets_error",
+            "The Secrets collections are owned by a different application identity "+
+                "and no handover file was found. Close the app completely and start "+
+                "it from the app grid; if this persists, start it once the way it "+
+                "last worked so it can hand over the key.")
+    }
     if err != nil {
         if _, serr := os.Stat("wa.db"); serr == nil {
             haltWithState("secrets_error",
@@ -2000,7 +2065,8 @@ func main() {
         haltWithState("secrets_error",
             "Sailfish Secrets is not responding ("+err.Error()+"). This app stores its "+
                 "encryption key only in Sailfish Secrets and cannot pair without it. "+
-                "A device restart usually helps.")
+                "If a confirmation prompt was dismissed, tap 'Restart backend' and "+
+                "accept it. Otherwise a device restart usually helps.")
     }
     
     // Initialize encrypted database
@@ -2025,6 +2091,7 @@ func main() {
     validateStoredPaths()
     loadContactsFromDisk()
     loadAvatarsFromDisk()
+    storesLoaded = true
 
     if client.Store.ID == nil {
         fmt.Println("📱 No device ID - need to pair")
@@ -2299,6 +2366,66 @@ func main() {
             Mentions: mentionNums, Ephemeral: ephemeral,
         })
         w.Write([]byte("ok"))
+    })
+
+    // Aeltere Nachrichten eines Chats vom Telefon anfordern (On-Demand-
+    // History-Sync). Anker ist die aelteste bekannte Nachricht des Chats.
+    http.HandleFunc("/history/request", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        if chat == "" {
+            http.Error(w, "chat required", 400)
+            return
+        }
+        var oldest *Message
+        msgMutex.RLock()
+        for i := range messages {
+            if messages[i].ChatJID != chat || messages[i].ID == "" {
+                continue
+            }
+            if oldest == nil || messages[i].Timestamp < oldest.Timestamp {
+                m := messages[i]
+                oldest = &m
+            }
+        }
+        msgMutex.RUnlock()
+        var info *types.MessageInfo
+        anchored := oldest != nil
+        if anchored {
+            info = &types.MessageInfo{
+                ID: types.MessageID(oldest.ID),
+                MessageSource: types.MessageSource{
+                    Chat:     toChatJID(oldest.ChatJID),
+                    Sender:   types.NewJID(oldest.Sender, types.DefaultUserServer),
+                    IsFromMe: oldest.FromMe,
+                },
+                Timestamp: time.Unix(oldest.Timestamp, 0),
+            }
+        } else {
+            // Kein Anker (z.B. nach Datenverlust): fabrizierter Cursor
+            // "jetzt" - der Zeitstempel ist die eigentliche Blaettermarke
+            info = &types.MessageInfo{
+                ID: types.MessageID(""),
+                MessageSource: types.MessageSource{
+                    Chat:     toChatJID(chat),
+                    Sender:   *client.Store.ID,
+                    IsFromMe: true,
+                },
+                Timestamp: time.Now(),
+            }
+        }
+        req := client.BuildHistorySyncRequest(info, 100)
+        _, err := client.SendMessage(ctx, client.Store.ID.ToNonAD(), req, whatsmeow.SendRequestExtra{Peer: true})
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        if anchored {
+            fmt.Printf("📜 Requested on-demand history for %s (before %s)\n", chat, oldest.ID)
+            w.Write([]byte("requested - messages arrive from your phone within seconds (phone must be online)"))
+        } else {
+            fmt.Printf("📜 Requested on-demand history for %s (no anchor, cursor=now)\n", chat)
+            w.Write([]byte("requested without anchor (cursor: now) - if nothing arrives within a minute, send one message in this chat and try again"))
+        }
     })
 
     // ---- Live-Standort teilen: Start/Update/Stop ----
@@ -3235,7 +3362,70 @@ func main() {
         json.NewEncoder(w).Encode(map[string]string{"link": link})
     })
 
+    // Gruppeninfo-Cache: das UI bekommt sofort die letzte bekannte Antwort,
+    // der Server-Roundtrip (bei 80 Teilnehmern spuerbar) laeuft im
+    // Hintergrund und aktualisiert den Cache fuer das naechste Oeffnen.
+    type groupInfoCacheEntry struct {
+        JSON []byte
+        At   time.Time
+    }
+    groupInfoCache := map[string]groupInfoCacheEntry{}
+    var groupInfoCacheMutex sync.Mutex
+
+    buildGroupInfoJSON := func(chat string) ([]byte, error) {
+        gi, err := client.GetGroupInfo(ctx, types.NewJID(chat, types.GroupServer))
+        if err != nil {
+            return nil, err
+        }
+        type P struct {
+            Number  string `json:"number"`
+            Name    string `json:"name"`
+            IsAdmin bool   `json:"isAdmin"`
+        }
+        var ps []P
+        contactsMutex.RLock()
+        for _, p := range gi.Participants {
+            pn := resolvePN(p.JID, p.PhoneNumber)
+            ps = append(ps, P{Number: pn.User, Name: contacts[pn.User], IsAdmin: p.IsAdmin || p.IsSuperAdmin})
+        }
+        contactsMutex.RUnlock()
+        buf, err := json.Marshal(map[string]interface{}{
+            "name": gi.Name, "participants": ps,
+        })
+        if err != nil {
+            return nil, err
+        }
+        groupInfoCacheMutex.Lock()
+        groupInfoCache[chat] = groupInfoCacheEntry{JSON: buf, At: time.Now()}
+        groupInfoCacheMutex.Unlock()
+        return buf, nil
+    }
+
     http.HandleFunc("/group/info", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        groupInfoCacheMutex.Lock()
+        entry, ok := groupInfoCache[chat]
+        groupInfoCacheMutex.Unlock()
+        if ok {
+            // Cache liefern; wenn aelter als 1 Minute, im Hintergrund
+            // auffrischen (das UI pollt nicht, sieht es beim naechsten Mal)
+            if time.Since(entry.At) > time.Minute {
+                go buildGroupInfoJSON(chat)
+            }
+            w.Header().Set("Content-Type", "application/json")
+            w.Write(entry.JSON)
+            return
+        }
+        buf, err := buildGroupInfoJSON(chat)
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Header().Set("Content-Type", "application/json")
+        w.Write(buf)
+    })
+
+    http.HandleFunc("/group/info-old-disabled", func(w http.ResponseWriter, r *http.Request) {
         chat := r.URL.Query().Get("chat")
         gi, err := client.GetGroupInfo(ctx, types.NewJID(chat, types.GroupServer))
         if err != nil {
@@ -3472,7 +3662,8 @@ func main() {
         d := string(data)
         contacts := err == nil && strings.Contains(d, "Contacts;") && strings.Contains(d, "Privileged;")
         media := err == nil && strings.Contains(d, "UserDirs;") && strings.Contains(d, "MediaIndexing;") && strings.Contains(d, "RemovableMedia;")
-        json.NewEncoder(w).Encode(map[string]bool{"contactsPermission": contacts, "mediaPermission": media})
+        location := err == nil && strings.Contains(d, "Location;")
+        json.NewEncoder(w).Encode(map[string]bool{"contactsPermission": contacts, "mediaPermission": media, "locationPermission": location})
     })
 
     http.HandleFunc("/storage", func(w http.ResponseWriter, r *http.Request) {
@@ -3667,20 +3858,6 @@ func main() {
         w.Write([]byte("ok"))
     })
 
-    http.HandleFunc("/quit", func(w http.ResponseWriter, r *http.Request) {
-        fmt.Println("👋 Quit requested (update?), saving and exiting...")
-        saveMessages()
-        saveContacts()
-        saveRawMedia()
-        json.NewEncoder(w).Encode(map[string]bool{"ok": true})
-        go func() {
-            time.Sleep(300 * time.Millisecond)
-            if client != nil {
-                client.Disconnect()
-            }
-            os.Exit(0)
-        }()
-    })
 
     http.HandleFunc("/reload", func(w http.ResponseWriter, r *http.Request) {
         loadContacts()

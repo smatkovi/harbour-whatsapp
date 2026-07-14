@@ -23,7 +23,9 @@ ApplicationWindow {
     function retryBackend() {
         backendFailed = false
         pairErrorMsg = ""
-        call('start_backend.start', [])
+        // call ist eine Methode des Python-Elements - unqualifiziert wirft
+        // das auf Root-Ebene einen stillen ReferenceError und nichts startet
+        python.call('start_backend.start', [])
     }
     property var waContactsMap: ({})
     property int backendPort: 8085
@@ -201,38 +203,62 @@ ApplicationWindow {
     }
 
     // Find contact name from Sailfish contacts by phone number (jid)
-    function findLocalContactName(phoneNumber) {
-        if (!phoneNumber) return ""
-        var jid = String(phoneNumber).replace(/[^0-9]/g, "")
-        var suffixResult = ""
+    // O(1)-Lookup statt Adressbuch-Linearscan pro Aufruf: das PeopleModel
+    // wird EINMAL in zwei Maps destilliert (kanonische JID und 9-Ziffern-
+    // Suffix fuer die Landesvorwahl-Heuristik). Vorher lief pro sichtbarem
+    // Delegate eine Schleife ueber das gesamte Adressbuch - in grossen
+    // Gruppen bremste das die ganze App.
+    property var localNameByJid: ({})
+    property var localNameBySuffix: ({})
 
+    function rebuildLocalContactMap() {
+        var byJid = {}
+        var bySuffix = {}
         var pm = peopleLoader.item
-        if (!pm) return ""
-        for (var i = 0; i < pm.count; i++) {
+        for (var i = 0; pm && i < pm.count; i++) {
             var person = pm.get(i)
-            if (person && person.phoneDetails) {
-                for (var j = 0; j < person.phoneDetails.length; j++) {
-                    var raw = person.phoneDetails[j].normalizedNumber || person.phoneDetails[j].number
-                    var cand = toJid(raw)
-                    // Exakter Treffer in kanonischer Form gewinnt sofort
-                    if (cand !== "" && cand === jid) {
-                        return person.displayLabel || ""
-                    }
-                    // Fallback: Suffix-Match nur mit >= 9 Ziffern (nationale Rufnummer),
-                    // falls die Landesvorwahl-Heuristik danebenlag
-                    if (suffixResult === "") {
-                        var pn = String(raw || "").replace(/[^0-9]/g, "").replace(/^0+/, "")
-                        var shorter = pn.length < jid.length ? pn : jid
-                        var longer  = pn.length < jid.length ? jid : pn
-                        if (shorter.length >= 9 &&
-                            longer.lastIndexOf(shorter) === longer.length - shorter.length) {
-                            suffixResult = person.displayLabel || ""
-                        }
-                    }
+            if (!person || !person.phoneDetails) continue
+            var label = person.displayLabel || ""
+            if (label === "") continue
+            for (var j = 0; j < person.phoneDetails.length; j++) {
+                var raw = person.phoneDetails[j].normalizedNumber || person.phoneDetails[j].number
+                var cand = toJid(raw)
+                if (cand !== "" && byJid[cand] === undefined) byJid[cand] = label
+                var pn = String(raw || "").replace(/[^0-9]/g, "").replace(/^0+/, "")
+                if (pn.length >= 9) {
+                    var suf = pn.substring(pn.length - 9)
+                    if (bySuffix[suf] === undefined) bySuffix[suf] = label
                 }
             }
         }
-        return suffixResult
+        localNameByJid = byJid
+        localNameBySuffix = bySuffix
+    }
+
+    Timer {
+        // PeopleModel fuellt sich asynchron: kurz nach Aktivierung und bei
+        // Aenderungen (debounced) neu destillieren
+        id: contactMapTimer
+        interval: 800
+        repeat: false
+        onTriggered: rebuildLocalContactMap()
+    }
+    Connections {
+        target: peopleLoader.item
+        ignoreUnknownSignals: true
+        onCountChanged: contactMapTimer.restart()
+    }
+
+    function findLocalContactName(phoneNumber) {
+        if (!phoneNumber) return ""
+        var jid = String(phoneNumber).replace(/[^0-9]/g, "")
+        var n = localNameByJid[jid]
+        if (n !== undefined) return n
+        if (jid.length >= 9) {
+            n = localNameBySuffix[jid.substring(jid.length - 9)]
+            if (n !== undefined) return n
+        }
+        return ""
     }
     
     // Lokales Adressbuch + WhatsApp-Kontakte zusammenfuehren
@@ -571,6 +597,57 @@ ApplicationWindow {
                     wrapMode: Text.Wrap
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.highlightColor
+                }
+
+                Label {
+                    visible: connState === "secrets_error"
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2*x
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                    text: "Re-pairing creates a fresh encrypted session. Your messages, contacts and media are stored separately and stay on this device."
+                }
+
+                Button {
+                    text: "Restart backend"
+                    visible: connState === "secrets_error"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    onClicked: {
+                        var xhr = new XMLHttpRequest()
+                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/quit")
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState === 4) {
+                                connState = "starting"
+                                lastError = ""
+                                restartTimer.start()
+                            }
+                        }
+                        xhr.send()
+                    }
+                }
+
+                Button {
+                    text: "Re-pair (keeps message history)"
+                    visible: connState === "secrets_error"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    onClicked: resetRemorse.execute("Resetting pairing", function() {
+                        var xhr = new XMLHttpRequest()
+                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/reset")
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState === 4) {
+                                connState = "starting"
+                                lastError = ""
+                                var xq = new XMLHttpRequest()
+                                xq.open("GET", "http://127.0.0.1:" + backendPort + "/quit")
+                                xq.onreadystatechange = function() {
+                                    if (xq.readyState === 4) restartTimer.start()
+                                }
+                                xq.send()
+                            }
+                        }
+                        xhr.send()
+                    })
                 }
 
                 Button {
@@ -1007,10 +1084,12 @@ ApplicationWindow {
                         id: permStatus
                         property bool granted: false
                         property bool mediaGranted: false
+                        property bool locationGranted: false
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
                         text: "Contacts permission: " + (granted ? "granted" : "not granted")
                               + "\nMedia storage permission: " + (mediaGranted ? "granted" : "not granted")
+                              + "\nLocation permission: " + (locationGranted ? "granted" : "not granted")
                         color: Theme.highlightColor
                         font.pixelSize: Theme.fontSizeSmall
                         wrapMode: Text.Wrap
@@ -1023,6 +1102,7 @@ ApplicationWindow {
                                     var p = JSON.parse(xhr.responseText)
                                     granted = p.contactsPermission === true
                                     mediaGranted = p.mediaPermission === true
+                                    locationGranted = p.locationPermission === true
                                 }
                             }
                             xhr.send()
@@ -1056,6 +1136,7 @@ ApplicationWindow {
                             id: grantLabel
                             x: Theme.horizontalPageMargin
                             width: parent.width - 2*x
+                            wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
                             text: "▸ Copy command to GRANT contacts permission"
                             color: Theme.highlightColor
@@ -1074,6 +1155,7 @@ ApplicationWindow {
                             id: revokeLabel
                             x: Theme.horizontalPageMargin
                             width: parent.width - 2*x
+                            wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
                             text: "▸ Copy command to REVOKE contacts permission"
                             color: Theme.secondaryHighlightColor
@@ -1092,6 +1174,7 @@ ApplicationWindow {
                             id: grantMediaLabel
                             x: Theme.horizontalPageMargin
                             width: parent.width - 2*x
+                            wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
                             text: "▸ Copy command to GRANT media storage permission"
                             color: Theme.highlightColor
@@ -1110,6 +1193,7 @@ ApplicationWindow {
                             id: revokeMediaLabel
                             x: Theme.horizontalPageMargin
                             width: parent.width - 2*x
+                            wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
                             text: "▸ Copy command to REVOKE media storage permission"
                             color: Theme.secondaryHighlightColor
@@ -1128,6 +1212,7 @@ ApplicationWindow {
                             id: grantLocLabel
                             x: Theme.horizontalPageMargin
                             width: parent.width - 2*x
+                            wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
                             text: "\u25b8 Copy command to GRANT location permission (for sending your position)"
                             color: Theme.highlightColor
@@ -1146,6 +1231,7 @@ ApplicationWindow {
                             id: revokeLocLabel
                             x: Theme.horizontalPageMargin
                             width: parent.width - 2*x
+                            wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
                             text: "\u25b8 Copy command to REVOKE location permission"
                             color: Theme.secondaryHighlightColor
@@ -1494,7 +1580,6 @@ ApplicationWindow {
                         var d = JSON.parse(xhr.responseText)
                         groupName = d.name || ""
                         participants = d.participants || []
-                        gnameField.text = groupName
                     } else if (xhr.readyState === 4) {
                         giStatus = xhr.responseText
                     }
@@ -1527,9 +1612,48 @@ ApplicationWindow {
                 xhr.send()
             }
 
-            SilicaFlickable {
+            SilicaListView {
                 anchors.fill: parent
-                contentHeight: giCol.height
+                model: participants
+                // Delegates werden virtualisiert: nur die sichtbaren ~10
+                // existieren, egal ob die Gruppe 8 oder 800 Mitglieder hat
+                delegate: ListItem {
+                    width: ListView.view.width
+                    contentHeight: Theme.itemSizeMedium
+                            // Menue als Component: wird erst beim Long-Press
+                            // instanziiert statt 80x beim Seitenaufbau
+                            menu: Component {
+                                ContextMenu {
+                                    MenuItem {
+                                        text: "Call +" + modelData.number
+                                        onClicked: Qt.openUrlExternally("tel:+" + modelData.number)
+                                    }
+                                    MenuItem {
+                                        text: modelData.isAdmin ? "Remove admin rights" : "Make admin"
+                                        onClicked: groupCall("/group/participants?chat=" + giPage.groupJid
+                                                   + "&action=" + (modelData.isAdmin ? "demote" : "promote")
+                                                   + "&numbers=" + modelData.number)
+                                    }
+                                    MenuItem {
+                                        text: "Remove from group"
+                                        onClicked: groupCall("/group/participants?chat=" + giPage.groupJid + "&action=remove&numbers=" + modelData.number)
+                                    }
+                                }
+                            }
+                            Column {
+                                x: Theme.horizontalPageMargin
+                                anchors.verticalCenter: parent.verticalCenter
+                                Label {
+                                    text: (getDisplayName(modelData.number, modelData.name))
+                                          + (modelData.isAdmin ? " · admin" : "")
+                                }
+                                Label {
+                                    text: "+" + modelData.number
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    color: Theme.secondaryColor
+                                }
+                            }
+                        }
 
                 PullDownMenu {
                     MenuItem {
@@ -1568,8 +1692,9 @@ ApplicationWindow {
                 }
 
                 RemorsePopup { id: leaveRemorse }
+                VerticalScrollDecorator {}
 
-                Column {
+                header: Column {
                     id: giCol
                     width: parent.width
                     spacing: Theme.paddingMedium
@@ -1583,6 +1708,7 @@ ApplicationWindow {
 
                         TextField {
                             id: gnameField
+                            text: giPage.groupName
                             width: parent.width - renameBtn.width - Theme.paddingMedium
                             label: "Group name"
                         }
@@ -1677,42 +1803,6 @@ ApplicationWindow {
 
                     SectionHeader { text: "Participants (" + participants.length + ")" }
 
-                    Repeater {
-                        model: participants
-                        ListItem {
-                            width: giCol.width
-                            contentHeight: Theme.itemSizeMedium
-                            menu: ContextMenu {
-                                MenuItem {
-                                    text: "Call +" + modelData.number
-                                    onClicked: Qt.openUrlExternally("tel:+" + modelData.number)
-                                }
-                                MenuItem {
-                                    text: modelData.isAdmin ? "Remove admin rights" : "Make admin"
-                                    onClicked: groupCall("/group/participants?chat=" + giPage.groupJid
-                                               + "&action=" + (modelData.isAdmin ? "demote" : "promote")
-                                               + "&numbers=" + modelData.number)
-                                }
-                                MenuItem {
-                                    text: "Remove from group"
-                                    onClicked: groupCall("/group/participants?chat=" + giPage.groupJid + "&action=remove&numbers=" + modelData.number)
-                                }
-                            }
-                            Column {
-                                x: Theme.horizontalPageMargin
-                                anchors.verticalCenter: parent.verticalCenter
-                                Label {
-                                    text: (getDisplayName(modelData.number, modelData.name))
-                                          + (modelData.isAdmin ? " · admin" : "")
-                                }
-                                Label {
-                                    text: "+" + modelData.number
-                                    font.pixelSize: Theme.fontSizeExtraSmall
-                                    color: Theme.secondaryColor
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -2883,6 +2973,20 @@ ApplicationWindow {
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/unfollow?jid=" + chatJid)
                             xhr.send()
                         })
+                    }
+                    MenuItem {
+                        text: "Load history from phone"
+                        visible: chatJid !== "status" && !isChannel
+                        onClicked: {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/history/request?chat=" + chatJid)
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) {
+                                    globalNotice = xhr.status === 200 ? xhr.responseText : ("History request failed: " + xhr.responseText)
+                                }
+                            }
+                            xhr.send()
+                        }
                     }
                     MenuItem {
                         text: "Search in chat"

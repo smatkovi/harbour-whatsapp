@@ -16,16 +16,49 @@ import (
 )
 
 const (
-    COLLECTION_NAME = "harbourwhatsapp" // SQLCipher-Plugin: nur alphanumerisch, <32 Zeichen
-    SECRET_KEY_NAME = "encryptionkey" // ebenfalls rein alphanumerisch
+    SECRET_KEY_NAME = "encryptionkey" // rein alphanumerisch (SQLCipher-Plugin-Regel)
     DEFAULT_PLUGIN  = "org.sailfishos.secrets.plugin.encryptedstorage.sqlcipher"
 
     USER_INTERACTION_SYSTEM   = 2
     DEVICE_LOCK_KEEP_UNLOCKED = 0
     ACCESS_CONTROL_OWNER_ONLY = 0
+    // NoAccessControlMode: Collection ist NICHT an die Sailjail-Identitaet
+    // des Erstellers gebunden. Der Zugriff bleibt durch die Secrets-
+    // Permission der Sandbox und den Device-Lock geschuetzt. Bewusst gewaehlt
+    // ("use with care"), damit Terminal- vs. Icon-Starts und kuenftige
+    // Identitaetsaenderungen die App nie wieder vom eigenen Key aussperren.
+    ACCESS_CONTROL_NONE = 2
 )
 
+// Sailfish Secrets bindet Collections an die Sailjail-Identitaet des
+// Erstellers. Laeuft die App unter anderer Identitaet (z.B. per Terminal
+// statt vom Icon gestartet), antwortet der Daemon mit OwnershipError
+// (errorCode=10). Das ist KEIN Datenverlust: vom Icon gestartet passt die
+// Identitaet wieder und der Key ist unveraendert da - wir erkennen den
+// Fall und erklaeren genau das, statt destruktiv auszuweichen.
+const errOwnership = 10 // Result errorCode: owned by a different application
+
+// isNotFoundError: Secret/Collection existiert nicht (Result-ErrorCodes 40,
+// 41, 43). NUR solche Namen duerfen Speicherziel fuer einen neuen Key sein -
+// jeder andere Lesefehler (Interaktion verpasst, Collection gesperrt,
+// Daemon-Problem) koennte einen real existierenden Key verdecken, und ein
+// Store dorthin wuerde ihn UEBERSCHREIBEN.
+func isNotFoundError(err error) bool {
+    var de *daemonError
+    if errors.As(err, &de) {
+        return de.ErrorCode == 40 || de.ErrorCode == 41 || de.ErrorCode == 43
+    }
+    return false
+}
+
+// IsOwnershipError meldet, ob ein Fehler der Identitaets-Besitzkonflikt ist.
+func IsOwnershipError(err error) bool {
+    var de *daemonError
+    return errors.As(err, &de) && de.ErrorCode == errOwnership
+}
+
 type SailfishSecrets struct {
+    collectionName string
     p2pAddress         string
     pluginName         string
     available          bool
@@ -208,7 +241,7 @@ func (s *SailfishSecrets) callWithTimeout(method string, timeout time.Duration, 
 }
 
 func InitSecrets() error {
-    secrets = &SailfishSecrets{pluginName: DEFAULT_PLUGIN}
+    secrets = &SailfishSecrets{pluginName: DEFAULT_PLUGIN, collectionName: "harbourwhatsapp"}
 
     done := make(chan error, 1)
     go func() {
@@ -278,6 +311,23 @@ func InitSecrets() error {
     } else {
         fmt.Println("🔐 self-test getPluginInfo ok (auth/transport working)")
     }
+
+    // Diagnose nach Storeman-Vorbild (CollectionNamesRequest): welche
+    // Collections existieren im Plugin? Zeigt Besitz-/Altlasten-Situationen
+    // im Log, BEVOR ein Zugriff scheitert. Antwort: (Result, a{sb}).
+    if ret, terr := secrets.callWithTimeout("collectionNames", 3*time.Second, secrets.pluginName); terr != nil {
+        fmt.Printf("🔐 collectionNames failed: %v\n", terr)
+    } else if len(ret) >= 2 {
+        if names, ok := ret[1].(map[string]bool); ok {
+            keys := make([]string, 0, len(names))
+            for k := range names {
+                keys = append(keys, k)
+            }
+            fmt.Printf("🔐 collections in plugin: %v\n", keys)
+        } else {
+            fmt.Printf("🔐 collections reply type: %T\n", ret[1])
+        }
+    }
     return nil
 }
 
@@ -286,9 +336,9 @@ func (s *SailfishSecrets) ensureCollection() error {
         return nil
     }
     body, err := s.callWithTimeout("createCollection", 10*time.Second,
-        COLLECTION_NAME, s.pluginName, s.pluginName,
+        s.collectionName, s.pluginName, s.pluginName,
         dbEnum{int32(DEVICE_LOCK_KEEP_UNLOCKED)},
-        dbEnum{int32(ACCESS_CONTROL_OWNER_ONLY)})
+        dbEnum{int32(ACCESS_CONTROL_NONE)})
     if err != nil {
         return err
     }
@@ -310,17 +360,17 @@ func (s *SailfishSecrets) StoreSecret(name string, data []byte) error {
     }
     s.ensureCollection()
 
-    secretId := secretIdentifier{name, COLLECTION_NAME, s.pluginName}
+    secretId := secretIdentifier{name, s.collectionName, s.pluginName}
     s.callWithTimeout("deleteSecret", 5*time.Second, secretId, dbEnum{int32(USER_INTERACTION_SYSTEM)}, "")
 
     secret := secretPayload{secretId, data, map[string]dbus.Variant{}}
 
     body, err := s.callWithTimeout("setSecret", 10*time.Second, secret, emptyUIParams(), dbEnum{int32(USER_INTERACTION_SYSTEM)}, "")
     if err != nil {
-        return fmt.Errorf("couldn't store key: %v", err)
+        return fmt.Errorf("couldn't store key: %w", err)
     }
     if rerr := checkResult(body, "setSecret"); rerr != nil {
-        return fmt.Errorf("couldn't store key: %v", rerr)
+        return fmt.Errorf("couldn't store key: %w", rerr)
     }
     return nil
 }
@@ -331,7 +381,7 @@ func (s *SailfishSecrets) RetrieveSecret(name string) ([]byte, error) {
     }
 
     body, err := s.callWithTimeout("getSecret", 10*time.Second,
-        secretIdentifier{name, COLLECTION_NAME, s.pluginName},
+        secretIdentifier{name, s.collectionName, s.pluginName},
         dbEnum{int32(USER_INTERACTION_SYSTEM)}, "")
     if err != nil {
         return nil, err
@@ -351,35 +401,220 @@ func (s *SailfishSecrets) RetrieveSecret(name string) ([]byte, error) {
 
 func ClearAllSecrets() {
     if secrets != nil && secrets.available {
-        secretId := secretIdentifier{SECRET_KEY_NAME, COLLECTION_NAME, secrets.pluginName}
+        secretId := secretIdentifier{SECRET_KEY_NAME, secrets.collectionName, secrets.pluginName}
         secrets.callWithTimeout("deleteSecret", 5*time.Second, secretId, dbEnum{int32(USER_INTERACTION_SYSTEM)}, "")
-        secrets.callWithTimeout("deleteCollection", 5*time.Second, COLLECTION_NAME, secrets.pluginName, dbEnum{int32(USER_INTERACTION_SYSTEM)}, "")
+        secrets.callWithTimeout("deleteCollection", 5*time.Second, secrets.collectionName, secrets.pluginName, dbEnum{int32(USER_INTERACTION_SYSTEM)}, "")
     }
     encryptionKey = nil
+}
+
+var collectionCandidates = []string{"harbourwhatsapp", "harbourwhatsapp2", "harbourwhatsapp3"}
+
+// Key-Uebergabe zwischen Sailjail-Identitaeten: gehoert die Collection einer
+// anderen Identitaet (z.B. Terminal-Start), schreibt die ausgesperrte
+// Identitaet einen Marker. Die besitzende Identitaet exportiert den Key beim
+// naechsten Start in eine temporaere 0600-Datei; die normale Identitaet
+// uebernimmt ihn in eine eigene Collection und loescht die Datei. Ergebnis:
+// gleiche wa.db, gleicher Key, KEIN neues Pairing.
+const keyHandoverMarker = ".want-key-handover"
+const keyHandoverFile = ".key-handover"
+
+// Sentinel-Fehler fuer main(): steuern die Halt-Texte
+var ErrKeyHandoverRequested = fmt.Errorf("key handover requested")
+var ErrKeyExported = fmt.Errorf("key exported for handover")
+
+const collectionNameFile = ".collection-name"
+
+// listCollections liefert die im Plugin existierenden Collection-Namen.
+func (s *SailfishSecrets) listCollections() []string {
+    ret, err := s.callWithTimeout("collectionNames", 3*time.Second, s.pluginName)
+    if err != nil || len(ret) < 2 {
+        return nil
+    }
+    names, ok := ret[1].(map[string]bool)
+    if !ok {
+        return nil
+    }
+    out := make([]string, 0, len(names))
+    for k := range names {
+        out = append(out, k)
+    }
+    return out
+}
+
+// candidateNames baut die Suchreihenfolge: zuletzt benutzter Name (persistiert),
+// dann die festen Kandidaten, dann alle existierenden Collections, die nach
+// unseren dynamischen Namen aussehen (hwapp<zeit>). So geht ein einmal
+// gewaehlter dynamischer Name nie mehr verloren.
+func candidateNames() []string {
+    seen := map[string]bool{}
+    var out []string
+    add := func(n string) {
+        if n != "" && !seen[n] {
+            seen[n] = true
+            out = append(out, n)
+        }
+    }
+    if data, err := os.ReadFile(collectionNameFile); err == nil {
+        add(strings.TrimSpace(string(data)))
+    }
+    for _, n := range collectionCandidates {
+        add(n)
+    }
+    for _, n := range secrets.listCollections() {
+        if strings.HasPrefix(n, "hwapp") || strings.HasPrefix(n, "harbourwhatsapp") {
+            add(n)
+        }
+    }
+    return out
+}
+
+func rememberCollectionName(name string) {
+    os.WriteFile(collectionNameFile, []byte(name), 0600)
 }
 
 func GetOrCreateKey() ([]byte, error) {
     if secrets == nil || !secrets.available {
         return nil, fmt.Errorf("Sailfish Secrets not available")
     }
-    
-    if key, err := secrets.RetrieveSecret(SECRET_KEY_NAME); err == nil && len(key) == 32 {
-        fmt.Println("🔐 Encryption key loaded from Sailfish Secrets")
-        encryptionKey = key
-        return key, nil
+
+    sawOwnership := false
+    var hardErr error
+    storeTarget := "" // erster sicher-leerer Name (fuer Neuanlage)
+    names := candidateNames()
+    for i, name := range names {
+        secrets.collectionName = name
+        secrets.collectionVerified = false
+        key, err := secrets.RetrieveSecret(SECRET_KEY_NAME)
+        if err == nil && len(key) == 32 {
+            if _, merr := os.Stat(keyHandoverMarker); merr == nil {
+                // Eine andere Identitaet hat um den Key gebeten. Der Key
+                // verlaesst Secrets dabei NIE: wir speichern ihn in eine
+                // NoAccessControl-Collection (identitaetsoffen, aber durch
+                // Sandbox-Permission und Device-Lock geschuetzt), aus der
+                // die App-Identitaet ihn regulaer laedt.
+                ownCollection := name
+                exported := false
+                for _, target := range append([]string{"harbourwhatsapp2", "harbourwhatsapp3"}, fmt.Sprintf("hwapp%d", time.Now().Unix())) {
+                    if target == ownCollection {
+                        continue
+                    }
+                    secrets.collectionName = target
+                    secrets.collectionVerified = false
+                    if serr := secrets.StoreSecret(SECRET_KEY_NAME, key); serr == nil {
+                        fmt.Printf("🔐 Encryption key handed over via Secrets into collection %s\n", target)
+                        exported = true
+                        break
+                    } else {
+                        fmt.Printf("🔐 handover store into %s failed: %v\n", target, serr)
+                    }
+                }
+                secrets.collectionName = ownCollection
+                secrets.collectionVerified = false
+                if !exported {
+                    return nil, fmt.Errorf("key handover failed: no writable target collection")
+                }
+                os.Remove(keyHandoverMarker)
+                return nil, ErrKeyExported
+            }
+            fmt.Printf("🔐 Encryption key loaded from Sailfish Secrets (collection %s)\n", name)
+            rememberCollectionName(name)
+            // Uebergabe-Reste entfernen: .key-handover enthaelt den Key im
+            // KLARTEXT und darf einen regulaeren Start nicht ueberleben;
+            // ein alter Marker wuerde beim naechsten Start faelschlich
+            // einen Export ausloesen
+            if err := os.Remove(keyHandoverFile); err == nil {
+                fmt.Println("🔐 removed leftover key handover file")
+            }
+            os.Remove(keyHandoverMarker)
+            encryptionKey = key
+            return key, nil
+        }
+        if IsOwnershipError(err) {
+            fmt.Printf("🔐 Collection %s owned by another identity (%d/%d)\n", name, i+1, len(names))
+            sawOwnership = true
+            continue
+        }
+        if isNotFoundError(err) {
+            // wirklich leer: als Speicherziel vormerken, aber weitersuchen
+            if storeTarget == "" {
+                storeTarget = name
+            }
+            continue
+        }
+        // Anderer Lesefehler (verpasste Bestaetigung, gesperrte Collection,
+        // Daemon-Problem): hier koennte ein echter Key liegen - NIE als
+        // Speicherziel verwenden, Fehler fuer den Halt merken
+        fmt.Printf("🔐 read error on collection %s (not eligible as target): %v\n", name, err)
+        if hardErr == nil {
+            hardErr = err
+        }
+    }
+    if hardErr != nil && storeTarget == "" {
+        // Kein sicher-leeres Ziel und mindestens eine unlesbare Collection:
+        // anhalten statt riskieren - Restart backend wiederholt den Prompt
+        return nil, fmt.Errorf("secret unreadable, refusing to overwrite: %w", hardErr)
+    }
+    if storeTarget != "" {
+        secrets.collectionName = storeTarget
+        secrets.collectionVerified = false
     }
 
-    fmt.Println("🔐 Generating new encryption key...")
+    // Legacy: Uebergabedatei aelterer Versionen noch adoptieren (und loeschen)
+    if data, ferr := os.ReadFile(keyHandoverFile); ferr == nil && len(data) == 32 {
+        fmt.Printf("🔐 Adopting handed-over encryption key into collection %s...\n", secrets.collectionName)
+        if err := secrets.StoreSecret(SECRET_KEY_NAME, data); err != nil {
+            return nil, fmt.Errorf("couldn't store handed-over key: %w", err)
+        }
+        os.Remove(keyHandoverFile)
+        rememberCollectionName(secrets.collectionName)
+        encryptionKey = data
+        fmt.Println("🔐 Key handover complete - same database, no re-pairing needed")
+        return data, nil
+    }
+
+    // Besitzkonflikt ohne Uebergabedatei: bei bestehender DB NICHT neu
+    // erzeugen (das wuerde die DB verwaisen) - Uebergabe anfordern
+    if sawOwnership {
+        if _, derr := os.Stat("wa.db"); derr == nil {
+            os.WriteFile(keyHandoverMarker, []byte("1"), 0600)
+            return nil, ErrKeyHandoverRequested
+        }
+        // Keine DB (z.B. nach Reset), aber alle festen Namen fremd-besessen:
+        // dynamischen, garantiert eigenen Namen verwenden (alphanumerisch,
+        // <32 Zeichen - SQLCipher-Plugin-Regel)
+        secrets.collectionName = fmt.Sprintf("hwapp%d", time.Now().Unix())
+        secrets.collectionVerified = false
+        fmt.Printf("🔐 All fixed collection names foreign-owned - using dynamic name %s\n", secrets.collectionName)
+    }
+
+    fmt.Printf("🔐 Generating new encryption key (collection %s)...\n", secrets.collectionName)
     key := make([]byte, 32)
     if _, err := rand.Read(key); err != nil {
         return nil, err
     }
 
     if err := secrets.StoreSecret(SECRET_KEY_NAME, key); err != nil {
-        return nil, fmt.Errorf("couldn't store key: %v", err)
+        if IsOwnershipError(err) && secrets.collectionName != collectionCandidates[len(collectionCandidates)-1] {
+            // Store deckte den Besitzkonflikt erst auf: einmal weiterruecken
+            for i, name := range collectionCandidates {
+                if name == secrets.collectionName && i+1 < len(collectionCandidates) {
+                    secrets.collectionName = collectionCandidates[i+1]
+                    secrets.collectionVerified = false
+                    break
+                }
+            }
+            fmt.Printf("🔐 Retrying key store in collection %s...\n", secrets.collectionName)
+            if err2 := secrets.StoreSecret(SECRET_KEY_NAME, key); err2 != nil {
+                return nil, fmt.Errorf("couldn't store key: %w", err2)
+            }
+        } else {
+            return nil, fmt.Errorf("couldn't store key: %w", err)
+        }
     }
 
-    fmt.Println("🔐 Encryption key stored in Sailfish Secrets")
+    rememberCollectionName(secrets.collectionName)
+    fmt.Printf("🔐 Encryption key stored in Sailfish Secrets (collection %s)\n", secrets.collectionName)
     encryptionKey = key
     return key, nil
 }

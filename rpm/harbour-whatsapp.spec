@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.6
+Version:    0.9.19
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,150 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.19-1
+- Big-group performance, the real fix: contact name resolution did a
+  full linear scan over the entire device address book (with an inner
+  loop over every phone number) on EVERY delegate evaluation - in an
+  80-member group every visible message paid that price on each
+  scroll. The address book is now distilled once into O(1) lookup
+  maps (canonical JID + 9-digit suffix for the country-code
+  heuristic), rebuilt debounced when the PeopleModel changes
+- Group info answers instantly from a backend cache; the WhatsApp
+  server roundtrip refreshes it in the background (Go doing the heavy
+  lifting instead of QML JavaScript)
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.18-1
+- Group info rebuilt the Fernschreiber way: the page is now a
+  virtualized SilicaListView (info sections as list header, one
+  delegate per participant) instead of a Flickable+Repeater that
+  instantiated every row up front. Only the ~10 visible rows exist at
+  any time, so opening the info of an 80-member group is instant and
+  scales to any size; the 0.9.17 "show first 30" workaround is gone.
+  A busy indicator would still be nice while the server roundtrip
+  runs - the seconds until data arrives are network, not UI
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.17-1
+- Secrets robustness hardened against a dangerous edge: a key READ
+  failing for reasons other than "does not exist" (missed confirmation
+  prompt, locked collection, daemon trouble) previously made that
+  collection eligible as a store target - a freshly generated key
+  could have OVERWRITTEN the real one. Only genuinely empty
+  collections (error codes 40/41/43) qualify now; any other read
+  error halts with "Restart backend", which re-triggers the prompt
+- Group info no longer freezes on large groups (~80 members caused
+  the OS "not responding" banner): participant context menus are
+  instantiated lazily on long-press instead of eagerly at page build,
+  and only the first 30 rows render immediately with a "Show all"
+  button for the rest
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.16-1
+- Key handover no longer touches the filesystem: the owning identity
+  stores the key directly into a NoAccessControl Secrets collection
+  which the app identity then loads normally - the key never exists
+  in plaintext on disk. Legacy handover files from 0.9.12-0.9.15 are
+  still adopted once and deleted
+- "Load history from phone" works without an anchor message: after
+  data loss the request uses a fabricated cursor at the current time,
+  so history can be recovered chat by chat without having to send a
+  message into every chat first
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.15-1
+- CRITICAL: a backend that halted before loading its stores (Secrets
+  halt) saved empty state over the real files on /quit, wiping
+  messages.enc and rawmedia.enc. All save functions are now guarded
+  by a stores-loaded flag - a halted backend can never overwrite data
+  again
+- Recover lost history: new chat menu entry "Load history from phone"
+  (on-demand history sync); the phone re-sends up to 100 older
+  messages per request, repeat to page further back. Requires one
+  anchor message in the chat
+- Leftover key handover files (plaintext key!) and stale handover
+  markers are removed automatically after a successful normal key load
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.14-1
+- Fix the 0.9.13 collection search stopping at the first empty fixed
+  candidate ("not found" broke the loop), so the scanned dynamic
+  hwapp* collection holding the key was never reached. The search now
+  visits every candidate and only remembers the first ownable name as
+  the store target for fresh keys. Note after updating: tap "Restart
+  backend" once (or fully close the app) so the running halted backend
+  is actually replaced by the new version
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.13-1
+- Fix ownership error returning right after a successful re-pair: the
+  key was stored under a dynamically generated collection name, but
+  the lookup only searched the fixed candidates - the name was never
+  persisted. The chosen collection name is now remembered in a state
+  file AND the plugin's existing collections are scanned for our
+  naming patterns, so an existing key is always found again. Existing
+  installations recover automatically, no further re-pairing
+- Settings: Location permission status is now shown next to Contacts
+  and Media; permission command rows wrap instead of overflowing the
+  line
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.12-1
+- Icon-only escape from Secrets identity conflicts, no terminal and no
+  reboot: the error screen offers "Re-pair (keeps message history)".
+  Messages, contacts and media live in the app's own stores, NOT in
+  wa.db - a session reset only costs re-entering a pairing code. The
+  UI says so explicitly; /reset is allowed in secrets_error state
+- Collection names can never be exhausted: if every fixed candidate is
+  owned by foreign identities, a dynamic alphanumeric name is used
+- The key handover via a one-time start under the owning identity
+  remains available for those who prefer zero re-pairing
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.11-1
+- Startup self-test now lists the existing Secrets collections in the
+  plugin (collectionNames, as Storeman does via CollectionNamesRequest)
+  so ownership/legacy situations are visible in backend.log before any
+  access fails. Review of Storeman's approach confirmed the design:
+  it uses OwnerOnlyMode with silent failure, affordable because its
+  secret is a re-obtainable login token; ours guards the message
+  database, hence explicit recovery states and the key handover
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.10-1
+- Secrets identity conflicts are now fully recoverable WITHOUT
+  re-pairing: if the key collection is owned by a different Sailjail
+  identity (e.g. it was created by a Terminal-started instance), the
+  app requests a key handover - start it once the way it last worked,
+  that instance exports the key to a private file, the next normal
+  start adopts the same key into its own collection and deletes the
+  file. Same database, same messages, no reset
+- New collections are created with NoAccessControlMode (still guarded
+  by the sandbox Secrets permission and the device lock) so identity
+  differences can never lock the app out of its own key again;
+  inspired by reviewing how Storeman handles collections (it uses
+  OwnerOnlyMode and would hit the same trap)
+- Collection name falls back to alternatives if a foreign-owned one
+  blocks the default name
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.9-1
+- Secrets ownership conflicts (errorCode 10, "owned by a different
+  application") are now recognized as what they are: the app running
+  under a different Sailjail identity, e.g. started from a Terminal
+  instead of the app icon. No data is lost in this state, so instead
+  of retry loops or destructive workarounds the app halts with plain
+  instructions: close the app completely and start it from the app
+  grid - key and messages load again. No reset, no re-pairing, no
+  terminal needed. Error wrapping switched to %w so the daemon error
+  codes survive for typed detection
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.8-1
+- Fix "Restart backend" / retry / reset leaving the UI in "Starting
+  backend" forever: retryBackend() called the pyotherside call()
+  method unqualified from the window root, which silently throws a
+  ReferenceError - no backend was ever started. Now correctly invoked
+  on the Python element. This dead branch dated back to 0.8.5 and
+  affected every automatic backend restart path
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.7-1
+- Escape hatch for a dismissed Sailfish Secrets confirmation prompt:
+  the backend halts in secrets_error, but since it outlives the app,
+  reopening found the same halted backend forever. /quit is now
+  registered early (works in halt states) and the error screen offers
+  a "Restart backend" button - tap it, accept the Secrets prompt this
+  time, done. Explanations mention the prompt explicitly
+
 * Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.6-1
 - THE image download fix, found via QML runtime errors in the journal:
   the download state (downloadingId/downloadError) lived on the
