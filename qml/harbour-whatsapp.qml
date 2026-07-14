@@ -1,5 +1,6 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import QtPositioning 5.2
 import Sailfish.Pickers 1.0
 import org.nemomobile.contacts 1.0
 import io.thp.pyotherside 1.5
@@ -74,6 +75,74 @@ ApplicationWindow {
     // ohne Einstellung wird die Kontaktdatenbank nie angefasst
     property bool contactsOptIn: false
     property string globalNotice: ""
+
+    // ---- Live-Standort-Freigabe (app-weit, ueberlebt Seitenwechsel) ----
+    property bool   liveActive: false
+    property string liveChatJid: ""
+    property double liveUntil: 0
+    property bool   liveStarted: false   // Startpaket schon gesendet?
+    property int    liveMinutes: 0
+
+    function liveCall(path, cb) {
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + path)
+        xhr.onreadystatechange = function() { if (xhr.readyState === 4 && cb) cb(xhr) }
+        xhr.send()
+    }
+
+    function startLiveShare(chatJid, minutes) {
+        liveChatJid = chatJid
+        liveMinutes = minutes
+        liveUntil = Date.now() + minutes * 60000
+        liveStarted = false
+        liveActive = true
+        globalNotice = "Waiting for GPS fix to start live location\u2026"
+    }
+
+    function stopLiveShare() {
+        if (liveChatJid !== "") {
+            liveCall("/live/stop?to=" + liveChatJid)
+        }
+        liveActive = false
+        liveStarted = false
+        liveChatJid = ""
+        globalNotice = "Live location ended"
+    }
+
+    PositionSource {
+        id: livePosition
+        active: liveActive
+        updateInterval: 20000
+        onPositionChanged: {
+            if (!liveActive) return
+            if (Date.now() > liveUntil) { stopLiveShare(); return }
+            if (!position.latitudeValid || !position.longitudeValid) return
+            var lat = position.coordinate.latitude.toFixed(6)
+            var lon = position.coordinate.longitude.toFixed(6)
+            if (!liveStarted) {
+                liveCall("/live/start?to=" + liveChatJid + "&lat=" + lat + "&lon=" + lon
+                         + "&minutes=" + liveMinutes, function(xhr) {
+                    if (xhr.status === 200) {
+                        liveStarted = true
+                        globalNotice = "Sharing live location (" + liveMinutes + " min)"
+                    } else {
+                        globalNotice = "Live location failed: " + xhr.responseText
+                        liveActive = false
+                    }
+                })
+            } else {
+                liveCall("/live/update?to=" + liveChatJid + "&lat=" + lat + "&lon=" + lon,
+                         function(xhr) { if (xhr.status === 410) stopLiveShare() })
+            }
+        }
+    }
+
+    Timer {
+        interval: 30000
+        running: liveActive
+        repeat: true
+        onTriggered: if (Date.now() > liveUntil) stopLiveShare()
+    }
 
     Loader {
         id: peopleLoader
@@ -403,7 +472,7 @@ ApplicationWindow {
                 MenuItem {
                     text: "Logout"
                     visible: connected
-                    onClicked: logoutRemorse.execute("Logging out", doLogout)
+                    onClicked: logoutRemorse.execute("Logging out", doLogout, 15000)
                 }
                 MenuItem {
                     text: "Reload"
@@ -1048,6 +1117,42 @@ ApplicationWindow {
                         }
                     }
 
+                    BackgroundItem {
+                        width: parent.width
+                        height: grantLocLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Location;/!s/$/Location;/}' /usr/share/applications/harbour-whatsapp.desktop"
+                            copiedHint.text = "Location grant command copied - paste in Terminal, then restart the app"
+                        }
+                        Label {
+                            id: grantLocLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "\u25b8 Copy command to GRANT location permission (for sending your position)"
+                            color: Theme.highlightColor
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
+                    BackgroundItem {
+                        width: parent.width
+                        height: revokeLocLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Location;//g}' /usr/share/applications/harbour-whatsapp.desktop"
+                            copiedHint.text = "Location revoke command copied - paste in Terminal"
+                        }
+                        Label {
+                            id: revokeLocLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "\u25b8 Copy command to REVOKE location permission"
+                            color: Theme.secondaryHighlightColor
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
                     Label {
                         id: copiedHint
                         x: Theme.horizontalPageMargin
@@ -1446,6 +1551,19 @@ ApplicationWindow {
                                 giStatus = "Invite link copied to clipboard"
                             }
                         })
+                    }
+                    MenuItem {
+                        text: "Join requests"
+                        onClicked: pageStack.push(joinRequestsPage, { groupJid: groupJid })
+                    }
+                    MenuItem {
+                        text: "Set description\u2026"
+                        onClicked: {
+                            var dlg = pageStack.push(groupDescDialog)
+                            dlg.accepted.connect(function() {
+                                groupCall("/group/desc?jid=" + groupJid + "&text=" + encodeURIComponent(dlg.descText))
+                            })
+                        }
                     }
                 }
 
@@ -2445,6 +2563,126 @@ ApplicationWindow {
 
             property string editingId: ""
             property string highlightMsgId: ""
+            property string downloadingId: ""
+            property string downloadError: ""
+            property string lastDownloadFailId: ""
+
+            function downloadMediaFor(msgId) {
+                if (downloadingId !== "") {
+                    // nie stumm bleiben: laufenden Download anzeigen
+                    downloadError = "Another download is still running\u2026"
+                    lastDownloadFailId = msgId
+                    return
+                }
+                downloadingId = msgId
+                downloadError = ""
+                var xhr = new XMLHttpRequest()
+                // Ohne Timeout kann ein einziger haengender Request
+                // downloadingId fuer immer blockieren - dann verschluckt
+                // die Wache oben jeden weiteren Tap kommentarlos
+                xhr.timeout = 60000
+                xhr.ontimeout = function() {
+                    downloadingId = ""
+                    downloadError = "Download timed out - backend may be stuck, see backend.log"
+                    lastDownloadFailId = msgId
+                }
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/download?id=" + encodeURIComponent(msgId))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        downloadingId = ""
+                        if (xhr.status === 200) {
+                            load()
+                        } else {
+                            // Status 0 = Backend nicht erreichbar; leere
+                            // Antworten duerfen nicht "nichts" anzeigen
+                            downloadError = xhr.responseText && xhr.responseText !== ""
+                                ? xhr.responseText
+                                : (xhr.status === 0
+                                   ? "Backend not reachable (download request failed) - check backend.log"
+                                   : "Download failed (HTTP " + xhr.status + ")")
+                            lastDownloadFailId = msgId
+                        }
+                    }
+                }
+                xhr.send()
+            }
+
+            property var groupParticipants: []   // [{number, name}] fuer @-Vorschlaege
+            property var mentionMap: ({})        // Name -> Nummer (gewaehlte Erwaehnungen)
+            property string mentionToken: ""     // aktuell getipptes @-Fragment
+
+            function ensureParticipants() {
+                if (!isGroupChat || groupParticipants.length > 0) return
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/info?chat=" + chatJid)
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
+                        var d = JSON.parse(xhr.responseText)
+                        var ps = d.participants || []
+                        var out = []
+                        for (var i = 0; i < ps.length; i++) {
+                            var num = ps[i].number || ps[i].jid || ps[i]
+                            if (typeof num === "string" && num.indexOf("@") > 0) num = num.split("@")[0]
+                            out.push({ number: num, name: senderDisplay(num) })
+                        }
+                        groupParticipants = out
+                    }
+                }
+                xhr.send()
+            }
+
+            function updateMentionToken() {
+                if (!isGroupChat) { mentionToken = ""; return }
+                var t = input.text
+                var at = t.lastIndexOf("@")
+                if (at < 0 || (at > 0 && t.charAt(at-1) !== " " && t.charAt(at-1) !== "\n")) {
+                    mentionToken = ""
+                    return
+                }
+                var frag = t.substring(at + 1)
+                if (frag.indexOf(" ") >= 0 || frag.length > 25) { mentionToken = ""; return }
+                mentionToken = frag
+                ensureParticipants()
+            }
+
+            function mentionSuggestions() {
+                if (mentionToken === "" && input.text.charAt(input.text.length-1) !== "@") return []
+                var f = mentionToken.toLowerCase()
+                var out = []
+                for (var i = 0; i < groupParticipants.length && out.length < 5; i++) {
+                    var p = groupParticipants[i]
+                    if (f === "" || p.name.toLowerCase().indexOf(f) === 0 || p.number.indexOf(f) === 0) {
+                        out.push(p)
+                    }
+                }
+                return out
+            }
+
+            function pickMention(p) {
+                var t = input.text
+                var at = t.lastIndexOf("@")
+                input.text = t.substring(0, at) + "@" + p.name + " "
+                var mm = mentionMap
+                mm[p.name] = p.number
+                mentionMap = mm
+                mentionToken = ""
+                input.forceActiveFocus()
+                input.cursorPosition = input.text.length
+            }
+
+            // @Name -> @Nummer fuers Protokoll uebersetzen
+            function resolveMentionsForSend(t) {
+                for (var name in mentionMap) {
+                    t = t.split("@" + name).join("@" + mentionMap[name])
+                }
+                return t
+            }
+
+            // @Nummer -> @Name fuer die Anzeige
+            function mentionsToNames(t) {
+                if (!t || t.indexOf("@") < 0) return t
+                return t.replace(/@(\d{5,15})/g, function(m, num) { return "@" + senderDisplay(num) })
+            }
 
             function scrollToMsg(msgId) {
                 for (var i = 0; i < msgs.length; i++) {
@@ -2541,8 +2779,16 @@ ApplicationWindow {
                         + "&id=" + encodeURIComponent(editingId)
                         + "&text=" + encodeURIComponent(input.text)
                 } else {
+                    var outText = resolveMentionsForSend(input.text)
                     url = "http://127.0.0.1:" + backendPort + "/send?to=" + chatJid
-                        + "&text=" + encodeURIComponent(input.text)
+                        + "&text=" + encodeURIComponent(outText)
+                    // @<nummer> im Text -> Erwaehnungen
+                    var mm = outText.match(/@(\d{5,15})/g)
+                    if (mm && mm.length > 0) {
+                        var nums = []
+                        for (var mi = 0; mi < mm.length; mi++) nums.push(mm[mi].substring(1))
+                        url += "&mentions=" + nums.join(",")
+                    }
                     if (replyToId !== "") {
                         url += "&quoteId=" + encodeURIComponent(replyToId)
                             + "&quoteSender=" + encodeURIComponent(replyToSender)
@@ -2599,6 +2845,7 @@ ApplicationWindow {
             SilicaListView {
                 id: msgList
                 anchors.fill: parent
+                anchors.topMargin: pinnedBar.visible ? pageHead.height + pinnedBar.height : 0
                 anchors.bottomMargin: inputCol.height
                 model: msgs
                 verticalLayoutDirection: ListView.TopToBottom
@@ -2640,6 +2887,69 @@ ApplicationWindow {
                     MenuItem {
                         text: "Search in chat"
                         onClicked: pageStack.push(searchPage, { scopeJid: chatJid, scopeName: chatName })
+                    }
+                    MenuItem {
+                        text: "Share live location\u2026"
+                        visible: chatJid !== "status" && !isChannel && !(liveActive && liveChatJid === chatJid)
+                        onClicked: {
+                            var dlg = pageStack.push(liveDurationDialog)
+                            dlg.accepted.connect(function() {
+                                startLiveShare(chatJid, [15, 60, 480][dlg.durationIndex])
+                            })
+                        }
+                    }
+                    MenuItem {
+                        text: "Stop live location"
+                        visible: liveActive && liveChatJid === chatJid
+                        onClicked: stopLiveShare()
+                    }
+                    MenuItem {
+                        text: "Send location\u2026"
+                        visible: chatJid !== "status" && !isChannel
+                        onClicked: {
+                            var dlg = pageStack.push(locationDialog)
+                            dlg.accepted.connect(function() {
+                                var xhr = new XMLHttpRequest()
+                                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/send/location?to=" + chatJid
+                                         + "&lat=" + dlg.lat + "&lon=" + dlg.lon
+                                         + "&name=" + encodeURIComponent(dlg.locName))
+                                xhr.onreadystatechange = function() {
+                                    if (xhr.readyState === 4) load()
+                                }
+                                xhr.send()
+                            })
+                        }
+                    }
+                    MenuItem {
+                        text: "Disappearing messages\u2026"
+                        visible: chatJid !== "status" && !isChannel
+                        onClicked: {
+                            var dlg = pageStack.push(disappearingDialog, { chatJid: chatJid })
+                        }
+                    }
+                    MenuItem {
+                        text: "Clear chat"
+                        visible: chatJid !== "status"
+                        onClicked: blockRemorse.execute("Clearing chat", function() {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chat/clear?jid=" + chatJid)
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) load()
+                            }
+                            xhr.send()
+                        })
+                    }
+                    MenuItem {
+                        text: "Delete chat"
+                        visible: chatJid !== "status" && !isChannel
+                        onClicked: blockRemorse.execute("Deleting chat", function() {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chat/delete?jid=" + chatJid)
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) pageStack.pop()
+                            }
+                            xhr.send()
+                        })
                     }
                     MenuItem {
                         text: "Load older messages"
@@ -2698,34 +3008,53 @@ ApplicationWindow {
 
                 header: Item { height: Theme.paddingLarge }
 
-                property string downloadingId: ""
-                property string downloadError: ""
-                property string lastDownloadFailId: ""
-
-                function downloadMediaFor(msgId) {
-                    if (downloadingId !== "") return
-                    downloadingId = msgId
-                    downloadError = ""
-                    var xhr = new XMLHttpRequest()
-                    xhr.open("GET", "http://127.0.0.1:" + backendPort + "/download?id=" + encodeURIComponent(msgId))
-                    xhr.onreadystatechange = function() {
-                        if (xhr.readyState === 4) {
-                            downloadingId = ""
-                            if (xhr.status === 200) {
-                                load()
-                            } else {
-                                downloadError = xhr.responseText
-                                lastDownloadFailId = msgId
-                            }
-                        }
-                    }
-                    xhr.send()
-                }
 
                 delegate: ListItem {
                     width: parent.width
                     contentHeight: msgContent.height + Theme.paddingSmall
                     highlighted: down || menuOpen || modelData.id === highlightMsgId
+                            property var voters: modelData.pollVoters || ({})
+                    property var myVotes: voters[phone] || []
+
+                    function voteCount(opt) {
+                        var n = 0
+                        for (var who in voters) {
+                            if (voters[who].indexOf(opt) >= 0) n++
+                        }
+                        return n
+                    }
+
+                    function totalVoters() {
+                        var n = 0
+                        for (var who in voters) n++
+                        return n
+                    }
+                    function sendVote(opt) {
+                        var sel
+                        if (modelData.pollMultiple) {
+                            sel = myVotes.slice()
+                            var idx = sel.indexOf(opt)
+                            if (idx >= 0) sel.splice(idx, 1)
+                            else sel.push(opt)
+                        } else {
+                            sel = (myVotes.indexOf(opt) >= 0) ? [] : [opt]
+                        }
+                        var xhr = new XMLHttpRequest()
+                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/pollvote?chat=" + chatJid
+                                 + "&id=" + encodeURIComponent(modelData.id)
+                                 + "&options=" + encodeURIComponent(sel.join("||")))
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState === 4) {
+                                if (xhr.status !== 200) {
+                                    downloadError = xhr.responseText
+                                    lastDownloadFailId = modelData.id
+                                }
+                                load()
+                            }
+                        }
+                        xhr.send()
+                    }
+
                     
                     menu: ContextMenu {
                         MenuItem {
@@ -2780,13 +3109,48 @@ ApplicationWindow {
                         }
                         MenuItem {
                             text: "Open"
-                            visible: modelData.localPath && modelData.localPath !== ""
+                            visible: !!modelData.localPath
                             onClicked: Qt.openUrlExternally("file://" + modelData.localPath)
                         }
                         MenuItem {
                             text: "Copy text"
                             visible: modelData.text && modelData.text !== ""
                             onClicked: Clipboard.text = modelData.text
+                        }
+                        MenuItem {
+                            text: "Forward\u2026"
+                            visible: !modelData.revoked && !modelData.pollName
+                            onClicked: pageStack.push(forwardPage, { forwardId: modelData.id })
+                        }
+                        MenuItem {
+                            text: modelData.pinnedInChat ? "Unpin" : "Pin"
+                            visible: !modelData.revoked && chatPageItem.chatJid !== "status" && !chatPageItem.isChannel
+                            onClicked: {
+                                var xhr = new XMLHttpRequest()
+                                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/msg/pin?chat=" + chatPageItem.chatJid
+                                         + "&id=" + modelData.id
+                                         + "&sender=" + (modelData.fromMe ? "" : modelData.sender)
+                                         + "&fromMe=" + (modelData.fromMe ? "1" : "0")
+                                         + (modelData.pinnedInChat ? "&unpin=1" : ""))
+                                xhr.onreadystatechange = function() {
+                                    if (xhr.readyState === 4) loadMessages()
+                                }
+                                xhr.send()
+                            }
+                        }
+                        MenuItem {
+                            text: "Join group"
+                            visible: modelData.inviteCode !== undefined && modelData.inviteCode !== "" && !modelData.fromMe
+                            onClicked: {
+                                var xhr = new XMLHttpRequest()
+                                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/joininvite?id=" + modelData.id)
+                                xhr.onreadystatechange = function() {
+                                    if (xhr.readyState === 4) {
+                                        globalNotice = xhr.status === 200 ? "Joined group" : ("Join failed: " + xhr.responseText)
+                                    }
+                                }
+                                xhr.send()
+                            }
                         }
                     }
 
@@ -2803,48 +3167,7 @@ ApplicationWindow {
                             width: parent.width
                             spacing: Theme.paddingSmall
 
-                            property var voters: modelData.pollVoters || ({})
-                            property var myVotes: voters[phone] || []
 
-                            function voteCount(opt) {
-                                var n = 0
-                                for (var who in voters) {
-                                    if (voters[who].indexOf(opt) >= 0) n++
-                                }
-                                return n
-                            }
-
-                            function totalVoters() {
-                                var n = 0
-                                for (var who in voters) n++
-                                return n
-                            }
-
-                            function sendVote(opt) {
-                                var sel
-                                if (modelData.pollMultiple) {
-                                    sel = myVotes.slice()
-                                    var idx = sel.indexOf(opt)
-                                    if (idx >= 0) sel.splice(idx, 1)
-                                    else sel.push(opt)
-                                } else {
-                                    sel = (myVotes.indexOf(opt) >= 0) ? [] : [opt]
-                                }
-                                var xhr = new XMLHttpRequest()
-                                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/pollvote?chat=" + chatJid
-                                         + "&id=" + encodeURIComponent(modelData.id)
-                                         + "&options=" + encodeURIComponent(sel.join("||")))
-                                xhr.onreadystatechange = function() {
-                                    if (xhr.readyState === 4) {
-                                        if (xhr.status !== 200) {
-                                            downloadError = xhr.responseText
-                                            lastDownloadFailId = modelData.id
-                                        }
-                                        load()
-                                    }
-                                }
-                                xhr.send()
-                            }
 
                             Label {
                                 text: "📊 " + (modelData.pollName || "Poll")
@@ -2965,6 +3288,25 @@ ApplicationWindow {
                         }
 
                         Label {
+                            property bool mentionsMe: {
+                                if (!modelData.mentions) return false
+                                for (var i = 0; i < modelData.mentions.length; i++)
+                                    if (modelData.mentions[i] === phone) return true
+                                return false
+                            }
+                            visible: modelData.forwarded === true || modelData.pinnedInChat === true
+                                     || modelData.live === true || mentionsMe
+                                     || (modelData.ephemeral !== undefined && modelData.ephemeral > 0)
+                            text: (modelData.forwarded ? "\u21aa Forwarded  " : "")
+                                  + (modelData.pinnedInChat ? "\ud83d\udccc Pinned  " : "")
+                                  + (modelData.live ? "\ud83d\udd34 Live  " : "")
+                                  + (mentionsMe ? "\ud83d\udd14 Mentioned you  " : "")
+                                  + ((modelData.ephemeral !== undefined && modelData.ephemeral > 0) ? "\u23f3" : "")
+                            font.pixelSize: Theme.fontSizeTiny
+                            color: Theme.secondaryHighlightColor
+                        }
+
+                        Label {
                             visible: isGroupChat && !modelData.fromMe
                             text: visible ? senderDisplay(modelData.sender) : ""
                             font.pixelSize: Theme.fontSizeExtraSmall
@@ -2984,6 +3326,13 @@ ApplicationWindow {
                                 anchors.margins: 2
                                 fillMode: Image.PreserveAspectFit
                                 source: modelData.localPath ? "file://" + modelData.localPath : ""
+                                // Datei wurde geloescht (Storage-Clear etc.):
+                                // Backend verwirft den toten Pfad und laedt neu
+                                onStatusChanged: {
+                                    if (status === Image.Error && modelData.localPath) {
+                                        downloadMediaFor(modelData.id)
+                                    }
+                                }
                                 BusyIndicator {
                                     anchors.centerIn: parent
                                     running: parent.status === Image.Loading
@@ -3143,7 +3492,7 @@ ApplicationWindow {
                                 id: msgTxt
                                 anchors.centerIn: parent
                                 width: parent.width - Theme.paddingLarge * 2
-                                text: modelData.text
+                                text: mentionsToNames(modelData.text)
                                 wrapMode: Text.Wrap
                             }
                         }
@@ -3229,6 +3578,26 @@ ApplicationWindow {
                     }
                 }
 
+                Column {
+                    width: parent.width
+                    visible: mentionToken !== "" || (input.text.length > 0 && input.text.charAt(input.text.length-1) === "@")
+                    Repeater {
+                        model: mentionSuggestions()
+                        BackgroundItem {
+                            width: parent.width
+                            height: Theme.itemSizeSmall
+                            onClicked: pickMention(modelData)
+                            Label {
+                                x: Theme.horizontalPageMargin
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.name + (modelData.name !== "+" + modelData.number ? "  (+" + modelData.number + ")" : "")
+                                color: Theme.highlightColor
+                                font.pixelSize: Theme.fontSizeSmall
+                            }
+                        }
+                    }
+                }
+
                 Row {
                     width: parent.width
 
@@ -3243,6 +3612,7 @@ ApplicationWindow {
                         placeholderText: "Message..."
                         EnterKey.onClicked: send()
                         backgroundStyle: TextEditor.NoBackground
+                        onTextChanged: updateMentionToken()
                     }
 
                     IconButton {
@@ -3253,7 +3623,288 @@ ApplicationWindow {
                 }
             }
 
-            PageHeader { title: chatName }
+            PageHeader { id: pageHead; title: chatName }
+
+            Rectangle {
+                id: pinnedBar
+                property var pinnedMsg: {
+                    for (var i = msgs.length - 1; i >= 0; i--) {
+                        if (msgs[i].pinnedInChat) return msgs[i]
+                    }
+                    return null
+                }
+                visible: pinnedMsg !== null
+                anchors.top: pageHead.bottom
+                width: parent.width
+                height: visible ? pinLabel.height + 2*Theme.paddingMedium : 0
+                color: Theme.rgba(Theme.highlightBackgroundColor, 0.2)
+                z: 10
+
+                Label {
+                    id: pinLabel
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2*x
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: pinnedBar.pinnedMsg
+                          ? "\ud83d\udccc " + mentionsToNames(pinnedBar.pinnedMsg.text || ("[" + (pinnedBar.pinnedMsg.mediaType || "media") + "]"))
+                          : ""
+                    font.pixelSize: Theme.fontSizeSmall
+                    elide: Text.ElideRight
+                    maximumLineCount: 1
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: if (pinnedBar.pinnedMsg) scrollToMsg(pinnedBar.pinnedMsg.id)
+                }
+            }
+        }
+    }
+
+    Component {
+        id: forwardPage
+        Page {
+            property string forwardId: ""
+            SilicaListView {
+                anchors.fill: parent
+                header: PageHeader { title: "Forward to\u2026" }
+                model: chats.filter(function(c) { return c.jid !== "status" && !c.isChannel })
+                delegate: ListItem {
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.name || ("+" + modelData.jid)
+                    }
+                    onClicked: {
+                        var xhr = new XMLHttpRequest()
+                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/msg/forward?to=" + modelData.jid
+                                 + "&id=" + encodeURIComponent(forwardId))
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState === 4) {
+                                globalNotice = xhr.status === 200 ? "Forwarded" : ("Forward failed: " + xhr.responseText)
+                                pageStack.pop()
+                            }
+                        }
+                        xhr.send()
+                    }
+                }
+                VerticalScrollDecorator {}
+            }
+        }
+    }
+
+    Component {
+        id: disappearingDialog
+        Dialog {
+            property string chatJid: ""
+            property int chosen: -1
+            Column {
+                width: parent.width
+                spacing: Theme.paddingMedium
+                DialogHeader { title: "Disappearing messages" }
+                ComboBox {
+                    id: ephemeralCombo
+                    label: "Timer"
+                    menu: ContextMenu {
+                        MenuItem { text: "Off" }
+                        MenuItem { text: "24 hours" }
+                        MenuItem { text: "7 days" }
+                        MenuItem { text: "90 days" }
+                    }
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2*x
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                    text: "New messages in this chat will disappear after the selected time, for everyone."
+                }
+            }
+            onDone: {
+                if (result === DialogResult.Accepted) {
+                    var secs = [0, 86400, 604800, 7776000][ephemeralCombo.currentIndex]
+                    var xhr = new XMLHttpRequest()
+                    xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chat/disappearing?jid=" + chatJid + "&seconds=" + secs)
+                    xhr.send()
+                }
+            }
+        }
+    }
+
+    Component {
+        id: groupDescDialog
+        Dialog {
+            property string descText: descArea.text
+            Column {
+                width: parent.width
+                DialogHeader { title: "Group description" }
+                TextArea {
+                    id: descArea
+                    width: parent.width
+                    placeholderText: "Description"
+                }
+            }
+        }
+    }
+
+    Component {
+        id: joinRequestsPage
+        Page {
+            property string groupJid: ""
+            property var requests: []
+            property string reqStatus: ""
+
+            function loadRequests() {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/requests?jid=" + groupJid)
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            requests = JSON.parse(xhr.responseText) || []
+                            reqStatus = requests.length === 0 ? "No pending requests" : ""
+                        } else {
+                            reqStatus = xhr.responseText
+                        }
+                    }
+                }
+                xhr.send()
+            }
+            function decide(number, action) {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/requests/update?jid=" + groupJid
+                         + "&numbers=" + number + "&action=" + action)
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) loadRequests()
+                }
+                xhr.send()
+            }
+            Component.onCompleted: loadRequests()
+
+            SilicaListView {
+                anchors.fill: parent
+                header: Column {
+                    width: parent.width
+                    PageHeader { title: "Join requests" }
+                    Label {
+                        visible: reqStatus !== ""
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: reqStatus
+                        wrapMode: Text.Wrap
+                        color: Theme.secondaryColor
+                    }
+                }
+                model: requests
+                delegate: ListItem {
+                    contentHeight: Theme.itemSizeMedium
+                    Column {
+                        x: Theme.horizontalPageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        Label { text: (modelData.name || "") !== "" ? modelData.name : ("+" + modelData.number) }
+                        Label {
+                            text: "+" + modelData.number
+                            visible: (modelData.name || "") !== ""
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: Theme.secondaryColor
+                        }
+                    }
+                    menu: ContextMenu {
+                        MenuItem { text: "Approve"; onClicked: decide(modelData.number, "approve") }
+                        MenuItem { text: "Reject";  onClicked: decide(modelData.number, "reject") }
+                    }
+                }
+                VerticalScrollDecorator {}
+            }
+        }
+    }
+
+    Component {
+        id: locationDialog
+        Dialog {
+            id: locDlg
+            property string lat: latField.text
+            property string lon: lonField.text
+            property string locName: nameField.text
+            canAccept: latField.text !== "" && lonField.text !== ""
+
+            PositionSource {
+                id: posSrc
+                active: true
+                updateInterval: 2000
+                onPositionChanged: {
+                    if (position.latitudeValid && position.longitudeValid) {
+                        latField.text = position.coordinate.latitude.toFixed(6)
+                        lonField.text = position.coordinate.longitude.toFixed(6)
+                        gpsHint.text = "Position from GPS (\u00b1" +
+                            (position.horizontalAccuracyValid ? Math.round(position.horizontalAccuracy) + " m)" : "?)")
+                    }
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: Theme.paddingMedium
+                DialogHeader { title: "Send location" }
+                Label {
+                    id: gpsHint
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2*x
+                    text: posSrc.valid ? "Waiting for GPS fix\u2026 (or enter manually)"
+                                       : "No positioning available - enter coordinates manually. Grant the Location permission in Settings if GPS should work."
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                }
+                TextField {
+                    id: latField
+                    width: parent.width
+                    label: "Latitude"
+                    placeholderText: "48.2082"
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
+                }
+                TextField {
+                    id: lonField
+                    width: parent.width
+                    label: "Longitude"
+                    placeholderText: "16.3738"
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
+                }
+                TextField {
+                    id: nameField
+                    width: parent.width
+                    label: "Label (optional)"
+                    placeholderText: "e.g. Meeting point"
+                }
+            }
+        }
+    }
+
+    Component {
+        id: liveDurationDialog
+        Dialog {
+            property int durationIndex: durCombo.currentIndex
+            Column {
+                width: parent.width
+                spacing: Theme.paddingMedium
+                DialogHeader { title: "Share live location" }
+                ComboBox {
+                    id: durCombo
+                    label: "Duration"
+                    menu: ContextMenu {
+                        MenuItem { text: "15 minutes" }
+                        MenuItem { text: "1 hour" }
+                        MenuItem { text: "8 hours" }
+                    }
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2*x
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                    text: "Your position is sent every ~20 s while the app keeps running (background/cover is fine, like Pure Maps). Closing the app ends the share. Requires the Location permission (see Settings)."
+                }
+            }
         }
     }
 }

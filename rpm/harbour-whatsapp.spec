@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.8.29
+Version:    0.9.6
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,86 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.6-1
+- THE image download fix, found via QML runtime errors in the journal:
+  the download state (downloadingId/downloadError) lived on the
+  message ListView, but QML resolves unqualified names only against
+  the scope object, the component root and ids - and a delegate is a
+  component boundary. Every download binding in the message delegate
+  threw ReferenceError, so taps never reached the handler (no request,
+  no log, no visible reaction). The state now lives on the chat page
+  root. Same class of bug fixed for the poll tile (vote counts threw
+  ReferenceError from the option repeater); poll helpers now live on
+  the delegate root. Undefined-to-bool binding warnings hardened
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.5-1
+- Fix downloads doing literally nothing after one stuck attempt: a
+  single hanging /download request left the UI download guard set
+  forever, silently swallowing every further tap (matches the empty
+  backend log). Downloads now have timeouts on both sides (60 s UI,
+  90 s backend CDN deadline), a busy guard message instead of
+  silence, and clear timeout errors
+- Logout remorse timer extended to 15 seconds
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.4-1
+- Download taps can no longer fail silently: empty or connection-level
+  failures (HTTP status 0) now show a clear error under the message
+  instead of nothing; the backend logs every /download request and
+  which branch it took, so backend.log pinpoints remaining cases
+- After a successful media retry the raw key is kept (with the fresh
+  direct path) per the re-download policy, instead of being dropped
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.3-1
+- Fix tap-to-download for media from before a re-pairing: after
+  re-registering, WhatsApp's CDN answers old direct paths with 403
+  (bound to the old session), which bypassed the media-retry path
+  that only matched 404/410. All three cases now use whatsmeow's
+  typed errors and ask the phone to re-upload; the answer arrives
+  asynchronously, so tap once ("requested re-upload..."), wait a
+  few seconds with the phone online, then tap again
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.2-1
+- Live location sharing: chat menu "Share live location" (15 min/1 h/
+  8 h). Position is streamed every ~20 s via GPS while the app keeps
+  running - background/cover works like Pure Maps; closing the app or
+  "Stop live location" ends the share, recipients see moving updates.
+  Requires the Location permission
+- Fix tap-to-download for media whose file was deleted after a
+  successful download (storage clear, file manager, ephemeral
+  cleanup): /download now stat()s the stored path and re-downloads
+  instead of returning a dead path, and the image view triggers a
+  re-download on load errors
+- Location permission sed grant/revoke verified with an 11-case matrix
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.1-1
+- Mentions by name: typing @ in a group shows live suggestions from
+  the participant list (filtered as you type); picking one inserts
+  @Name, which is translated to the protocol form on send. Incoming
+  @<number> mentions are displayed as @Name everywhere
+- Pinned message bar: the latest pinned message is shown in a bar
+  right below the page header; tapping it jumps to the message
+- Send location: chat menu entry with GPS autofill (QtPositioning)
+  and manual coordinate entry plus optional label; Location
+  permission grant/revoke commands added to Settings. Note: real live
+  location sharing requires a continuous update stream from the
+  sharing device and is not implemented - this sends a static pin
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.0-1
+- Mentions: type @<number> in groups to mention; messages mentioning
+  you are marked with a bell
+- Forwarding: context menu "Forward..." with chat picker; text carries
+  the forwarded flag, media is re-sent from the local file
+- Live locations: shown like locations with a live marker; incoming
+  updates move the existing entry instead of spamming the chat
+- Disappearing messages: set per chat (off/24h/7d/90d) from the chat
+  menu; incoming timer changes are shown; expired messages are cleaned
+  up locally; outgoing messages honor the chat timer
+- Pin/unpin messages in chat (for everyone) via context menu
+- Clear chat and delete chat (local) from the chat menu
+- Group descriptions can be set from group info
+- Join requests: list, approve and reject from group info
+- Group invite messages are rendered with a "Join group" action
+
 * Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.8.29-1
 - App state diagnostics: after the (error-free) full sync still
   yielded 0 contacts, log the stored patch versions - version > 0

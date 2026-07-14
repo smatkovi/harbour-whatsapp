@@ -11,9 +11,12 @@ if [ ! -f "$SRCDIR/wa-backend" ]; then
     echo "Building backend..."
     cd backend
     VERSION=$(grep '^Version:' ../rpm/harbour-whatsapp.spec | awk '{print $2}')
+    # Go aus dem PATH nehmen (z.B. zypper-Paket), Fallback auf /usr/local/go
+    GO_BIN="$(command -v go || echo /usr/local/go/bin/go)"
+    echo "Using $($GO_BIN version)"
     CGO_CFLAGS="-I/usr/include/sqlcipher" \
     CGO_LDFLAGS="-L/usr/lib64 -lsqlcipher" \
-    /usr/local/go/bin/go build -ldflags "-X main.version=$VERSION" -o ../wa-backend .
+    "$GO_BIN" build -ldflags "-X main.version=$VERSION" -o ../wa-backend .
     cd ..
     echo "✅ Backend built"
 fi

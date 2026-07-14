@@ -5,6 +5,7 @@ import (
     "encoding/hex"
     "encoding/base64"
     "encoding/json"
+    "errors"
     "fmt"
     "io"
     "net"
@@ -28,6 +29,7 @@ import (
     _ "github.com/mutecomm/go-sqlcipher/v4"
     "go.mau.fi/whatsmeow"
     "go.mau.fi/whatsmeow/appstate"
+    "go.mau.fi/whatsmeow/proto/waCommon"
     "go.mau.fi/whatsmeow/proto/waE2E"
     "go.mau.fi/whatsmeow/proto/waMmsRetry"
     "go.mau.fi/whatsmeow/store/sqlstore"
@@ -77,6 +79,7 @@ type ChatSettings struct {
     Muted    bool `json:"muted,omitempty"`
     Archived bool `json:"archived,omitempty"`
     IsChannel bool `json:"isChannel,omitempty"`
+    Ephemeral uint32 `json:"ephemeral,omitempty"`
 }
 
 var chatSettings = make(map[string]*ChatSettings) // chatJid -> settings
@@ -256,6 +259,16 @@ type Message struct {
     PollOptions  []string            `json:"pollOptions,omitempty"`
     PollMultiple bool                `json:"pollMultiple,omitempty"`
     PollVoters   map[string][]string `json:"pollVoters,omitempty"` // Nummer -> gewaehlte Optionen
+    Mentions     []string `json:"mentions,omitempty"`     // erwaehnte Nummern
+    Forwarded    bool     `json:"forwarded,omitempty"`
+    Live         bool     `json:"live,omitempty"`         // Live-Standort
+    Ephemeral    uint32   `json:"ephemeral,omitempty"`    // Ablauf in Sekunden
+    PinnedInChat bool     `json:"pinnedInChat,omitempty"`
+    InviteGroupJID  string `json:"inviteGroupJid,omitempty"` // Gruppen-Einladung
+    InviteGroupName string `json:"inviteGroupName,omitempty"`
+    InviteCode      string `json:"inviteCode,omitempty"`
+    InviteExpiration int64 `json:"inviteExpiration,omitempty"`
+    InviteFrom      string `json:"inviteFrom,omitempty"` // Einlader (Nummer)
 }
 
 type Chat struct {
@@ -263,6 +276,7 @@ type Chat struct {
     Pinned   bool `json:"pinned,omitempty"`
     Muted    bool `json:"muted,omitempty"`
     Archived bool `json:"archived,omitempty"`
+    Ephemeral uint32 `json:"ephemeral,omitempty"` // Ablauf-Timer in Sekunden
     IsChannel bool `json:"isChannel,omitempty"`
     Name        string `json:"name"`
     LastMessage string `json:"lastMessage"`
@@ -626,7 +640,11 @@ func getAvatar(jid string) string {
 }
 
 func downloadMedia(msgID string, msg whatsmeow.DownloadableMessage, mimeType string, origFileName string) (string, error) {
-    data, err := client.Download(ctx, msg)
+    // Ohne Deadline kann ein CDN-Stillstand den Aufruf endlos blockieren -
+    // und damit ueber die QML-Wache jeden weiteren Download-Tap
+    dctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+    defer cancel()
+    data, err := client.Download(dctx, msg)
     if err != nil {
         return "", err
     }
@@ -658,6 +676,100 @@ func addMessage(m Message) {
     messages = append(messages, m)
     msgMutex.Unlock()
     go saveMessages()
+}
+
+// setMessagePinned markiert eine Nachricht als (nicht mehr) angepinnt.
+func setMessagePinned(chatJid, msgID string, pinned bool) {
+    msgMutex.Lock()
+    for i := range messages {
+        if messages[i].ID == msgID && (chatJid == "" || messages[i].ChatJID == chatJid) {
+            messages[i].PinnedInChat = pinned
+            break
+        }
+    }
+    msgMutex.Unlock()
+    go saveMessages()
+}
+
+// updateLiveLocation aktualisiert den letzten Live-Standort desselben
+// Absenders im Chat in place. Liefert false, wenn keiner existiert (dann
+// wird die Nachricht normal als neuer Eintrag angelegt).
+func updateLiveLocation(chatJid, sender string, lat, lon float64, ts int64) bool {
+    msgMutex.Lock()
+    defer msgMutex.Unlock()
+    for i := len(messages) - 1; i >= 0; i-- {
+        m := &messages[i]
+        if m.ChatJID == chatJid && m.Sender == sender && m.Live {
+            m.Latitude, m.Longitude = lat, lon
+            m.Timestamp = ts
+            m.Text = "📍 Live location"
+            go saveMessages()
+            return true
+        }
+    }
+    return false
+}
+
+// setChatEphemeral merkt sich den Ablauf-Timer eines Chats.
+func setChatEphemeral(chatJid string, secs uint32) {
+    chatSettingsMutex.Lock()
+    cs := chatSettings[chatJid]
+    if cs == nil {
+        cs = &ChatSettings{}
+        chatSettings[chatJid] = cs
+    }
+    cs.Ephemeral = secs
+    chatSettingsMutex.Unlock()
+    go saveChatSettings()
+}
+
+func getChatEphemeral(chatJid string) uint32 {
+    chatSettingsMutex.RLock()
+    defer chatSettingsMutex.RUnlock()
+    if cs := chatSettings[chatJid]; cs != nil {
+        return cs.Ephemeral
+    }
+    return 0
+}
+
+func ephemeralLabel(secs uint32) string {
+    switch {
+    case secs >= 7776000:
+        return "90 days"
+    case secs >= 604800:
+        return "7 days"
+    case secs >= 86400:
+        return "24 hours"
+    default:
+        return fmt.Sprintf("%d s", secs)
+    }
+}
+
+// cleanupEphemeral loescht lokal abgelaufene Nachrichten (Naeherung der
+// WhatsApp-Semantik; laeuft periodisch).
+func cleanupEphemeral() {
+    now := time.Now().Unix()
+    removedFiles := []string{}
+    msgMutex.Lock()
+    kept := messages[:0]
+    for _, m := range messages {
+        if m.Ephemeral > 0 && now > m.Timestamp+int64(m.Ephemeral) {
+            if m.LocalPath != "" {
+                removedFiles = append(removedFiles, m.LocalPath)
+            }
+            continue
+        }
+        kept = append(kept, m)
+    }
+    changed := len(kept) != len(messages)
+    messages = kept
+    msgMutex.Unlock()
+    for _, f := range removedFiles {
+        os.Remove(f)
+    }
+    if changed {
+        go saveMessages()
+    }
 }
 
 // resolvePN maps a @lid JID to the corresponding phone-number JID if known,
@@ -1028,6 +1140,23 @@ func eventHandler(evt interface{}) {
                     }
                 }
                 return
+            case waE2E.ProtocolMessage_EPHEMERAL_SETTING:
+                secs := pm.GetEphemeralExpiration()
+                epChat := resolvePN(v.Info.Chat, types.EmptyJID).User
+                epSender := resolvePN(v.Info.Sender, types.EmptyJID).User
+                if v.Info.IsFromMe && client.Store.ID != nil {
+                    epSender = client.Store.ID.User
+                }
+                setChatEphemeral(epChat, secs)
+                label := "Disappearing messages turned off"
+                if secs > 0 {
+                    label = "Disappearing messages set to " + ephemeralLabel(secs)
+                }
+                addMessage(Message{
+                    ID: v.Info.ID, Sender: epSender, Text: "⏳ " + label,
+                    Timestamp: v.Info.Timestamp.Unix(), FromMe: v.Info.IsFromMe, ChatJID: epChat,
+                })
+                return
             default:
                 return // andere Protokollnachrichten still ignorieren
             }
@@ -1098,15 +1227,29 @@ func eventHandler(evt interface{}) {
 
         // Zitat/Antwort auslesen
         var quotedID, quotedText, quotedSender string
-        if ci := getContextInfo(msg); ci != nil && ci.GetStanzaID() != "" {
-            quotedID = ci.GetStanzaID()
-            quotedText = quotedSnippet(ci.GetQuotedMessage())
-            if p := ci.GetParticipant(); p != "" {
-                if pj, err := types.ParseJID(p); err == nil {
-                    quotedSender = resolvePN(pj, types.EmptyJID).User
+        var mentions []string
+        var forwarded bool
+        var ephemeral uint32
+        if ci := getContextInfo(msg); ci != nil {
+            if ci.GetStanzaID() != "" {
+                quotedID = ci.GetStanzaID()
+                quotedText = quotedSnippet(ci.GetQuotedMessage())
+                if p := ci.GetParticipant(); p != "" {
+                    if pj, err := types.ParseJID(p); err == nil {
+                        quotedSender = resolvePN(pj, types.EmptyJID).User
+                    }
                 }
             }
+            for _, mj := range ci.GetMentionedJID() {
+                if pj, err := types.ParseJID(mj); err == nil {
+                    mentions = append(mentions, resolvePN(pj, types.EmptyJID).User)
+                }
+            }
+            forwarded = ci.GetIsForwarded() || ci.GetForwardingScore() > 0
+            ephemeral = ci.GetExpiration()
         }
+
+        isLive := msg.GetLiveLocationMessage() != nil
         
         if msg.ImageMessage != nil {
             mediaType = "image"
@@ -1212,6 +1355,33 @@ func eventHandler(evt interface{}) {
         if v.Info.IsFromMe {
             sender = client.Store.ID.User
         }
+
+        // Nachricht im Chat anpinnen/loesen (kommt als eigene Nachricht)
+        if pin := msg.GetPinInChatMessage(); pin != nil && pin.GetKey() != nil {
+            setMessagePinned(chatJid, pin.GetKey().GetID(), pin.GetType() == waE2E.PinInChatMessage_PIN_FOR_ALL)
+            return
+        }
+
+        // Gruppen-Einladung als interaktive Nachricht ablegen
+        if inv := msg.GetGroupInviteMessage(); inv != nil {
+            addMessage(Message{
+                ID: v.Info.ID, Sender: sender, Timestamp: v.Info.Timestamp.Unix(),
+                FromMe: v.Info.IsFromMe, ChatJID: chatJid,
+                Text: "👥 Invitation: " + inv.GetGroupName(),
+                InviteGroupJID:   inv.GetGroupJID(),
+                InviteGroupName:  inv.GetGroupName(),
+                InviteCode:       inv.GetInviteCode(),
+                InviteExpiration: inv.GetInviteExpiration(),
+                InviteFrom:       sender,
+                Ephemeral:        ephemeral,
+            })
+            return
+        }
+
+        // Live-Standort-Updates ersetzen den letzten Fix desselben Absenders
+        if isLive && updateLiveLocation(chatJid, sender, latitude, longitude, v.Info.Timestamp.Unix()) {
+            return
+        }
         if v.Info.PushName != "" && !v.Info.IsFromMe {
             contactsMutex.Lock()
             contacts[sender] = v.Info.PushName
@@ -1227,6 +1397,7 @@ func eventHandler(evt interface{}) {
                 Latitude: latitude, Longitude: longitude,
                 QuotedID: quotedID, QuotedText: quotedText, QuotedSender: quotedSender,
                 PollName: pollName, PollOptions: pollOptions, PollMultiple: pollMultiple,
+                Mentions: mentions, Forwarded: forwarded, Live: isLive, Ephemeral: ephemeral,
             })
             if mediaType != "" {
                 fmt.Printf("📩 %s: [%s] %s\n", chatJid, mediaType, text)
@@ -1287,10 +1458,13 @@ func eventHandler(evt interface{}) {
         }
         if path, err := downloadMedia(msgID, dl, mimeType, fileName); err == nil {
             updateMessage("", msgID, func(m *Message) { m.LocalPath = path })
-            rawMediaMutex.Lock()
-            delete(rawMedia, msgID)
-            rawMediaMutex.Unlock()
-            go saveRawMedia()
+            // Key mit frischem DirectPath behalten (Re-Download-Policy)
+            if nd, merr := proto.Marshal(&full); merr == nil {
+                rawMediaMutex.Lock()
+                rawMedia[msgID] = base64.StdEncoding.EncodeToString(nd)
+                rawMediaMutex.Unlock()
+                go saveRawMedia()
+            }
             fmt.Printf("📥 Media retry succeeded for %s\n", msgID)
         } else {
             // aktualisierten Proto aufheben, naechster /download-Versuch nutzt ihn
@@ -1592,7 +1766,7 @@ func getChats() []Chat {
             continue // eigene Status-Seite (attached page), nicht in der Chatliste
         }
         if cs, ok := chatSettings[c.JID]; ok {
-            c.Pinned, c.Muted, c.Archived = cs.Pinned, cs.Muted, cs.Archived
+            c.Pinned, c.Muted, c.Archived, c.Ephemeral = cs.Pinned, cs.Muted, cs.Archived, cs.Ephemeral
         }
         knownChannelsMutex.RLock()
         c.IsChannel = knownChannels[c.JID]
@@ -2072,19 +2246,43 @@ func main() {
         quoteID := r.URL.Query().Get("quoteId")
         quoteSender := r.URL.Query().Get("quoteSender")
         quoteText := r.URL.Query().Get("quoteText")
-        var msg *waE2E.Message
+        mentionsParam := r.URL.Query().Get("mentions") // kommaseparierte Nummern
+        ephemeral := getChatEphemeral(to)
+
+        var mentionJIDs []string
+        var mentionNums []string
+        for _, n := range strings.Split(mentionsParam, ",") {
+            if n = strings.TrimSpace(n); n != "" {
+                mentionJIDs = append(mentionJIDs, n+"@"+types.DefaultUserServer)
+                mentionNums = append(mentionNums, n)
+            }
+        }
+
+        ci := &waE2E.ContextInfo{}
+        needCI := false
         if quoteID != "" {
             participant := quoteSender
             if participant == "" && client.Store.ID != nil {
                 participant = client.Store.ID.User
             }
+            ci.StanzaID = proto.String(quoteID)
+            ci.Participant = proto.String(participant + "@" + types.DefaultUserServer)
+            ci.QuotedMessage = &waE2E.Message{Conversation: proto.String(quoteText)}
+            needCI = true
+        }
+        if len(mentionJIDs) > 0 {
+            ci.MentionedJID = mentionJIDs
+            needCI = true
+        }
+        if ephemeral > 0 {
+            ci.Expiration = proto.Uint32(ephemeral)
+            needCI = true
+        }
+        var msg *waE2E.Message
+        if needCI {
             msg = &waE2E.Message{ExtendedTextMessage: &waE2E.ExtendedTextMessage{
-                Text: proto.String(text),
-                ContextInfo: &waE2E.ContextInfo{
-                    StanzaID:      proto.String(quoteID),
-                    Participant:   proto.String(participant + "@" + types.DefaultUserServer),
-                    QuotedMessage: &waE2E.Message{Conversation: proto.String(quoteText)},
-                },
+                Text:        proto.String(text),
+                ContextInfo: ci,
             }}
         } else {
             msg = &waE2E.Message{Conversation: proto.String(text)}
@@ -2098,7 +2296,447 @@ func main() {
             ID: resp.ID, Sender: client.Store.ID.User, Text: text,
             Timestamp: time.Now().Unix(), FromMe: true, ChatJID: to,
             QuotedID: quoteID, QuotedText: quoteText, QuotedSender: quoteSender,
+            Mentions: mentionNums, Ephemeral: ephemeral,
         })
+        w.Write([]byte("ok"))
+    })
+
+    // ---- Live-Standort teilen: Start/Update/Stop ----
+    // WhatsApp-Live-Location ist ein Strom: das Startpaket plus periodische
+    // LiveLocationMessages mit steigender SequenceNumber. Empfaenger (auch
+    // wir selbst, s. updateLiveLocation) kollabieren nach Absender+Chat.
+    type liveShare struct {
+        Seq   int64
+        Until time.Time
+        MsgID string
+    }
+    liveShares := map[string]*liveShare{}
+    var liveSharesMutex sync.Mutex
+
+    sendLive := func(to string, lat, lon float64, seq int64) (string, error) {
+        var jid types.JID
+        if len(to) > 15 {
+            jid = types.NewJID(to, "g.us")
+        } else {
+            jid = types.NewJID(to, "s.whatsapp.net")
+        }
+        ll := &waE2E.LiveLocationMessage{
+            DegreesLatitude:  proto.Float64(lat),
+            DegreesLongitude: proto.Float64(lon),
+            SequenceNumber:   proto.Int64(seq),
+            Caption:          proto.String(""),
+        }
+        if eph := getChatEphemeral(to); eph > 0 {
+            ll.ContextInfo = &waE2E.ContextInfo{Expiration: proto.Uint32(eph)}
+        }
+        resp, err := client.SendMessage(ctx, jid, &waE2E.Message{LiveLocationMessage: ll})
+        if err != nil {
+            return "", err
+        }
+        return resp.ID, nil
+    }
+
+    http.HandleFunc("/live/start", func(w http.ResponseWriter, r *http.Request) {
+        to := r.URL.Query().Get("to")
+        lat, e1 := strconv.ParseFloat(r.URL.Query().Get("lat"), 64)
+        lon, e2 := strconv.ParseFloat(r.URL.Query().Get("lon"), 64)
+        minutes, _ := strconv.Atoi(r.URL.Query().Get("minutes"))
+        if to == "" || e1 != nil || e2 != nil || minutes <= 0 {
+            http.Error(w, "to, lat, lon, minutes required", 400)
+            return
+        }
+        id, err := sendLive(to, lat, lon, 1)
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        liveSharesMutex.Lock()
+        liveShares[to] = &liveShare{Seq: 1, Until: time.Now().Add(time.Duration(minutes) * time.Minute), MsgID: id}
+        liveSharesMutex.Unlock()
+        addMessage(Message{
+            ID: id, Sender: client.Store.ID.User, Text: "📍 Live location",
+            Timestamp: time.Now().Unix(), FromMe: true, ChatJID: to,
+            MediaType: "location", Latitude: lat, Longitude: lon, Live: true,
+            Ephemeral: getChatEphemeral(to),
+        })
+        w.Write([]byte("ok"))
+    })
+
+    http.HandleFunc("/live/update", func(w http.ResponseWriter, r *http.Request) {
+        to := r.URL.Query().Get("to")
+        lat, e1 := strconv.ParseFloat(r.URL.Query().Get("lat"), 64)
+        lon, e2 := strconv.ParseFloat(r.URL.Query().Get("lon"), 64)
+        if to == "" || e1 != nil || e2 != nil {
+            http.Error(w, "to, lat, lon required", 400)
+            return
+        }
+        liveSharesMutex.Lock()
+        sh := liveShares[to]
+        if sh == nil {
+            liveSharesMutex.Unlock()
+            http.Error(w, "no active share for this chat", 404)
+            return
+        }
+        if time.Now().After(sh.Until) {
+            delete(liveShares, to)
+            liveSharesMutex.Unlock()
+            http.Error(w, "share expired", 410)
+            return
+        }
+        sh.Seq++
+        seq := sh.Seq
+        liveSharesMutex.Unlock()
+        if _, err := sendLive(to, lat, lon, seq); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        updateLiveLocation(to, client.Store.ID.User, lat, lon, time.Now().Unix())
+        w.Write([]byte("ok"))
+    })
+
+    http.HandleFunc("/live/stop", func(w http.ResponseWriter, r *http.Request) {
+        to := r.URL.Query().Get("to")
+        liveSharesMutex.Lock()
+        sh := liveShares[to]
+        delete(liveShares, to)
+        liveSharesMutex.Unlock()
+        if sh != nil {
+            updateMessage(to, sh.MsgID, func(m *Message) {
+                m.Live = false
+                m.Text = "📍 Live location ended"
+            })
+        }
+        w.Write([]byte("ok"))
+    })
+
+    // Statischen Standort senden
+    http.HandleFunc("/send/location", func(w http.ResponseWriter, r *http.Request) {
+        to := r.URL.Query().Get("to")
+        latS := r.URL.Query().Get("lat")
+        lonS := r.URL.Query().Get("lon")
+        name := r.URL.Query().Get("name")
+        lat, err1 := strconv.ParseFloat(latS, 64)
+        lon, err2 := strconv.ParseFloat(lonS, 64)
+        if to == "" || err1 != nil || err2 != nil {
+            http.Error(w, "to, lat, lon required", 400)
+            return
+        }
+        var jid types.JID
+        if len(to) > 15 {
+            jid = types.NewJID(to, "g.us")
+        } else {
+            jid = types.NewJID(to, "s.whatsapp.net")
+        }
+        loc := &waE2E.LocationMessage{
+            DegreesLatitude:  proto.Float64(lat),
+            DegreesLongitude: proto.Float64(lon),
+        }
+        if name != "" {
+            loc.Name = proto.String(name)
+        }
+        if eph := getChatEphemeral(to); eph > 0 {
+            loc.ContextInfo = &waE2E.ContextInfo{Expiration: proto.Uint32(eph)}
+        }
+        resp, err := client.SendMessage(ctx, jid, &waE2E.Message{LocationMessage: loc})
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        label := name
+        if label == "" {
+            label = fmt.Sprintf("%.5f, %.5f", lat, lon)
+        }
+        addMessage(Message{
+            ID: resp.ID, Sender: client.Store.ID.User, Text: "📍 " + label,
+            Timestamp: time.Now().Unix(), FromMe: true, ChatJID: to,
+            MediaType: "location", Latitude: lat, Longitude: lon,
+            Ephemeral: getChatEphemeral(to),
+        })
+        w.Write([]byte("ok"))
+    })
+
+    // Weiterleiten: Text 1:1 mit Forwarded-Flag; Medien werden aus der
+    // lokalen Datei neu hochgeladen (erscheinen beim Empfaenger als Original)
+    http.HandleFunc("/msg/forward", func(w http.ResponseWriter, r *http.Request) {
+        to := r.URL.Query().Get("to")
+        id := r.URL.Query().Get("id")
+        if to == "" || id == "" {
+            http.Error(w, "to and id required", 400)
+            return
+        }
+        var src *Message
+        msgMutex.RLock()
+        for i := range messages {
+            if messages[i].ID == id {
+                m := messages[i]
+                src = &m
+                break
+            }
+        }
+        msgMutex.RUnlock()
+        if src == nil {
+            http.Error(w, "message not found", 404)
+            return
+        }
+        if src.MediaType != "" && src.LocalPath != "" {
+            if err := sendMedia(to, src.LocalPath, src.Text); err != nil {
+                http.Error(w, err.Error(), 500)
+                return
+            }
+            w.Write([]byte("ok"))
+            return
+        }
+        var jid types.JID
+        if len(to) > 15 {
+            jid = types.NewJID(to, "g.us")
+        } else {
+            jid = types.NewJID(to, "s.whatsapp.net")
+        }
+        fwd := &waE2E.Message{ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+            Text: proto.String(src.Text),
+            ContextInfo: &waE2E.ContextInfo{
+                IsForwarded:     proto.Bool(true),
+                ForwardingScore: proto.Uint32(1),
+            },
+        }}
+        resp, err := client.SendMessage(ctx, jid, fwd)
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        addMessage(Message{
+            ID: resp.ID, Sender: client.Store.ID.User, Text: src.Text,
+            Timestamp: time.Now().Unix(), FromMe: true, ChatJID: to, Forwarded: true,
+        })
+        w.Write([]byte("ok"))
+    })
+
+    // Nachricht im Chat anpinnen/loesen (fuer alle)
+    http.HandleFunc("/msg/pin", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        id := r.URL.Query().Get("id")
+        senderNum := r.URL.Query().Get("sender")
+        unpin := r.URL.Query().Get("unpin") == "1"
+        fromMe := r.URL.Query().Get("fromMe") == "1"
+        if chat == "" || id == "" {
+            http.Error(w, "chat and id required", 400)
+            return
+        }
+        var jid types.JID
+        if len(chat) > 15 {
+            jid = types.NewJID(chat, "g.us")
+        } else {
+            jid = types.NewJID(chat, "s.whatsapp.net")
+        }
+        pinType := waE2E.PinInChatMessage_PIN_FOR_ALL
+        if unpin {
+            pinType = waE2E.PinInChatMessage_UNPIN_FOR_ALL
+        }
+        key := &waCommon.MessageKey{
+            RemoteJID: proto.String(jid.String()),
+            ID:        proto.String(id),
+            FromMe:    proto.Bool(fromMe),
+        }
+        if jid.Server == types.GroupServer && !fromMe && senderNum != "" {
+            key.Participant = proto.String(senderNum + "@" + types.DefaultUserServer)
+        }
+        pin := &waE2E.Message{PinInChatMessage: &waE2E.PinInChatMessage{
+            Key:               key,
+            Type:              &pinType,
+            SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
+        }}
+        if _, err := client.SendMessage(ctx, jid, pin); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        setMessagePinned(chat, id, !unpin)
+        w.Write([]byte("ok"))
+    })
+
+    // Ablaufende Nachrichten fuer einen Chat setzen (0 = aus)
+    http.HandleFunc("/chat/disappearing", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("jid")
+        secsStr := r.URL.Query().Get("seconds")
+        secs, _ := strconv.ParseUint(secsStr, 10, 32)
+        if chat == "" {
+            http.Error(w, "jid required", 400)
+            return
+        }
+        var jid types.JID
+        if len(chat) > 15 {
+            jid = types.NewJID(chat, "g.us")
+        } else {
+            jid = types.NewJID(chat, "s.whatsapp.net")
+        }
+        if err := client.SetDisappearingTimer(ctx, jid, time.Duration(secs)*time.Second, time.Now()); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        setChatEphemeral(chat, uint32(secs))
+        w.Write([]byte("ok"))
+    })
+
+    // Chat leeren (nur lokal): alle Nachrichten + Mediendateien des Chats
+    http.HandleFunc("/chat/clear", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("jid")
+        if chat == "" {
+            http.Error(w, "jid required", 400)
+            return
+        }
+        removed := []string{}
+        msgMutex.Lock()
+        kept := messages[:0]
+        for _, m := range messages {
+            if m.ChatJID == chat {
+                if m.LocalPath != "" {
+                    removed = append(removed, m.LocalPath)
+                }
+                continue
+            }
+            kept = append(kept, m)
+        }
+        messages = kept
+        msgMutex.Unlock()
+        for _, f := range removed {
+            os.Remove(f)
+        }
+        saveMessages()
+        w.Write([]byte("ok"))
+    })
+
+    // Chat loeschen (lokal): leeren + Einstellungen entfernen
+    http.HandleFunc("/chat/delete", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("jid")
+        if chat == "" {
+            http.Error(w, "jid required", 400)
+            return
+        }
+        removed := []string{}
+        msgMutex.Lock()
+        kept := messages[:0]
+        for _, m := range messages {
+            if m.ChatJID == chat {
+                if m.LocalPath != "" {
+                    removed = append(removed, m.LocalPath)
+                }
+                continue
+            }
+            kept = append(kept, m)
+        }
+        messages = kept
+        msgMutex.Unlock()
+        for _, f := range removed {
+            os.Remove(f)
+        }
+        chatSettingsMutex.Lock()
+        delete(chatSettings, chat)
+        chatSettingsMutex.Unlock()
+        saveMessages()
+        saveChatSettings()
+        w.Write([]byte("ok"))
+    })
+
+    // Gruppenbeschreibung setzen
+    http.HandleFunc("/group/desc", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("jid")
+        text := r.URL.Query().Get("text")
+        if chat == "" {
+            http.Error(w, "jid required", 400)
+            return
+        }
+        jid := types.NewJID(chat, "g.us")
+        if err := client.SetGroupTopic(ctx, jid, "", "", text); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Write([]byte("ok"))
+    })
+
+    // Beitrittsanfragen einer Gruppe auflisten
+    http.HandleFunc("/group/requests", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("jid")
+        if chat == "" {
+            http.Error(w, "jid required", 400)
+            return
+        }
+        reqs, err := client.GetGroupRequestParticipants(ctx, types.NewJID(chat, "g.us"))
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        type reqEntry struct {
+            Number string `json:"number"`
+            Name   string `json:"name"`
+            Time   int64  `json:"time"`
+        }
+        out := []reqEntry{}
+        contactsMutex.RLock()
+        for _, rq := range reqs {
+            num := resolvePN(rq.JID, types.EmptyJID).User
+            out = append(out, reqEntry{Number: num, Name: contacts[num], Time: rq.RequestedAt.Unix()})
+        }
+        contactsMutex.RUnlock()
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(out)
+    })
+
+    // Beitrittsanfragen genehmigen/ablehnen (numbers kommasepariert)
+    http.HandleFunc("/group/requests/update", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("jid")
+        numbers := r.URL.Query().Get("numbers")
+        action := r.URL.Query().Get("action")
+        if chat == "" || numbers == "" || (action != "approve" && action != "reject") {
+            http.Error(w, "jid, numbers, action=approve|reject required", 400)
+            return
+        }
+        var jids []types.JID
+        for _, n := range strings.Split(numbers, ",") {
+            if n = strings.TrimSpace(n); n != "" {
+                jids = append(jids, types.NewJID(n, types.DefaultUserServer))
+            }
+        }
+        change := whatsmeow.ParticipantChangeApprove
+        if action == "reject" {
+            change = whatsmeow.ParticipantChangeReject
+        }
+        if _, err := client.UpdateGroupRequestParticipants(ctx, types.NewJID(chat, "g.us"), jids, change); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Write([]byte("ok"))
+    })
+
+    // Einer Gruppe per empfangener Einladungsnachricht beitreten
+    http.HandleFunc("/group/joininvite", func(w http.ResponseWriter, r *http.Request) {
+        id := r.URL.Query().Get("id")
+        if id == "" {
+            http.Error(w, "id required", 400)
+            return
+        }
+        var src *Message
+        msgMutex.RLock()
+        for i := range messages {
+            if messages[i].ID == id && messages[i].InviteCode != "" {
+                m := messages[i]
+                src = &m
+                break
+            }
+        }
+        msgMutex.RUnlock()
+        if src == nil {
+            http.Error(w, "invite not found", 404)
+            return
+        }
+        gjid, err := types.ParseJID(src.InviteGroupJID)
+        if err != nil {
+            http.Error(w, "bad group jid: "+err.Error(), 400)
+            return
+        }
+        inviter := types.NewJID(src.InviteFrom, types.DefaultUserServer)
+        if err := client.JoinGroupWithInvite(ctx, gjid, inviter, src.InviteCode, src.InviteExpiration); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
         w.Write([]byte("ok"))
     })
 
@@ -2144,6 +2782,7 @@ func main() {
 
     http.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
         msgID := r.URL.Query().Get("id")
+        fmt.Printf("⬇️ /download id=%s\n", msgID)
         if msgID == "" {
             http.Error(w, "missing id", 400)
             return
@@ -2163,13 +2802,26 @@ func main() {
             return
         }
         if target.LocalPath != "" {
-            json.NewEncoder(w).Encode(map[string]string{"path": target.LocalPath})
-            return
+            if _, serr := os.Stat(target.LocalPath); serr == nil {
+                json.NewEncoder(w).Encode(map[string]string{"path": target.LocalPath})
+                return
+            }
+            // Datei wurde geloescht (Storage-Clear, Dateimanager, Ephemeral-
+            // Cleanup) - Pfad verwerfen und unten neu herunterladen
+            msgMutex.Lock()
+            for i := range messages {
+                if messages[i].ID == msgID {
+                    messages[i].LocalPath = ""
+                    break
+                }
+            }
+            msgMutex.Unlock()
         }
         rawMediaMutex.RLock()
         b64, ok := rawMedia[msgID]
         rawMediaMutex.RUnlock()
         if !ok {
+            fmt.Printf("⬇️ /download %s: no raw media key stored\n", msgID)
             http.Error(w, "no media key stored for this message", 404)
             return
         }
@@ -2190,14 +2842,21 @@ func main() {
         }
         path, err := downloadMedia(msgID, dl, mimeType, fileName)
         if err != nil {
-            // Abgelaufen? Telefon um Neu-Upload bitten und spaeter erneut versuchen
-            if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "410") {
+            // Abgelaufen oder an die alte Session gebunden (403 nach einem
+            // Re-Pairing!): Telefon um Neu-Upload bitten, Antwort kommt
+            // asynchron als events.MediaRetry
+            if errors.Is(err, whatsmeow.ErrMediaDownloadFailedWith403) ||
+                errors.Is(err, whatsmeow.ErrMediaDownloadFailedWith404) ||
+                errors.Is(err, whatsmeow.ErrMediaDownloadFailedWith410) {
                 if rerr := requestMediaRetry(target, dl); rerr == nil {
                     w.WriteHeader(202)
                     w.Write([]byte("media expired - requested re-upload from your phone, try again in a moment (phone must be online)"))
                     return
+                } else {
+                    fmt.Printf("⚠️ media retry request failed for %s: %v\n", msgID, rerr)
                 }
             }
+            fmt.Printf("⬇️ /download %s: failed: %v\n", msgID, err)
             http.Error(w, fmt.Sprintf("download failed: %v (media may have expired on WhatsApp servers)", err), 502)
             return
         }
@@ -3029,6 +3688,14 @@ func main() {
     })
 
     fmt.Println("✅ Initialization complete")
+
+    // Abgelaufene (ephemere) Nachrichten periodisch lokal entfernen
+    go func() {
+        for {
+            cleanupEphemeral()
+            time.Sleep(15 * time.Minute)
+        }
+    }()
 
     c := make(chan os.Signal, 1)
     signal.Notify(c, os.Interrupt, syscall.SIGTERM)
