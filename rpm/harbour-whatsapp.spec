@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.19
+Version:    0.9.29
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,99 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.29-1
+- REAL online channel search: the search doc_id (26301059626252132)
+  and its exact typed variable schema were found in the published
+  WhatsApp Web Mex bindings (@vinikjkkj/wa-mex on npm) - no DevTools
+  digging needed after all. Search now queries the directory
+  server-side with {input:{search_text, categories, limit,
+  start_cursor}}; pagination cursors work for search results too.
+  The .dir-search-docid override file remains supported in case the
+  ID ever rotates; local recommendation filtering stays as fallback
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.28-1
+- Channel search restructured on hard evidence: all 8 input shapes on
+  the list doc_id return clean 400s, proving directory SEARCH is a
+  separate persisted GraphQL query. Searching no longer wastes a
+  request cascade - it goes straight to the locally filtered
+  recommendations (single request). The real search doc_id can be
+  retrofitted WITHOUT a rebuild: extract it from the WhatsApp Web JS
+  bundle (DevTools > Sources > search "NewsletterDirectorySearch")
+  and write it to .dir-search-docid in the app data dir - the backend
+  then performs true online search with the wa-js parameter shape
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.27-1
+- Directory rate-limit protection (a 429 today was self-inflicted by
+  the variant cascade): a rate-limit response aborts the cascade
+  immediately instead of burning the remaining variants, the first
+  accepted variant is remembered and used exclusively afterwards,
+  infinite scroll auto-loads at most every 3 seconds, and the UI
+  shows a friendly "wait a minute" message on 429
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.26-1
+- Online channel search, next attempt with researched field names:
+  wa-js documents the web client's directory search job
+  (WAWebMexFetchNewsletterDirectorySearchResultsJob) taking
+  searchText, categories, limit and cursorToken - and the documented
+  "view" variable strongly suggests the same persisted query serves
+  both RECOMMENDED and SEARCH. Three new SEARCH input shapes with
+  categories/cursor_token are tried first; the local-filter fallback
+  remains if all are rejected
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.25-1
+- Channel search fallback fixed: it used one hardcoded input shape
+  for the recommendations fetch, which the server can reject just
+  like the search shapes - the fallback now walks the same variant
+  cascade that makes the list work, then filters locally
+- Loading beyond 50 channels actually works now: infinite scroll at
+  the list end plus a visible "Load more" footer; when the response
+  carries no pagination cursor the request is repeated with a larger
+  limit instead (backend cap raised to 500); a spinner shows while
+  loading and the footer disappears once no new entries arrive
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.24-1
+- Channel directory pagination: responses carry an end_cursor, which
+  is now parsed (defensively, incl. has_next_page) and exposed as a
+  "Load more" button - browse beyond the first 50 recommendations
+- Images open in the app's own fullscreen viewer instead of the
+  external Gallery: downloads live in the app's private data dir,
+  which other sandboxed apps (Gallery) cannot read - external open
+  showed nothing, especially with media permission revoked. Videos
+  and documents still open externally
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.23-1
+- Channel search: WhatsApp's directory SEARCH uses a separate
+  persisted GraphQL query whose ID is not public (whatsmeow and
+  Baileys only know the recommendations list). Until that ID
+  surfaces, search falls back to fetching up to 50 recommendations
+  and filtering them locally by name/description, clearly labelled
+  in the UI as "showing matches from recommendations"
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.22-1
+- Channel directory: the GraphQL endpoint answers incomplete variables
+  with a bare 400, so the request now walks a cascade of plausible
+  input shapes (start_cursor, filters, search field naming), logging
+  each rejection and using the first accepted form - backend.log
+  documents which variant the server takes
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.21-1
+- Channel discovery: new "Discover channels" page (pulley on the
+  Channels page) with recommendations on open and full-text search
+  via WhatsApp's channel directory (same GraphQL interface the
+  official clients use); results show name, description, follower
+  count and verification badge, long-press to follow. /channel/follow
+  accepts a jid directly and imports the last 50 channel posts
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.20-1
+- Status updates after a fresh pairing: WhatsApp only delivers status
+  broadcasts to devices that announced available presence, and sending
+  presence requires the push name, which arrives only via app state
+  sync some time after pairing. The old code gave up with a warning;
+  now it waits up to 2 minutes for the push name and announces
+  presence as soon as it is there, plus reacts to the push-name event
+  directly. Note: statuses are push-only - anything posted while
+  presence was missing will never arrive retroactively
+
 * Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.19-1
 - Big-group performance, the real fix: contact name resolution did a
   full linear scan over the entire device address book (with an inner

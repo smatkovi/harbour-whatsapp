@@ -1554,20 +1554,43 @@ func eventHandler(evt interface{}) {
         fmt.Printf("🔓 Undecryptable message%s from %s in %s (type=%s) - retry receipt sent\n",
             tag, v.Info.Sender.User, v.Info.Chat.String(), v.Info.Type)
 
+    case *events.PushNameSetting:
+        // Push-Name gerade gesetzt (z.B. nach frischem Pairing): Presence
+        // sofort senden, damit Status-Broadcasts freigeschaltet werden
+        go func() {
+            if err := client.SendPresence(ctx, types.PresenceAvailable); err == nil {
+                fmt.Println("👋 Presence: available (push name arrived via app state)")
+            }
+        }()
+
     case *events.Connected:
         // Available-Presence senden: ohne sie stellt WhatsApp keine
         // Status-Broadcasts (Stories) an dieses Geraet zu. Nebenwirkung wie
         // bei WhatsApp Web: solange verbunden, gilt das Geraet als online.
         go func() {
-            if client.Store.PushName != "" {
-                if err := client.SendPresence(ctx, types.PresenceAvailable); err != nil {
-                    fmt.Printf("⚠️ SendPresence failed: %v\n", err)
-                } else {
-                    fmt.Println("👋 Presence: available (status updates enabled)")
+            // Ohne Push-Namen schlaegt SendPresence fehl - nach einem
+            // frischen Pairing trifft er erst per App-State-Sync ein.
+            // Statt aufzugeben: bis zu 2 Minuten darauf warten und die
+            // Presence nachschieben, sonst kommen nie Status-Updates.
+            for attempt := 0; attempt < 24; attempt++ {
+                if client.Store.PushName != "" {
+                    if err := client.SendPresence(ctx, types.PresenceAvailable); err != nil {
+                        fmt.Printf("⚠️ SendPresence failed: %v\n", err)
+                    } else {
+                        if attempt > 0 {
+                            fmt.Printf("👋 Presence: available after waiting for push name (%ds)\n", attempt*5)
+                        } else {
+                            fmt.Println("👋 Presence: available (status updates enabled)")
+                        }
+                    }
+                    return
                 }
-            } else {
-                fmt.Println("⚠️ No push name yet - statuses need one presence-enabled connect after pairing")
+                if attempt == 0 {
+                    fmt.Println("⏳ No push name yet - waiting for app state sync to enable statuses...")
+                }
+                time.Sleep(5 * time.Second)
             }
+            fmt.Println("⚠️ Push name still missing after 2 min - statuses stay disabled until next connect")
         }()
         isConnected = true
         connState = "connected"
@@ -3362,6 +3385,11 @@ func main() {
         json.NewEncoder(w).Encode(map[string]string{"link": link})
     })
 
+    // Kanal-Verzeichnis: gemerkte akzeptierte Input-Varianten
+    dirListVariant := -1
+    dirSearchVariant := -1
+    _ = dirSearchVariant
+
     // Gruppeninfo-Cache: das UI bekommt sofort die letzte bekannte Antwort,
     // der Server-Roundtrip (bei 80 Teilnehmern spuerbar) laeuft im
     // Hintergrund und aktualisiert den Cache fuer das naechste Oeffnen.
@@ -3517,7 +3545,276 @@ func main() {
     })
 
     // Kanal folgen per Invite-Link (https://whatsapp.com/channel/KEY)
+    // Kanal-Verzeichnis: Suche und Empfehlungen (MEX-Query, gleiche
+    // GraphQL-Schnittstelle wie die offiziellen Clients)
+    http.HandleFunc("/channels/search", func(w http.ResponseWriter, r *http.Request) {
+        query := r.URL.Query().Get("query")
+        cursor := r.URL.Query().Get("cursor")
+        limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+        if limit <= 0 {
+            limit = 30
+        }
+        if limit > 500 {
+            limit = 500
+        }
+        view := "RECOMMENDED"
+        if query != "" {
+            view = "SEARCH"
+        }
+        base := func() map[string]any {
+            m := map[string]any{"view": view, "limit": limit}
+            if query != "" {
+                m["search_text"] = query
+            }
+            return m
+        }
+        // Der Server beantwortet unvollstaendige Variablen mit einem nackten
+        // 400 - also plausible Formen durchprobieren und jede Absage loggen,
+        // damit die funktionierende dokumentiert ist
+        variants := []map[string]any{}
+        v1 := base()
+        v1["start_cursor"] = cursor
+        v1["filters"] = map[string]any{"country_codes": []string{}}
+        variants = append(variants, v1)
+        v2 := base()
+        v2["start_cursor"] = cursor
+        variants = append(variants, v2)
+        v3 := base()
+        v3["start_cursor"] = cursor
+        v3["filters"] = map[string]any{"country_codes": []string{"AT"}}
+        variants = append(variants, v3)
+        v4 := base()
+        v4["filters"] = map[string]any{"country_codes": []string{}}
+        variants = append(variants, v4)
+        // Suche laeuft NICHT ueber die Listen-doc_id (8 Varianten sauber
+        // mit 400 abgelehnt - eigene persistierte Query). Wenn die echte
+        // Such-doc_id bekannt ist (.dir-search-docid, aus dem WA-Web-Bundle
+        // via DevTools-Quelltextsuche), wird sie mit den wa-js-Feldern
+        // benutzt; sonst faellt die Suche direkt auf den lokalen Filter.
+        isRateLimit := func(err error) bool {
+            return err != nil && (strings.Contains(err.Error(), "429") || strings.Contains(strings.ToLower(err.Error()), "rate"))
+        }
+        // Such-doc_id aus dem WA-Web-Schema (@vinikjkkj/wa-mex:
+        // FetchNewsletterDirectorySearchResults); .dir-search-docid
+        // kann sie weiterhin ueberschreiben, falls sie je rotiert
+        searchDocID := "26301059626252132"
+        if query != "" {
+            if b, ferr := os.ReadFile(".dir-search-docid"); ferr == nil && strings.TrimSpace(string(b)) != "" {
+                searchDocID = strings.TrimSpace(string(b))
+            }
+            variants = nil // Listen-Varianten sind fuer die Suche nutzlos
+        }
+        runCascade := func(vars []map[string]any, remembered *int) (json.RawMessage, error) {
+            var raw json.RawMessage
+            var err error
+            order := make([]int, 0, len(vars))
+            if *remembered >= 0 && *remembered < len(vars) {
+                order = append(order, *remembered)
+            }
+            for i := range vars {
+                if i != *remembered {
+                    order = append(order, i)
+                }
+            }
+            for _, i := range order {
+                raw, err = client.DangerousInternals().SendMexIQ(ctx, "6190824427689257", map[string]any{"input": vars[i]})
+                if err == nil {
+                    if *remembered != i {
+                        fmt.Printf("📡 directory variant %d accepted (remembered)\n", i+1)
+                    }
+                    *remembered = i
+                    return raw, nil
+                }
+                if isRateLimit(err) {
+                    // Sofort abbrechen: weitere Varianten wuerden das Limit
+                    // nur tiefer ausschoepfen
+                    fmt.Printf("📡 rate limited - aborting cascade: %v\n", err)
+                    return nil, fmt.Errorf("rate-limited: %w", err)
+                }
+                fmt.Printf("📡 directory variant %d rejected: %v\n", i+1, err)
+            }
+            return nil, err
+        }
+        var raw json.RawMessage
+        var err error
+        if query != "" && searchDocID != "" {
+            // Echte Online-Suche mit nachgeruesteter doc_id: drei plausible
+            // Variablen-Formen (wa-js-Parameter in snake_case zuerst)
+            // Exakte Variablen-Struktur laut wa-mex-Typdefinition:
+            // {fetch_status_metadata?, input:{search_text, categories,
+            //  limit, start_cursor}}
+            in := map[string]any{"search_text": query, "categories": []string{}, "limit": limit, "start_cursor": cursor}
+            sv := []map[string]any{
+                {"input": in},
+                {"fetch_status_metadata": true, "input": in},
+            }
+            for i, vars := range sv {
+                raw, err = client.DangerousInternals().SendMexIQ(ctx, searchDocID, vars)
+                if err == nil {
+                    fmt.Printf("📡 search doc_id variant %d accepted\n", i+1)
+                    break
+                }
+                if isRateLimit(err) {
+                    break
+                }
+                fmt.Printf("📡 search doc_id variant %d rejected: %v\n", i+1, err)
+            }
+        } else if query == "" {
+            raw, err = runCascade(variants, &dirListVariant)
+        } else {
+            err = fmt.Errorf("no search doc id configured")
+        }
+        localFilter := false
+        if err != nil && query != "" {
+            // Die Such-Query-ID ist oeffentlich nicht bekannt (auch Baileys
+            // kennt keine). Fallback: Empfehlungen ueber DIESELBE Kaskade
+            // holen (nicht eine fest verdrahtete Form, die der Server
+            // womoeglich genauso ablehnt) und lokal filtern.
+            fbBase := func() map[string]any {
+                return map[string]any{"view": "RECOMMENDED", "limit": limit}
+            }
+            f1 := fbBase()
+            f1["start_cursor"] = cursor
+            f1["filters"] = map[string]any{"country_codes": []string{}}
+            f2 := fbBase()
+            f2["start_cursor"] = cursor
+            f3 := fbBase()
+            f3["filters"] = map[string]any{"country_codes": []string{}}
+            f4 := fbBase()
+            raw, err = runCascade([]map[string]any{f1, f2, f3, f4}, &dirListVariant)
+            if err == nil {
+                localFilter = true
+                fmt.Println("📡 search fell back to locally filtered recommendations")
+            }
+        }
+        if err != nil {
+            if isRateLimit(err) {
+                http.Error(w, "WhatsApp rate limit reached - wait a minute and try again", 429)
+                return
+            }
+            http.Error(w, "directory query rejected (all variants): "+err.Error(), 502)
+            return
+        }
+        // Antwort defensiv parsen: erstes Feld mit "result"->"newsletters"
+        // oder direkt ein Array unter einem xwa2_*-Schluessel
+        var top map[string]json.RawMessage
+        if err := json.Unmarshal(raw, &top); err != nil {
+            http.Error(w, "unexpected directory response", 502)
+            return
+        }
+        type dirEntry struct {
+            JID         string `json:"jid"`
+            Name        string `json:"name"`
+            Description string `json:"description"`
+            Subscribers int64  `json:"subscribers"`
+            Verified    bool   `json:"verified"`
+        }
+        out := []dirEntry{}
+        var scan func(v json.RawMessage)
+        scan = func(v json.RawMessage) {
+            var arr []json.RawMessage
+            if json.Unmarshal(v, &arr) == nil {
+                for _, el := range arr {
+                    var nl struct {
+                        ID             string `json:"id"`
+                        ThreadMetadata struct {
+                            Name             struct{ Text string `json:"text"` } `json:"name"`
+                            Description      struct{ Text string `json:"text"` } `json:"description"`
+                            SubscribersCount string `json:"subscribers_count"`
+                            Verification     string `json:"verification"`
+                        } `json:"thread_metadata"`
+                    }
+                    if json.Unmarshal(el, &nl) == nil && nl.ID != "" {
+                        subs, _ := strconv.ParseInt(nl.ThreadMetadata.SubscribersCount, 10, 64)
+                        out = append(out, dirEntry{
+                            JID:         nl.ID,
+                            Name:        nl.ThreadMetadata.Name.Text,
+                            Description: nl.ThreadMetadata.Description.Text,
+                            Subscribers: subs,
+                            Verified:    nl.ThreadMetadata.Verification == "VERIFIED",
+                        })
+                    }
+                }
+                return
+            }
+            var obj map[string]json.RawMessage
+            if json.Unmarshal(v, &obj) == nil {
+                for _, sub := range obj {
+                    scan(sub)
+                }
+            }
+        }
+        for _, v := range top {
+            scan(v)
+        }
+        nextCursor := ""
+        hasNext := false
+        var scanCursor func(v json.RawMessage)
+        scanCursor = func(v json.RawMessage) {
+            var obj map[string]json.RawMessage
+            if json.Unmarshal(v, &obj) != nil {
+                return
+            }
+            for k, sub := range obj {
+                switch k {
+                case "end_cursor", "next_cursor", "start_cursor_next":
+                    var cs string
+                    if json.Unmarshal(sub, &cs) == nil && cs != "" {
+                        nextCursor = cs
+                    }
+                case "has_next_page":
+                    var b bool
+                    if json.Unmarshal(sub, &b) == nil && b {
+                        hasNext = true
+                    }
+                default:
+                    scanCursor(sub)
+                }
+            }
+        }
+        for _, v := range top {
+            scanCursor(v)
+        }
+        if !hasNext {
+            // Manche Antworten haben nur end_cursor ohne has_next_page-Flag;
+            // dann signalisiert eine volle Seite "mehr vorhanden"
+            hasNext = nextCursor != "" && len(out) >= limit
+        }
+        if localFilter {
+            q := strings.ToLower(query)
+            filtered := out[:0]
+            for _, e := range out {
+                if strings.Contains(strings.ToLower(e.Name), q) || strings.Contains(strings.ToLower(e.Description), q) {
+                    filtered = append(filtered, e)
+                }
+            }
+            out = filtered
+        }
+        resp := map[string]any{"results": out, "localFilter": localFilter}
+        if hasNext && nextCursor != "" {
+            resp["nextCursor"] = nextCursor
+        }
+        fmt.Printf("📡 Channel directory: query=%q cursor=%q -> %d results (localFilter=%v, next=%v)\n", query, cursor, len(out), localFilter, hasNext)
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(resp)
+    })
+
     http.HandleFunc("/channel/follow", func(w http.ResponseWriter, r *http.Request) {
+        if j := r.URL.Query().Get("jid"); j != "" {
+            njid, err := types.ParseJID(j)
+            if err != nil {
+                http.Error(w, "bad jid: "+err.Error(), 400)
+                return
+            }
+            if err := client.FollowNewsletter(ctx, njid); err != nil {
+                http.Error(w, err.Error(), 500)
+                return
+            }
+            markChannel(njid.User)
+            importNewsletterMessages(njid, 50)
+            w.Write([]byte("ok"))
+            return
+        }
         link := r.URL.Query().Get("link")
         key := link
         if idx := strings.LastIndex(link, "/channel/"); idx >= 0 {

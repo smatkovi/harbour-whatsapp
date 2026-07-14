@@ -2257,6 +2257,13 @@ ApplicationWindow {
                 anchors.fill: parent
                 model: channels
 
+                PullDownMenu {
+                    MenuItem {
+                        text: "Discover channels\u2026"
+                        onClicked: pageStack.push(channelDirectoryPage)
+                    }
+                }
+
                 header: Column {
                     width: parent ? parent.width : Screen.width
                     PageHeader { title: "Channels" }
@@ -3214,7 +3221,9 @@ ApplicationWindow {
                         MenuItem {
                             text: "Open"
                             visible: !!modelData.localPath
-                            onClicked: Qt.openUrlExternally("file://" + modelData.localPath)
+                            onClicked: modelData.mediaType === "image"
+                                       ? pageStack.push(statusFullscreen, { imagePath: modelData.localPath, caption: modelData.text || "" })
+                                       : Qt.openUrlExternally("file://" + modelData.localPath)
                         }
                         MenuItem {
                             text: "Copy text"
@@ -3463,9 +3472,13 @@ ApplicationWindow {
 
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: modelData.localPath
-                                           ? Qt.openUrlExternally("file://" + modelData.localPath)
-                                           : downloadMediaFor(modelData.id)
+                                onClicked: {
+                                    if (!modelData.localPath) { downloadMediaFor(modelData.id); return }
+                                    if (modelData.mediaType === "image")
+                                        pageStack.push(statusFullscreen, { imagePath: modelData.localPath, caption: modelData.text || "" })
+                                    else
+                                        Qt.openUrlExternally("file://" + modelData.localPath)
+                                }
                             }
                         }
 
@@ -3497,9 +3510,13 @@ ApplicationWindow {
 
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: modelData.localPath
-                                           ? Qt.openUrlExternally("file://" + modelData.localPath)
-                                           : downloadMediaFor(modelData.id)
+                                onClicked: {
+                                    if (!modelData.localPath) { downloadMediaFor(modelData.id); return }
+                                    if (modelData.mediaType === "image")
+                                        pageStack.push(statusFullscreen, { imagePath: modelData.localPath, caption: modelData.text || "" })
+                                    else
+                                        Qt.openUrlExternally("file://" + modelData.localPath)
+                                }
                             }
                         }
 
@@ -3527,9 +3544,13 @@ ApplicationWindow {
 
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: modelData.localPath
-                                           ? Qt.openUrlExternally("file://" + modelData.localPath)
-                                           : downloadMediaFor(modelData.id)
+                                onClicked: {
+                                    if (!modelData.localPath) { downloadMediaFor(modelData.id); return }
+                                    if (modelData.mediaType === "image")
+                                        pageStack.push(statusFullscreen, { imagePath: modelData.localPath, caption: modelData.text || "" })
+                                    else
+                                        Qt.openUrlExternally("file://" + modelData.localPath)
+                                }
                             }
                         }
 
@@ -3560,9 +3581,13 @@ ApplicationWindow {
 
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: modelData.localPath
-                                           ? Qt.openUrlExternally("file://" + modelData.localPath)
-                                           : downloadMediaFor(modelData.id)
+                                onClicked: {
+                                    if (!modelData.localPath) { downloadMediaFor(modelData.id); return }
+                                    if (modelData.mediaType === "image")
+                                        pageStack.push(statusFullscreen, { imagePath: modelData.localPath, caption: modelData.text || "" })
+                                    else
+                                        Qt.openUrlExternally("file://" + modelData.localPath)
+                                }
                             }
                         }
 
@@ -4008,6 +4033,171 @@ ApplicationWindow {
                     color: Theme.secondaryColor
                     text: "Your position is sent every ~20 s while the app keeps running (background/cover is fine, like Pure Maps). Closing the app ends the share. Requires the Location permission (see Settings)."
                 }
+            }
+        }
+    }
+
+    Component {
+        id: channelDirectoryPage
+        Page {
+            id: chDirPage
+            property var results: []
+            property string dirStatus: ""
+            property bool searching: false
+            property string nextCursor: ""
+            property string lastQuery: ""
+            property int curLimit: 30
+            property bool exhausted: false
+            property double lastAutoLoad: 0
+
+            function loadMore() {
+                if (searching || exhausted) return
+                if (nextCursor !== "") {
+                    search(lastQuery, nextCursor, curLimit)
+                } else {
+                    // Kein Cursor in der Antwort: stattdessen mit groesserem
+                    // Limit neu holen (Backend erlaubt bis 500)
+                    curLimit = Math.min(curLimit + 50, 500)
+                    search(lastQuery, "", curLimit)
+                }
+            }
+
+            function search(q, cursor, limit) {
+                searching = true
+                dirStatus = ""
+                lastQuery = q
+                if (!limit) limit = curLimit
+                var url = "http://127.0.0.1:" + backendPort + "/channels/search?query=" + encodeURIComponent(q) + "&limit=" + limit
+                if (cursor) url += "&cursor=" + encodeURIComponent(cursor)
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", url)
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        searching = false
+                        if (xhr.status === 200) {
+                            var d = JSON.parse(xhr.responseText) || {}
+                            var page = d.results || []
+                            var before = results.length
+                            results = cursor ? results.concat(page) : page
+                            nextCursor = d.nextCursor || ""
+                            // Nichts Neues trotz Nachladen -> Ende erreicht
+                            exhausted = (cursor || before > 0) && results.length <= before
+                            if (results.length === 0) dirStatus = "No channels found"
+                            else if (d.localFilter) dirStatus = "Online search unavailable - showing matches from recommendations"
+                            else dirStatus = ""
+                        } else if (xhr.status === 429) {
+                            dirStatus = "WhatsApp rate limit reached - wait a minute and try again"
+                        } else {
+                            dirStatus = xhr.responseText
+                        }
+                    }
+                }
+                xhr.send()
+            }
+            Component.onCompleted: search("")
+
+            SilicaListView {
+                anchors.fill: parent
+                model: results
+                header: Column {
+                    width: parent ? parent.width : Screen.width
+                    PageHeader { title: "Discover channels" }
+                    SearchField {
+                        id: dirSearch
+                        width: parent.width
+                        placeholderText: "Search channels"
+                        EnterKey.iconSource: "image://theme/icon-m-search"
+                        EnterKey.onClicked: { focus = false; chDirPage.curLimit = 30; chDirPage.exhausted = false; chDirPage.search(text) }
+                    }
+                    BusyIndicator {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        running: chDirPage.searching
+                        size: BusyIndicatorSize.Medium
+                    }
+                    Label {
+                        visible: chDirPage.dirStatus !== ""
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: chDirPage.dirStatus
+                        wrapMode: Text.Wrap
+                        color: Theme.secondaryColor
+                    }
+                }
+                delegate: ListItem {
+                    width: ListView.view.width
+                    contentHeight: dirCol.height + 2*Theme.paddingMedium
+                    onClicked: openMenu()
+                    menu: Component {
+                        ContextMenu {
+                            MenuItem {
+                                text: "Follow"
+                                onClicked: {
+                                    var xhr = new XMLHttpRequest()
+                                    xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/follow?jid=" + encodeURIComponent(modelData.jid))
+                                    xhr.onreadystatechange = function() {
+                                        if (xhr.readyState === 4) {
+                                            globalNotice = xhr.status === 200 ? ("Following " + modelData.name) : ("Follow failed: " + xhr.responseText)
+                                            if (xhr.status === 200) loadChats()
+                                        }
+                                    }
+                                    xhr.send()
+                                }
+                            }
+                        }
+                    }
+                    Column {
+                        id: dirCol
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        anchors.verticalCenter: parent.verticalCenter
+                        Label {
+                            width: parent.width
+                            text: modelData.name + (modelData.verified ? " \u2713" : "")
+                            truncationMode: TruncationMode.Fade
+                        }
+                        Label {
+                            width: parent.width
+                            visible: !!modelData.description
+                            text: modelData.description || ""
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: Theme.secondaryColor
+                            maximumLineCount: 2
+                            wrapMode: Text.Wrap
+                            elide: Text.ElideRight
+                        }
+                        Label {
+                            text: modelData.subscribers > 0 ? (modelData.subscribers + " followers") : ""
+                            visible: modelData.subscribers > 0
+                            font.pixelSize: Theme.fontSizeTiny
+                            color: Theme.secondaryHighlightColor
+                        }
+                    }
+                }
+                onAtYEndChanged: {
+                    // Infinite Scroll mit Abklingzeit: nie schneller als
+                    // alle 3 s automatisch nachladen (Rate-Limit-Schutz)
+                    if (atYEnd && chDirPage.results.length > 0
+                            && Date.now() - chDirPage.lastAutoLoad > 3000) {
+                        chDirPage.lastAutoLoad = Date.now()
+                        chDirPage.loadMore()
+                    }
+                }
+                footer: Item {
+                    width: parent ? parent.width : Screen.width
+                    height: chDirPage.results.length > 0 && !chDirPage.exhausted ? Theme.itemSizeMedium : 0
+                    Button {
+                        anchors.centerIn: parent
+                        visible: parent.height > 0 && !chDirPage.searching
+                        text: "Load more"
+                        onClicked: chDirPage.loadMore()
+                    }
+                    BusyIndicator {
+                        anchors.centerIn: parent
+                        running: chDirPage.searching && chDirPage.results.length > 0
+                        size: BusyIndicatorSize.Medium
+                    }
+                }
+                VerticalScrollDecorator {}
             }
         }
     }
