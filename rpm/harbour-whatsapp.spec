@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.29
+Version:    0.9.31
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,25 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.31-1
+- Group photo actually works: WhatsApp's server only accepts square
+  baseline JPEGs up to ~640x640 and answered full-size uploads with
+  not-acceptable ("the given data is not a valid image" via
+  whatsmeow). Photos are now center-cropped to a square and scaled
+  to 640x640 (pure-Go bilinear, no new dependency) before upload;
+  the handler finally logs decode/upload results (🖼️ lines)
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.30-1
+- Admin changes (promote/demote), rename, description, photo and
+  leave now show up immediately: all mutating group endpoints
+  invalidate the group-info cache, so the reload after the action
+  fetches fresh data instead of the cached copy (cache moved to
+  package level so every handler can invalidate it)
+- Group photo selection reports errors instead of failing silently:
+  the picker XHR had no response handler. The most common failure is
+  Sailjail denying the backend read access to ~/Pictures without the
+  media storage permission - the error message now says so
+
 * Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.29-1
 - REAL online channel search: the search doc_id (26301059626252132)
   and its exact typed variable schema were found in the published

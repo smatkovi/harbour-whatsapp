@@ -1556,6 +1556,19 @@ ApplicationWindow {
                 var xhr = new XMLHttpRequest()
                 xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/photo?chat=" + groupJid
                          + "&file=" + encodeURIComponent(selectedContentProperties.filePath))
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState !== 4) return
+                    if (xhr.status === 200) {
+                        globalNotice = "Group photo updated"
+                    } else {
+                        // Haeufigste Ursache: Sailjail verweigert dem Backend
+                        // das Lesen aus ~/Pictures ohne Medien-Berechtigung
+                        globalNotice = "Group photo failed: " + xhr.responseText
+                                     + (xhr.responseText.indexOf("permission") >= 0 || xhr.status === 400
+                                        ? " - grant the media storage permission in Settings and restart the app"
+                                        : "")
+                    }
+                }
                 xhr.send()
             }
         }

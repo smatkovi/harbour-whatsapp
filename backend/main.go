@@ -110,6 +110,73 @@ func saveKnownChannels() {
     SaveEncrypted(knownChannelsFile, knownChannels)
 }
 
+// Gruppeninfo-Cache (Paket-Ebene, damit ihn jeder Handler invalidieren
+// kann): Mutationen wie promote/demote/rename MUESSEN invalidieren, sonst
+// serviert /group/info nach der Aktion die alte Kopie
+type groupInfoCacheEntry struct {
+    JSON []byte
+    At   time.Time
+}
+
+var groupInfoCache = map[string]groupInfoCacheEntry{}
+var groupInfoCacheMutex sync.Mutex
+
+// cropScaleSquare schneidet das Bild mittig quadratisch zu und skaliert
+// bilinear auf size x size (WhatsApp-Vorgabe fuer Gruppen-/Profilfotos)
+func cropScaleSquare(src image.Image, size int) image.Image {
+    b := src.Bounds()
+    side := b.Dx()
+    if b.Dy() < side {
+        side = b.Dy()
+    }
+    x0 := b.Min.X + (b.Dx()-side)/2
+    y0 := b.Min.Y + (b.Dy()-side)/2
+    dst := image.NewRGBA(image.Rect(0, 0, size, size))
+    scale := float64(side) / float64(size)
+    for y := 0; y < size; y++ {
+        sy := float64(y0) + (float64(y)+0.5)*scale - 0.5
+        yi := int(sy)
+        fy := sy - float64(yi)
+        if yi < y0 {
+            yi, fy = y0, 0
+        }
+        if yi >= y0+side-1 {
+            yi, fy = y0+side-2, 1
+        }
+        for x := 0; x < size; x++ {
+            sx := float64(x0) + (float64(x)+0.5)*scale - 0.5
+            xi := int(sx)
+            fx := sx - float64(xi)
+            if xi < x0 {
+                xi, fx = x0, 0
+            }
+            if xi >= x0+side-1 {
+                xi, fx = x0+side-2, 1
+            }
+            r00, g00, b00, _ := src.At(xi, yi).RGBA()
+            r10, g10, b10, _ := src.At(xi+1, yi).RGBA()
+            r01, g01, b01, _ := src.At(xi, yi+1).RGBA()
+            r11, g11, b11, _ := src.At(xi+1, yi+1).RGBA()
+            lerp := func(a, b uint32, t float64) float64 { return float64(a) + (float64(b)-float64(a))*t }
+            rr := lerp(uint32(lerp(r00, r10, fx)), uint32(lerp(r01, r11, fx)), fy)
+            gg := lerp(uint32(lerp(g00, g10, fx)), uint32(lerp(g01, g11, fx)), fy)
+            bb := lerp(uint32(lerp(b00, b10, fx)), uint32(lerp(b01, b11, fx)), fy)
+            i := dst.PixOffset(x, y)
+            dst.Pix[i] = uint8(uint32(rr) >> 8)
+            dst.Pix[i+1] = uint8(uint32(gg) >> 8)
+            dst.Pix[i+2] = uint8(uint32(bb) >> 8)
+            dst.Pix[i+3] = 0xFF
+        }
+    }
+    return dst
+}
+
+func invalidateGroupInfo(chat string) {
+    groupInfoCacheMutex.Lock()
+    delete(groupInfoCache, chat)
+    groupInfoCacheMutex.Unlock()
+}
+
 func markChannel(jid string) {
     knownChannelsMutex.Lock()
     knownChannels[jid] = true
@@ -2799,6 +2866,7 @@ func main() {
             http.Error(w, err.Error(), 500)
             return
         }
+        invalidateGroupInfo(chat)
         w.Write([]byte("ok"))
     })
 
@@ -3340,6 +3408,7 @@ func main() {
             http.Error(w, err.Error(), 500)
             return
         }
+        invalidateGroupInfo(chat)
         w.Write([]byte("ok"))
     })
 
@@ -3350,6 +3419,7 @@ func main() {
             http.Error(w, err.Error(), 500)
             return
         }
+        invalidateGroupInfo(chat)
         w.Write([]byte("ok"))
     })
 
@@ -3363,15 +3433,23 @@ func main() {
         }
         img, _, err := image.Decode(bytes.NewReader(data))
         if err != nil {
+            fmt.Printf("🖼️ group photo decode failed: %v\n", err)
             http.Error(w, "unsupported image: "+err.Error(), 400)
             return
         }
+        // WhatsApps Server akzeptiert nur quadratische Baseline-JPEGs bis
+        // ~640x640 (die offiziellen Clients croppen/skalieren vor dem
+        // Upload; Originalgroessen werden mit not-acceptable abgelehnt)
+        img = cropScaleSquare(img, 640)
         var buf bytes.Buffer
-        jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85})
+        jpeg.Encode(&buf, img, &jpeg.Options{Quality: 82})
         if _, err := client.SetGroupPhoto(ctx, types.NewJID(chat, types.GroupServer), buf.Bytes()); err != nil {
+            fmt.Printf("🖼️ SetGroupPhoto failed for %s: %v\n", chat, err)
             http.Error(w, err.Error(), 500)
             return
         }
+        fmt.Printf("🖼️ group photo updated for %s (%d bytes)\n", chat, buf.Len())
+        invalidateGroupInfo(chat)
         w.Write([]byte("ok"))
     })
 
@@ -3393,13 +3471,6 @@ func main() {
     // Gruppeninfo-Cache: das UI bekommt sofort die letzte bekannte Antwort,
     // der Server-Roundtrip (bei 80 Teilnehmern spuerbar) laeuft im
     // Hintergrund und aktualisiert den Cache fuer das naechste Oeffnen.
-    type groupInfoCacheEntry struct {
-        JSON []byte
-        At   time.Time
-    }
-    groupInfoCache := map[string]groupInfoCacheEntry{}
-    var groupInfoCacheMutex sync.Mutex
-
     buildGroupInfoJSON := func(chat string) ([]byte, error) {
         gi, err := client.GetGroupInfo(ctx, types.NewJID(chat, types.GroupServer))
         if err != nil {
@@ -3506,6 +3577,7 @@ func main() {
             http.Error(w, err.Error(), 500)
             return
         }
+        invalidateGroupInfo(chat)
         w.Write([]byte("ok"))
     })
 
