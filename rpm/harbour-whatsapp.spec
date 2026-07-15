@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.34
+Version:    0.9.37
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,33 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.37-1
+- Auto-download display made deterministic: the policy ComboBoxes are
+  only instantiated AFTER the prefs have loaded (small spinner in the
+  meantime), so they initialize directly with the stored values -
+  independent of Silica ComboBox binding/menu timing that kept the
+  display stuck on defaults while the backend value was correct
+
+* Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.36-1
+- Auto-download settings DISPLAY fixed (the backend value was already
+  correct and persisted since 0.9.35): Silica's ComboBox assigns
+  currentIndex imperatively during menu setup, destroying the
+  declarative binding before the async prefs fetch returns - the
+  boxes then showed the default ("Wi-Fi only") forever regardless of
+  the stored value. The index is now synchronized imperatively
+  whenever the prefs arrive or change
+
+* Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.35-1
+- The real auto-download reset bug, caught in the act: opening the
+  settings page OVERWROTE saved policies with the defaults. The
+  ComboBox change handler fires already during initialization (index
+  jumps to the default) while the async /prefs fetch is still
+  running, compared against the still-empty map, saw a "change" and
+  wrote the default to the backend - deterministically on every page
+  visit ("Documents: Always" became "Wi-Fi only" even within one
+  session). Writes are now blocked until the prefs are actually
+  loaded; re-set your preferred values once after updating
+
 * Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.34-1
 - In-app audio player: voice messages and audio files play inside the
   app (play/pause, seek slider, position display) - completing the

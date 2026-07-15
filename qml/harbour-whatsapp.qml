@@ -940,6 +940,12 @@ ApplicationWindow {
         id: settingsPage
         Page {
             property var downloadPrefs: ({})
+            // Schreibschutz: onCurrentIndexChanged feuert schon bei der
+            // Initialisierung der ComboBoxen (Index 0 -> Default) und hat
+            // dabei die gespeicherten Werte mit den Defaults UEBERSCHRIEBEN,
+            // solange der /prefs-Fetch noch lief - erst nach erfolgreichem
+            // Laden darf gespeichert werden
+            property bool prefsReady: false
             property var storageInfo: ({})
 
             function loadStorage() {
@@ -960,6 +966,7 @@ ApplicationWindow {
                     if (xhr.readyState !== 4) return
                     if (xhr.status === 200) {
                         downloadPrefs = JSON.parse(xhr.responseText) || {}
+                        prefsReady = true
                     } else {
                         // Backend laedt noch (503) - gleich nochmal, sonst
                         // zeigen die ComboBoxen faelschlich die Defaults
@@ -1015,8 +1022,16 @@ ApplicationWindow {
                         wrapMode: Text.Wrap
                     }
 
+                    BusyIndicator {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        running: !prefsReady
+                        size: BusyIndicatorSize.Small
+                    }
+
                     Repeater {
-                        model: [
+                        // Erst nach dem Prefs-Load instanziieren: die Boxen
+                        // starten dann direkt mit den gespeicherten Werten
+                        model: !prefsReady ? [] : [
                             { key: "image",    label: "Images",           def: "always" },
                             { key: "sticker",  label: "Stickers",         def: "always" },
                             { key: "video",    label: "Videos",           def: "wifi" },
@@ -1025,12 +1040,25 @@ ApplicationWindow {
                             { key: "avatar",   label: "Profile pictures", def: "always" }
                         ]
                         ComboBox {
+                            id: adlBox
                             width: setCol.width
                             label: modelData.label
                             property string prefKey: "autodl_" + modelData.key
-                            currentIndex: {
+                            // KEIN Binding auf currentIndex: Silicas ComboBox
+                            // weist currentIndex intern imperativ zu und
+                            // zerstoert das Binding vor Eintreffen der async
+                            // geladenen Prefs - die Anzeige blieb dann fuer
+                            // immer auf dem Default haengen, obwohl das
+                            // Backend den richtigen Wert hatte. Stattdessen
+                            // imperative Synchronisation, sobald Daten da sind.
+                            function syncFromPrefs() {
                                 var v = downloadPrefs[prefKey] || modelData.def
-                                return v === "always" ? 0 : (v === "wifi" ? 1 : 2)
+                                currentIndex = v === "always" ? 0 : (v === "wifi" ? 1 : 2)
+                            }
+                            Component.onCompleted: syncFromPrefs()
+                            Connections {
+                                target: settingsPage
+                                onDownloadPrefsChanged: adlBox.syncFromPrefs()
                             }
                             menu: ContextMenu {
                                 MenuItem { text: "Always" }
@@ -1038,6 +1066,7 @@ ApplicationWindow {
                                 MenuItem { text: "Never" }
                             }
                             onCurrentIndexChanged: {
+                                if (!prefsReady) return // Initialisierung/Sync, kein Nutzer-Input
                                 var v = currentIndex === 0 ? "always" : (currentIndex === 1 ? "wifi" : "never")
                                 if (downloadPrefs[prefKey] !== v) {
                                     var p = downloadPrefs
