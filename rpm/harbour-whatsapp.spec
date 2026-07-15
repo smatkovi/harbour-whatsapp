@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.37
+Version:    0.9.38
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,14 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.38-1
+- Pairing failures now tell you WHY: the PairError event (fired when
+  the phone accepts the code but the handshake fails afterwards -
+  the phone only shows "there was an error") was silently discarded.
+  The reason is now shown on the pairing screen and logged
+  (❌ PairError line), covering the classic causes: outdated app
+  version rejected by WhatsApp, device clock skew, device limit
+
 * Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.37-1
 - Auto-download display made deterministic: the policy ComboBoxes are
   only instantiated AFTER the prefs have loaded (small spinner in the

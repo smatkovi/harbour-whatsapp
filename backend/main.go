@@ -1736,6 +1736,15 @@ func eventHandler(evt interface{}) {
             }
         }()
         
+    case *events.PairError:
+        // Der Grund fuer ein Scheitern NACH angenommenem Code (Telefon
+        // zeigt nur "there was an error") steckt genau hier - vorher
+        // wurde dieses Event stumm verworfen
+        lastError = "Pairing failed: " + v.Error.Error()
+        connState = "waiting_for_pair"
+        pairCode = ""
+        fmt.Printf("❌ PairError: %v (id=%s, platform=%s)\n", v.Error, v.ID, v.Platform)
+
     case *events.PairSuccess:
         isConnected = true
         connState = "connected"
