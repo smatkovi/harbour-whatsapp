@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+wa-backend
+backend/wa-backend*
+*.rpm

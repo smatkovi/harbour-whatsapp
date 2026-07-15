@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.31
+Version:    0.9.34
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,41 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.34-1
+- In-app audio player: voice messages and audio files play inside the
+  app (play/pause, seek slider, position display) - completing the
+  media trio after images (0.9.24) and videos (0.9.32). External
+  players cannot read the app's private data directory under
+  Sailjail, so no media permission is needed anymore for any
+  received media type
+
+* Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.33-1
+- Auto-download settings no longer appear reset after an update or
+  restart: /prefs answered with an empty map before the stores were
+  loaded, making the settings page fall back to defaults ("Wi-Fi
+  only"), and worse, /prefs/set could overwrite prefs.enc with a
+  single-entry map in that window, actually losing settings. Both
+  endpoints now answer 503 while starting and the UI retries shortly
+- Channel audio "invalid media hmac" fixed: the server re-hosts
+  newsletter media UNENCRYPTED while the message proto still carries
+  the author's mediaKey, so normal decryption fails HMAC validation.
+  On that error the download retries as a plaintext newsletter fetch
+  over the direct path (mms-type newsletter-*) - applies to audio,
+  video and documents in channels alike
+
+* Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.32-1
+- In-app video player (QtMultimedia): videos play inside the app -
+  fullscreen, tap for play/pause, seek slider, position display. The
+  Gallery cannot read the app's private data directory under Sailjail
+  (users saw "0 bytes"), and unlike before no media permission is
+  needed to watch. All six media-open sites route videos to the
+  player; other file types still open externally
+- Pinned chats survive restarts reliably: the pin/mute/archive
+  handler mutated local state, then bailed out before saving when the
+  WhatsApp app-state sync failed (typical shortly after a fresh
+  pairing) - the UI showed the pin from memory and lost it on
+  restart. Local state is now persisted synchronously first; a failed
+  server sync is logged and reported but no longer discards the pin
 * Tue Jul 14 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.31-1
 - Group photo actually works: WhatsApp's server only accepts square
   baseline JPEGs up to ~640x640 and answered full-size uploads with

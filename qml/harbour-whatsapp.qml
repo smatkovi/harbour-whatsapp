@@ -1,4 +1,5 @@
 import QtQuick 2.0
+import QtMultimedia 5.6
 import Sailfish.Silica 1.0
 import QtPositioning 5.2
 import Sailfish.Pickers 1.0
@@ -161,13 +162,22 @@ ApplicationWindow {
         var xhr = new XMLHttpRequest()
         xhr.open("GET", "http://127.0.0.1:" + backendPort + "/prefs")
         xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4 && xhr.status === 200) {
+            if (xhr.readyState !== 4) return
+            if (xhr.status === 200) {
                 var p = JSON.parse(xhr.responseText) || {}
                 contactsOptIn = p.contactSuggestions === "1"
                 prefsLoaded = true
+            } else {
+                globalPrefsRetry.start()
             }
         }
         xhr.send()
+    }
+    Timer {
+        id: globalPrefsRetry
+        interval: 1500
+        repeat: false
+        onTriggered: loadPrefs()
     }
 
     function setPref(key, value) {
@@ -943,16 +953,31 @@ ApplicationWindow {
                 xhr.send()
             }
 
-            Component.onCompleted: {
-                loadStorage()
+            function loadDownloadPrefs() {
                 var xhr = new XMLHttpRequest()
                 xhr.open("GET", "http://127.0.0.1:" + backendPort + "/prefs")
                 xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4 && xhr.status === 200) {
+                    if (xhr.readyState !== 4) return
+                    if (xhr.status === 200) {
                         downloadPrefs = JSON.parse(xhr.responseText) || {}
+                    } else {
+                        // Backend laedt noch (503) - gleich nochmal, sonst
+                        // zeigen die ComboBoxen faelschlich die Defaults
+                        prefsRetry.start()
                     }
                 }
                 xhr.send()
+            }
+            Timer {
+                id: prefsRetry
+                interval: 1200
+                repeat: false
+                onTriggered: loadDownloadPrefs()
+            }
+
+            Component.onCompleted: {
+                loadStorage()
+                loadDownloadPrefs()
             }
 
             SilicaFlickable {
@@ -2080,6 +2105,10 @@ ApplicationWindow {
                                     pageStack.push(statusFullscreen,
                                                    { imagePath: modelData.localPath,
                                                      caption: modelData.text || "" })
+                                } else if (modelData.mediaType === "video") {
+                                    pageStack.push(videoPlayerPage, { videoPath: modelData.localPath })
+                                } else if (modelData.mediaType === "audio") {
+                                    pageStack.push(audioPlayerPage, { audioPath: modelData.localPath, title: modelData.text || "Audio" })
                                 } else {
                                     Qt.openUrlExternally("file://" + modelData.localPath)
                                 }
@@ -3236,7 +3265,11 @@ ApplicationWindow {
                             visible: !!modelData.localPath
                             onClicked: modelData.mediaType === "image"
                                        ? pageStack.push(statusFullscreen, { imagePath: modelData.localPath, caption: modelData.text || "" })
-                                       : Qt.openUrlExternally("file://" + modelData.localPath)
+                                       : modelData.mediaType === "video"
+                                         ? pageStack.push(videoPlayerPage, { videoPath: modelData.localPath })
+                                         : modelData.mediaType === "audio"
+                                           ? pageStack.push(audioPlayerPage, { audioPath: modelData.localPath, title: modelData.text || "Audio" })
+                                           : Qt.openUrlExternally("file://" + modelData.localPath)
                         }
                         MenuItem {
                             text: "Copy text"
@@ -3489,6 +3522,10 @@ ApplicationWindow {
                                     if (!modelData.localPath) { downloadMediaFor(modelData.id); return }
                                     if (modelData.mediaType === "image")
                                         pageStack.push(statusFullscreen, { imagePath: modelData.localPath, caption: modelData.text || "" })
+                                    else if (modelData.mediaType === "video")
+                                        pageStack.push(videoPlayerPage, { videoPath: modelData.localPath })
+                                    else if (modelData.mediaType === "audio")
+                                        pageStack.push(audioPlayerPage, { audioPath: modelData.localPath, title: modelData.text || "Audio" })
                                     else
                                         Qt.openUrlExternally("file://" + modelData.localPath)
                                 }
@@ -3527,6 +3564,10 @@ ApplicationWindow {
                                     if (!modelData.localPath) { downloadMediaFor(modelData.id); return }
                                     if (modelData.mediaType === "image")
                                         pageStack.push(statusFullscreen, { imagePath: modelData.localPath, caption: modelData.text || "" })
+                                    else if (modelData.mediaType === "video")
+                                        pageStack.push(videoPlayerPage, { videoPath: modelData.localPath })
+                                    else if (modelData.mediaType === "audio")
+                                        pageStack.push(audioPlayerPage, { audioPath: modelData.localPath, title: modelData.text || "Audio" })
                                     else
                                         Qt.openUrlExternally("file://" + modelData.localPath)
                                 }
@@ -3561,6 +3602,10 @@ ApplicationWindow {
                                     if (!modelData.localPath) { downloadMediaFor(modelData.id); return }
                                     if (modelData.mediaType === "image")
                                         pageStack.push(statusFullscreen, { imagePath: modelData.localPath, caption: modelData.text || "" })
+                                    else if (modelData.mediaType === "video")
+                                        pageStack.push(videoPlayerPage, { videoPath: modelData.localPath })
+                                    else if (modelData.mediaType === "audio")
+                                        pageStack.push(audioPlayerPage, { audioPath: modelData.localPath, title: modelData.text || "Audio" })
                                     else
                                         Qt.openUrlExternally("file://" + modelData.localPath)
                                 }
@@ -3598,6 +3643,10 @@ ApplicationWindow {
                                     if (!modelData.localPath) { downloadMediaFor(modelData.id); return }
                                     if (modelData.mediaType === "image")
                                         pageStack.push(statusFullscreen, { imagePath: modelData.localPath, caption: modelData.text || "" })
+                                    else if (modelData.mediaType === "video")
+                                        pageStack.push(videoPlayerPage, { videoPath: modelData.localPath })
+                                    else if (modelData.mediaType === "audio")
+                                        pageStack.push(audioPlayerPage, { audioPath: modelData.localPath, title: modelData.text || "Audio" })
                                     else
                                         Qt.openUrlExternally("file://" + modelData.localPath)
                                 }
@@ -4211,6 +4260,135 @@ ApplicationWindow {
                     }
                 }
                 VerticalScrollDecorator {}
+            }
+        }
+    }
+
+    Component {
+        id: videoPlayerPage
+        Page {
+            id: vpPage
+            property string videoPath: ""
+            allowedOrientations: Orientation.All
+            backgroundColor: "black"
+
+            MediaPlayer {
+                id: vplayer
+                source: "file://" + vpPage.videoPath
+                autoPlay: true
+                onStatusChanged: if (status === MediaPlayer.EndOfMedia) vpControls.visible = true
+            }
+            VideoOutput {
+                anchors.fill: parent
+                source: vplayer
+            }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: {
+                    if (vplayer.playbackState === MediaPlayer.PlayingState) {
+                        vplayer.pause()
+                        vpControls.visible = true
+                    } else {
+                        vplayer.play()
+                        vpControls.visible = false
+                    }
+                }
+            }
+            Column {
+                id: vpControls
+                visible: false
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: Theme.paddingLarge
+                width: parent.width
+                spacing: Theme.paddingSmall
+
+                Slider {
+                    width: parent.width
+                    minimumValue: 0
+                    maximumValue: vplayer.duration > 0 ? vplayer.duration : 1
+                    value: vplayer.position
+                    enabled: vplayer.seekable
+                    onReleased: vplayer.seek(value)
+                }
+                Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    color: "white"
+                    font.pixelSize: Theme.fontSizeSmall
+                    function fmt(ms) {
+                        var t = Math.floor(ms / 1000)
+                        var m = Math.floor(t / 60)
+                        var sec = t % 60
+                        return m + ":" + (sec < 10 ? "0" : "") + sec
+                    }
+                    text: fmt(vplayer.position) + " / " + fmt(vplayer.duration)
+                }
+            }
+            IconButton {
+                anchors { top: parent.top; left: parent.left; margins: Theme.paddingLarge }
+                icon.source: "image://theme/icon-m-back"
+                onClicked: pageStack.pop()
+            }
+        }
+    }
+
+    Component {
+        id: audioPlayerPage
+        Page {
+            id: apPage
+            property string audioPath: ""
+            property string title: "Audio"
+
+            MediaPlayer {
+                id: aplayer
+                source: "file://" + apPage.audioPath
+                autoPlay: true
+            }
+
+            Column {
+                anchors.centerIn: parent
+                width: parent.width - 2*Theme.horizontalPageMargin
+                spacing: Theme.paddingLarge
+
+                Image {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    source: "image://theme/icon-l-music"
+                    width: Theme.itemSizeExtraLarge
+                    height: width
+                }
+                Label {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: apPage.title
+                    truncationMode: TruncationMode.Fade
+                    color: Theme.highlightColor
+                }
+                IconButton {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    icon.source: aplayer.playbackState === MediaPlayer.PlayingState
+                                 ? "image://theme/icon-l-pause" : "image://theme/icon-l-play"
+                    onClicked: aplayer.playbackState === MediaPlayer.PlayingState
+                               ? aplayer.pause() : aplayer.play()
+                }
+                Slider {
+                    width: parent.width
+                    minimumValue: 0
+                    maximumValue: aplayer.duration > 0 ? aplayer.duration : 1
+                    value: aplayer.position
+                    enabled: aplayer.seekable
+                    onReleased: aplayer.seek(value)
+                }
+                Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.secondaryColor
+                    function fmt(ms) {
+                        var t = Math.floor(ms / 1000)
+                        var m = Math.floor(t / 60)
+                        var sec = t % 60
+                        return m + ":" + (sec < 10 ? "0" : "") + sec
+                    }
+                    text: fmt(aplayer.position) + " / " + fmt(aplayer.duration)
+                }
             }
         }
     }

@@ -733,6 +733,20 @@ func downloadMedia(msgID string, msg whatsmeow.DownloadableMessage, mimeType str
     dctx, cancel := context.WithTimeout(ctx, 90*time.Second)
     defer cancel()
     data, err := client.Download(dctx, msg)
+    if errors.Is(err, whatsmeow.ErrInvalidMediaHMAC) || errors.Is(err, whatsmeow.ErrInvalidMediaEncSHA256) {
+        // Kanal-Medien: der Server re-hostet Newsletter-Uploads
+        // UNVERSCHLUESSELT (mms-type "newsletter-*"), waehrend das Proto
+        // noch den mediaKey des Autors traegt - die normale Entschluesselung
+        // scheitert dann an der HMAC-Pruefung. Zweiter Versuch als
+        // Plaintext-Download ueber den direct path.
+        mt := whatsmeow.GetMediaType(msg)
+        mms := map[whatsmeow.MediaType]string{
+            whatsmeow.MediaImage: "image", whatsmeow.MediaAudio: "audio",
+            whatsmeow.MediaVideo: "video", whatsmeow.MediaDocument: "document",
+        }[mt]
+        fmt.Printf("⬇️ %s: hmac mismatch - retrying as unencrypted newsletter media (%s)\n", msgID, mms)
+        data, err = client.DownloadMediaWithPath(dctx, msg.GetDirectPath(), nil, msg.GetFileSHA256(), nil, mt, "newsletter-"+mms, true)
+    }
     if err != nil {
         return "", err
     }
@@ -3196,12 +3210,26 @@ func main() {
     })
 
     http.HandleFunc("/prefs", func(w http.ResponseWriter, r *http.Request) {
+        if !storesLoaded {
+            // Vor dem Laden wuerde eine leere Map geliefert und die UI
+            // fiele auf Defaults zurueck ("Wi-Fi only" statt gespeichertem
+            // Wert) - 503 laesst die UI kurz spaeter erneut fragen
+            http.Error(w, "starting", 503)
+            return
+        }
         prefsMutex.RLock()
         defer prefsMutex.RUnlock()
         json.NewEncoder(w).Encode(prefs)
     })
 
     http.HandleFunc("/prefs/set", func(w http.ResponseWriter, r *http.Request) {
+        if !storesLoaded {
+            // Ein Save vor dem Laden wuerde prefs.enc mit einer
+            // Ein-Eintrag-Map ueberschreiben und alle anderen
+            // Einstellungen verlieren
+            http.Error(w, "starting", 503)
+            return
+        }
         key := r.URL.Query().Get("key")
         value := r.URL.Query().Get("value")
         if key == "" {
@@ -3359,11 +3387,17 @@ func main() {
             http.Error(w, "unknown action", 400)
             return
         }
+        // Lokal-first: Der lokale Zustand ist bereits gesetzt und wird
+        // JETZT synchron persistiert - vorher konnte ein fehlgeschlagener
+        // App-State-Sync (z.B. kurz nach frischem Pairing) per early
+        // return das Speichern verhindern: UI zeigte den Pin aus dem
+        // Speicher, nach Neustart war er weg (Nutzerbericht).
+        saveChatSettings()
         if err := client.SendAppState(ctx, patch); err != nil {
-            http.Error(w, err.Error(), 500)
+            fmt.Printf("⚠️ app state sync for %s/%s failed (kept locally): %v\n", chat, action, err)
+            w.Write([]byte("ok (local only - server sync failed)"))
             return
         }
-        go saveChatSettings()
         w.Write([]byte("ok"))
     })
 
