@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.43
+Version:    0.9.45
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,23 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.45-1
+- Live location update throttle relaxed to 45 seconds (or 75 meters
+  of movement, whichever comes first)
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.44-1
+- Live location sharing no longer floods the chat with hundreds of
+  messages: the 20-second GPS tick sent a full new message per fix
+  (~500 over a few hours), and recipients' official clients showed
+  each one instead of collapsing them into the live bubble. Two-part
+  fix: updates are aligned with what official senders emit
+  (SequenceNumber as unix millis instead of 1,2,3..., TimeOffset in
+  seconds since the share started, no empty caption) to give
+  receiving clients their collapse key, and updates are throttled to
+  every 90 seconds OR 75 meters of movement, whichever comes first
+  (📍 log line per sent update). Your own bubble still refreshes on
+  every GPS fix
+
 * Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.43-1
 - Group messages no longer leak into 1:1 chats: the per-chat message
   filter also matched on sender, so a person's group posts appeared

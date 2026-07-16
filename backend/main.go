@@ -8,6 +8,7 @@ import (
     "errors"
     "fmt"
     "io"
+    "math"
     "net"
     "net/http"
     "os"
@@ -798,6 +799,17 @@ func setMessagePinned(chatJid, msgID string, pinned bool) {
 // updateLiveLocation aktualisiert den letzten Live-Standort desselben
 // Absenders im Chat in place. Liefert false, wenn keiner existiert (dann
 // wird die Nachricht normal als neuer Eintrag angelegt).
+// haversineMeters: Distanz zweier Koordinaten in Metern
+func haversineMeters(lat1, lon1, lat2, lon2 float64) float64 {
+    const R = 6371000.0
+    p1 := lat1 * math.Pi / 180
+    p2 := lat2 * math.Pi / 180
+    dp := (lat2 - lat1) * math.Pi / 180
+    dl := (lon2 - lon1) * math.Pi / 180
+    a := math.Sin(dp/2)*math.Sin(dp/2) + math.Cos(p1)*math.Cos(p2)*math.Sin(dl/2)*math.Sin(dl/2)
+    return R * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+}
+
 func updateLiveLocation(chatJid, sender string, lat, lon float64, ts int64) bool {
     if lat == 0 && lon == 0 {
         // Beim Beenden schickt WhatsApp oft ein letztes Paket ohne echte
@@ -2600,25 +2612,34 @@ func main() {
     // LiveLocationMessages mit steigender SequenceNumber. Empfaenger (auch
     // wir selbst, s. updateLiveLocation) kollabieren nach Absender+Chat.
     type liveShare struct {
-        Seq   int64
-        Until time.Time
-        MsgID string
+        Seq      int64
+        Until    time.Time
+        MsgID    string
+        Started  time.Time
+        LastSent time.Time
+        LastLat  float64
+        LastLon  float64
     }
     liveShares := map[string]*liveShare{}
     var liveSharesMutex sync.Mutex
 
-    sendLive := func(to string, lat, lon float64, seq int64) (string, error) {
+    sendLive := func(to string, lat, lon float64, seq int64, timeOffset uint32) (string, error) {
         var jid types.JID
         if len(to) > 15 {
             jid = types.NewJID(to, "g.us")
         } else {
             jid = types.NewJID(to, "s.whatsapp.net")
         }
+        // Angleichung an offizielle Sender, damit Empfaenger-Clients die
+        // Updates in die bestehende Live-Blase kollabieren statt jedes als
+        // neue Nachricht zu zeigen: SequenceNumber = Unix-Millis (nicht
+        // 1,2,3...), TimeOffset = Sekunden seit Share-Start, KEINE leere
+        // Caption mitsenden
         ll := &waE2E.LiveLocationMessage{
             DegreesLatitude:  proto.Float64(lat),
             DegreesLongitude: proto.Float64(lon),
             SequenceNumber:   proto.Int64(seq),
-            Caption:          proto.String(""),
+            TimeOffset:       proto.Uint32(timeOffset),
         }
         if eph := getChatEphemeral(to); eph > 0 {
             ll.ContextInfo = &waE2E.ContextInfo{Expiration: proto.Uint32(eph)}
@@ -2639,13 +2660,16 @@ func main() {
             http.Error(w, "to, lat, lon, minutes required", 400)
             return
         }
-        id, err := sendLive(to, lat, lon, 1)
+        seq := time.Now().UnixMilli()
+        id, err := sendLive(to, lat, lon, seq, 0)
         if err != nil {
             http.Error(w, err.Error(), 500)
             return
         }
+        now := time.Now()
         liveSharesMutex.Lock()
-        liveShares[to] = &liveShare{Seq: 1, Until: time.Now().Add(time.Duration(minutes) * time.Minute), MsgID: id}
+        liveShares[to] = &liveShare{Seq: seq, Until: now.Add(time.Duration(minutes) * time.Minute),
+            MsgID: id, Started: now, LastSent: now, LastLat: lat, LastLon: lon}
         liveSharesMutex.Unlock()
         addMessage(Message{
             ID: id, Sender: client.Store.ID.User, Text: "📍 Live location",
@@ -2677,13 +2701,28 @@ func main() {
             http.Error(w, "share expired", 410)
             return
         }
-        sh.Seq++
-        seq := sh.Seq
+        // Drossel: senden nur bei >=45s Abstand ODER >=75m Bewegung -
+        // 20s-GPS-Takt erzeugte sonst Hunderte Nachrichten bei Empfaengern,
+        // deren Client die Updates nicht kollabiert
+        moved := haversineMeters(sh.LastLat, sh.LastLon, lat, lon)
+        if time.Since(sh.LastSent) < 45*time.Second && moved < 75 {
+            liveSharesMutex.Unlock()
+            // Eigene Blase trotzdem aktualisieren
+            updateLiveLocation(to, client.Store.ID.User, lat, lon, time.Now().Unix())
+            w.Write([]byte("throttled"))
+            return
+        }
+        seq := time.Now().UnixMilli()
+        sh.Seq = seq
+        sh.LastSent = time.Now()
+        sh.LastLat, sh.LastLon = lat, lon
+        offset := uint32(time.Since(sh.Started).Seconds())
         liveSharesMutex.Unlock()
-        if _, err := sendLive(to, lat, lon, seq); err != nil {
+        if _, err := sendLive(to, lat, lon, seq, offset); err != nil {
             http.Error(w, err.Error(), 500)
             return
         }
+        fmt.Printf("📍 live update sent to %s (moved %.0fm, offset %ds)\n", to, moved, offset)
         updateLiveLocation(to, client.Store.ID.User, lat, lon, time.Now().Unix())
         w.Write([]byte("ok"))
     })
