@@ -2418,6 +2418,19 @@ func main() {
     loadContactsFromDisk()
     loadAvatarsFromDisk()
     storesLoaded = true
+    // Daemon-Fruehausstieg VOR dem WhatsApp-Connect: eine enabled Unit
+    // startet bei jedem Login - sind Benachrichtigungen aus, darf der
+    // Daemon dabei keine Sekunde Praesenz zeigen (vorher fing ihn erst
+    // der 30s-Watchdog, mit aufgebauter Verbindung)
+    if isDaemon {
+        prefsMutex.RLock()
+        notif := prefs["notifications"] == "1"
+        prefsMutex.RUnlock()
+        if !notif {
+            fmt.Println("🔔 daemon exiting before connect: notifications disabled")
+            os.Exit(0)
+        }
+    }
 
     if client.Store.ID == nil {
         fmt.Println("📱 No device ID - need to pair")

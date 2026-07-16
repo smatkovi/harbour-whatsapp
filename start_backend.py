@@ -28,6 +28,26 @@ def daemon_enabled():
     except Exception:
         return False
 
+def stop_daemon_via_quit():
+    """Sandbox-tauglicher Daemon-Stopp: /quit statt systemctl (das die
+    Sandbox verbietet). Sauberer Exit -> Restart=on-failure zieht nicht
+    neu hoch. Danach Kind-Backend nachstarten, damit die offene App
+    nicht ohne Backend dasteht. Der Autostart-Symlink bleibt bestehen -
+    beim naechsten Login beendet der Watchdog den Daemon selbst wieder,
+    solange Benachrichtigungen aus sind."""
+    port = find_backend_port()
+    if port:
+        try:
+            urllib.request.urlopen("http://127.0.0.1:%d/quit" % port, timeout=2)
+        except Exception:
+            pass
+        for _ in range(30):
+            if not find_backend_port():
+                break
+            time.sleep(0.2)
+    start()
+    return True
+
 def daemon_set(enable):
     """Daemon ein-/ausschalten MIT sauberer Uebergabe. Liefert (ok, meldung).
 

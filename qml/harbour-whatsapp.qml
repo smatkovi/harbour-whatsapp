@@ -1063,6 +1063,10 @@ ApplicationWindow {
             // solange der /prefs-Fetch noch lief - erst nach erfolgreichem
             // Laden darf gespeichert werden
             property bool prefsReady: false
+            // Anzeige-Sync direkt am Eigentuemer der Property: das
+            // Connections-Konstrukt in Kind-Elementen hat sich schon bei
+            // den Auto-Download-Boxen als unzuverlaessig erwiesen
+            onDownloadPrefsChanged: notifySwitch.checked = downloadPrefs["notifications"] === "1"
             property var storageInfo: ({})
 
             function loadStorage() {
@@ -1151,16 +1155,22 @@ ApplicationWindow {
                                    + "running in the background (muted chats stay silent)"
                         checked: false
                         Component.onCompleted: checked = downloadPrefs["notifications"] === "1"
-                        Connections {
-                            target: settingsPage
-                            onDownloadPrefsChanged: notifySwitch.checked = downloadPrefs["notifications"] === "1"
-                        }
                         onClicked: {
                             if (!prefsReady) { checked = !checked; return }
                             var p = downloadPrefs
                             p["notifications"] = checked ? "1" : "0"
                             downloadPrefs = p
                             setPref("notifications", checked ? "1" : "0")
+                            // Regel "Daemon nur mit Benachrichtigungen" sofort
+                            // durchsetzen: laufenden Daemon per /quit beenden
+                            // und Kind-Backend nachstarten (systemctl ist in
+                            // der Sandbox tabu)
+                            if (!checked && daemonRunning) {
+                                globalNotice = "Stopping background daemon\u2026"
+                                python.call('start_backend.stop_daemon_via_quit', [], function() {
+                                    globalNotice = "Background daemon stopped (autostart link remains - it exits by itself at next login while notifications are off)"
+                                })
+                            }
                         }
                     }
 
@@ -1171,7 +1181,7 @@ Label {
                         font.pixelSize: Theme.fontSizeSmall
                         color: daemonRunning ? Theme.highlightColor : Theme.secondaryColor
                         text: "Background daemon: " + (daemonRunning ? "running" : "not running")
-                        visible: notifySwitch.checked || daemonRunning
+                        visible: notifySwitch.checked || daemonRunning || downloadPrefs["daemon_autostart"] === "1"
                     }
 
                     Label {
@@ -1180,12 +1190,15 @@ Label {
                         wrapMode: Text.Wrap
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
-                        visible: notifySwitch.checked || daemonRunning
+                        visible: notifySwitch.checked || daemonRunning || downloadPrefs["daemon_autostart"] === "1"
                         text: "Keeps notifications coming after the app is closed. "
                             + "systemd cannot be controlled from inside the sandbox - "
                             + "tap a command below to copy it, then paste in Terminal. "
-                            + "The daemon quits by itself when notifications are "
-                            + "switched off and the app is closed."
+                            + "After enabling, restart the app if the status does not "
+                            + "switch to running within a few seconds. Switching "
+                            + "notifications off only stops the running daemon - "
+                            + "removing the autostart completely needs the disable "
+                            + "command below."
                     }
 
                     BackgroundItem {
@@ -1194,6 +1207,10 @@ Label {
                         onClicked: {
                             Clipboard.text = "systemctl --user enable --now harbour-whatsapp-daemon.service"
                             globalNotice = "Enable command copied - paste in Terminal"
+                            var p = downloadPrefs
+                            p["daemon_autostart"] = "1"
+                            downloadPrefs = p
+                            setPref("daemon_autostart", "1")
                         }
                         Label {
                             id: enableCmdLabel
@@ -1209,11 +1226,18 @@ Label {
                     }
 
                     BackgroundItem {
-                        visible: notifySwitch.checked || daemonRunning
+                        // Enabled-Zustand ist aus der Sandbox nicht pruefbar
+                        // (~/.config/systemd ist verborgen) - lokales Flag
+                        // "je aktiviert" irrt im Zweifel Richtung Anzeigen
+                        visible: daemonRunning || downloadPrefs["daemon_autostart"] === "1"
                         height: disableCmdLabel.height + 2*Theme.paddingMedium
                         onClicked: {
                             Clipboard.text = "systemctl --user disable --now harbour-whatsapp-daemon.service"
                             globalNotice = "Disable command copied - paste in Terminal"
+                            var p = downloadPrefs
+                            p["daemon_autostart"] = "0"
+                            downloadPrefs = p
+                            setPref("daemon_autostart", "0")
                         }
                         Label {
                             id: disableCmdLabel

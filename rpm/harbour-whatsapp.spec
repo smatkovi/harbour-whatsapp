@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.56
+Version:    0.9.60
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -58,6 +58,43 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/bin/harbour-whatsapp-daemon
 
 %changelog
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.60-1
+- Daemon section hints: after enabling, restart the app if the status
+  does not switch to running within a few seconds; switching
+  notifications off only stops the running daemon - removing the
+  autostart completely needs the Terminal disable command. Since the
+  enabled state cannot be probed from inside the sandbox
+  (~/.config/systemd is hidden; a probe would err towards hiding),
+  a local "ever enabled" flag decides when to show the disable
+  command: while the daemon runs, or after the enable command was
+  copied and the disable command has not been copied yet
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.59-1
+- Notifications toggle no longer shows "off" while the backend says
+  on (display-sync bug family, member four): the switch relied on a
+  Connections element to follow the async prefs load - the same
+  construct that already failed for the auto-download boxes. The
+  sync handler now lives directly on the settings page (the
+  property's owner), which fires reliably
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.58-1
+- Daemon early exit before connecting: an enabled unit starts at
+  every login - with notifications off, the daemon now exits right
+  after loading prefs and BEFORE touching WhatsApp (previously the
+  30s watchdog caught it only after the connection was already
+  established). An enabled-but-"disabled" unit thus never shows
+  presence; only the running process can be controlled from the UI,
+  removing the autostart link still needs the one terminal command
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.57-1
+- Switching notifications off now stops a running daemon immediately
+  (sandbox-compatible: the GUI asks it to /quit - a clean exit that
+  Restart=on-failure leaves alone - and respawns a child backend for
+  the open app). Previously the daemon kept showing "running" until
+  the watchdog caught it after the app was closed. The autostart
+  symlink remains until the disable command is run; a daemon started
+  at next login exits by itself while notifications are off
+
 * Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.56-1
 - cwd guard: the backend derives its data directory from the working
   directory - started manually (or with the sandbox mapping the cwd
