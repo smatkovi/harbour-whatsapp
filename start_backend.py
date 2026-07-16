@@ -1,4 +1,5 @@
 import subprocess
+import signal
 import os
 import time
 import urllib.request
@@ -19,6 +20,84 @@ def _pdeathsig():
         pass  # besser ohne Absicherung starten als gar nicht
 
 DAEMON_UNIT = "harbour-whatsapp-daemon.service"
+
+voice_process = None
+voice_path = None
+
+def voice_start():
+    """Sprachaufnahme starten: PulseAudio -> Opus/OGG (16 kHz mono, wie
+    WhatsApp-Voice-Notes). SIGINT + -e finalisiert die Datei sauber."""
+    global voice_process, voice_path
+    voice_cancel()  # evtl. Reste
+    data_dir = os.path.expanduser("~/.local/share/harbour/harbour-whatsapp")
+    media = os.path.join(data_dir, "media", "Voice")
+    os.makedirs(media, exist_ok=True)
+    voice_path = os.path.join(media, "voice_%d.ogg" % int(time.time() * 1000))
+    # /usr/bin kann im Jail auf eine Positivliste reduziert sein (EACCES) -
+    # /usr/share/harbour-whatsapp ist nachweislich ausfuehrbar (wa-backend
+    # startet von dort); der Hardlink wird bei der Installation angelegt
+    gst = "/usr/share/harbour-whatsapp/gst-launch-1.0"
+    if not os.path.exists(gst):
+        gst = "gst-launch-1.0"
+    errlog = os.path.join(media, "recorder.err")
+    try:
+        errf = open(errlog, "w")
+        voice_process = subprocess.Popen(
+            [gst, "-e", "-q", "pulsesrc", "!", "audioconvert",
+             "!", "audioresample", "!", "audio/x-raw,rate=16000,channels=1",
+             "!", "opusenc", "bitrate=24000", "!", "oggmux",
+             "!", "filesink", "location=" + voice_path],
+            stdout=subprocess.DEVNULL, stderr=errf,
+            preexec_fn=_pdeathsig)  # Mikrofon darf die App NIE ueberleben
+        errf.close()
+        # Sofortiger Tod (z.B. Berechtigung fehlt) sofort und WOERTLICH melden
+        time.sleep(0.4)
+        if voice_process.poll() is not None:
+            rc = voice_process.returncode
+            voice_process = None
+            tail = ""
+            try:
+                with open(errlog) as f:
+                    tail = " ".join(f.read().strip().splitlines()[-2:])[:200]
+            except Exception:
+                pass
+            return "recorder exited (code %s): %s" % (rc, tail or "no error output")
+        return True
+    except Exception as e:
+        voice_process = None
+        return str(e)
+
+def voice_stop():
+    """Aufnahme beenden; liefert den Dateipfad (oder Fehlertext)."""
+    global voice_process
+    if not voice_process:
+        return ""
+    try:
+        voice_process.send_signal(signal.SIGINT)
+        voice_process.wait(timeout=5)
+    except Exception:
+        voice_process.kill()
+    voice_process = None
+    if voice_path and os.path.exists(voice_path) and os.path.getsize(voice_path) > 0:
+        return voice_path
+    return ""
+
+def voice_cancel():
+    """Aufnahme verwerfen und Datei loeschen."""
+    global voice_process, voice_path
+    if voice_process:
+        try:
+            voice_process.kill()
+        except Exception:
+            pass
+        voice_process = None
+    if voice_path and os.path.exists(voice_path):
+        try:
+            os.remove(voice_path)
+        except Exception:
+            pass
+    voice_path = None
+    return True
 
 def daemon_enabled():
     try:

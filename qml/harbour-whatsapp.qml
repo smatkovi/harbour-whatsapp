@@ -1382,9 +1382,11 @@ Label {
                         property bool locationGranted: false
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
+                        property bool micGranted: false
                         text: "Contacts permission: " + (granted ? "granted" : "not granted")
                               + "\nMedia storage permission: " + (mediaGranted ? "granted" : "not granted")
                               + "\nLocation permission: " + (locationGranted ? "granted" : "not granted")
+                              + "\nMicrophone permission: " + (micGranted ? "granted" : "not granted")
                         color: Theme.highlightColor
                         font.pixelSize: Theme.fontSizeSmall
                         wrapMode: Text.Wrap
@@ -1398,6 +1400,7 @@ Label {
                                     granted = p.contactsPermission === true
                                     mediaGranted = p.mediaPermission === true
                                     locationGranted = p.locationPermission === true
+                                    micGranted = p.micPermission === true
                                 }
                             }
                             xhr.send()
@@ -1529,6 +1532,44 @@ Label {
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
                             text: "\u25b8 Copy command to REVOKE location permission"
+                            color: Theme.secondaryHighlightColor
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
+                    BackgroundItem {
+                        width: parent.width
+                        height: grantMicLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Microphone;/!s/$/Microphone;/}' /usr/share/applications/harbour-whatsapp.desktop"
+                            copiedHint.text = "Microphone grant command copied - paste in Terminal, then restart the app"
+                        }
+                        Label {
+                            id: grantMicLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            wrapMode: Text.Wrap
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "\u25b8 Copy command to GRANT microphone permission (voice notes)"
+                            color: Theme.highlightColor
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
+                    BackgroundItem {
+                        width: parent.width
+                        height: revokeMicLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Microphone;//g}' /usr/share/applications/harbour-whatsapp.desktop"
+                            copiedHint.text = "Microphone revoke command copied - paste in Terminal"
+                        }
+                        Label {
+                            id: revokeMicLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            wrapMode: Text.Wrap
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "\u25b8 Copy command to REVOKE microphone permission"
                             color: Theme.secondaryHighlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -4246,16 +4287,48 @@ Label {
 
                 Row {
                     width: parent.width
+                    property bool recording: false
+                    property int recSeconds: 0
+                    id: inputRow
+
+                    Timer {
+                        id: recTimer
+                        interval: 1000
+                        repeat: true
+                        running: inputRow.recording
+                        onTriggered: inputRow.recSeconds++
+                    }
+
+                    Component.onDestruction: {
+                        // Chat verlassen waehrend der Aufnahme: abbrechen,
+                        // sonst laeuft das Mikrofon unsichtbar weiter
+                        if (inputRow.recording) python.call('start_backend.voice_cancel', [])
+                    }
 
                     IconButton {
-                        icon.source: "image://theme/icon-m-attach"
-                        onClicked: pageStack.push(filePicker)
+                        icon.source: inputRow.recording ? "image://theme/icon-m-clear"
+                                                        : "image://theme/icon-m-attach"
+                        onClicked: {
+                            if (inputRow.recording) {
+                                // Aufnahme verwerfen
+                                inputRow.recording = false
+                                python.call('start_backend.voice_cancel', [])
+                                globalNotice = "Recording discarded"
+                            } else {
+                                pageStack.push(filePicker)
+                            }
+                        }
                     }
 
                     TextField {
                         id: input
                         width: parent.width - sendBtn.width - parent.children[0].width
-                        placeholderText: "Message..."
+                        placeholderText: inputRow.recording
+                                         ? ("Recording… " + Math.floor(inputRow.recSeconds / 60)
+                                            + ":" + (inputRow.recSeconds % 60 < 10 ? "0" : "")
+                                            + (inputRow.recSeconds % 60))
+                                         : "Message..."
+                        enabled: !inputRow.recording
                         EnterKey.onClicked: send()
                         backgroundStyle: TextEditor.NoBackground
                         onTextChanged: updateMentionToken()
@@ -4263,8 +4336,52 @@ Label {
 
                     IconButton {
                         id: sendBtn
-                        icon.source: "image://theme/icon-m-send"
-                        onClicked: send()
+                        icon.source: inputRow.recording ? "image://theme/icon-m-send"
+                                     : (input.text.length > 0 ? "image://theme/icon-m-send"
+                                                              : "image://theme/icon-m-mic")
+                        highlighted: inputRow.recording
+                        onClicked: {
+                            if (inputRow.recording) {
+                                // Stoppen und senden
+                                inputRow.recording = false
+                                var secs = inputRow.recSeconds
+                                if (secs < 1) {
+                                    // Doppeltipp: 0-Sekunden-Notes will niemand
+                                    python.call('start_backend.voice_cancel', [])
+                                    globalNotice = "Too short - discarded"
+                                    return
+                                }
+                                python.call('start_backend.voice_stop', [], function(path) {
+                                    if (!path) {
+                                        globalNotice = "Recording failed - is gst-launch-1.0 available?"
+                                        return
+                                    }
+                                    var xhr = new XMLHttpRequest()
+                                    xhr.open("GET", "http://127.0.0.1:" + backendPort + "/send/voice?to=" + chatJid
+                                             + "&file=" + encodeURIComponent(path) + "&seconds=" + secs)
+                                    xhr.onreadystatechange = function() {
+                                        if (xhr.readyState !== 4) return
+                                        if (xhr.status === 200) { load() }
+                                        else globalNotice = "Voice note failed: " + xhr.responseText
+                                    }
+                                    xhr.send()
+                                })
+                            } else if (input.text.length > 0) {
+                                send()
+                            } else {
+                                // Aufnahme starten (Mikrofon-Berechtigung noetig)
+                                python.call('start_backend.voice_start', [], function(res) {
+                                    if (res === true) {
+                                        inputRow.recSeconds = 0
+                                        inputRow.recording = true
+                                        globalNotice = "Recording - tap \u2716 to discard, send to deliver"
+                                    } else {
+                                        globalNotice = "Recording failed (" + res + ") - grant the "
+                                                     + "microphone permission in Settings and restart the app"
+                                    }
+                                })
+                            }
+                        }
                     }
                 }
             }

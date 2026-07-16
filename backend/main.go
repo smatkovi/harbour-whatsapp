@@ -2219,6 +2219,46 @@ func sendMedia(to string, filePath string, caption string) error {
     return nil
 }
 
+// sendVoice sendet eine echte WhatsApp-Sprachnachricht: nur die
+// Kombination aus PTT-Flag, "audio/ogg; codecs=opus" und gesetzter Dauer
+// laesst Android/iOS/Web sie als Voice Note (Inline-Player in der Blase)
+// rendern - sonst erscheint nur ein generisches Audio-Attachment.
+func sendVoice(to string, filePath string, seconds uint32) error {
+    data, err := os.ReadFile(filePath)
+    if err != nil {
+        return err
+    }
+    var jid types.JID
+    if len(to) > 15 {
+        jid = types.NewJID(to, "g.us")
+    } else {
+        jid = types.NewJID(to, "s.whatsapp.net")
+    }
+    uploaded, err := client.Upload(ctx, data, whatsmeow.MediaAudio)
+    if err != nil {
+        return fmt.Errorf("upload failed: %v", err)
+    }
+    mimeType := "audio/ogg; codecs=opus"
+    ptt := true
+    fileLen := uint64(len(data))
+    msg := &waE2E.Message{AudioMessage: &waE2E.AudioMessage{
+        URL: &uploaded.URL, DirectPath: &uploaded.DirectPath, MediaKey: uploaded.MediaKey,
+        Mimetype: &mimeType, FileEncSHA256: uploaded.FileEncSHA256, FileSHA256: uploaded.FileSHA256,
+        FileLength: &fileLen, PTT: &ptt, Seconds: &seconds,
+    }}
+    resp, err := client.SendMessage(ctx, jid, msg)
+    if err != nil {
+        return err
+    }
+    addMessage(Message{
+        ID: resp.ID, Sender: client.Store.ID.User, Text: "", Timestamp: time.Now().Unix(),
+        FromMe: true, ChatJID: to, MediaType: "audio", MimeType: mimeType,
+        FileName: filepath.Base(filePath), FileSize: fileLen, LocalPath: filePath,
+    })
+    fmt.Printf("🎤 Sent voice note to %s (%ds, %d bytes)\n", to, seconds, fileLen)
+    return nil
+}
+
 func main() {
     // Initialize paths first
     initPaths()
@@ -4366,13 +4406,29 @@ func main() {
         json.NewEncoder(w).Encode(hits)
     })
 
+    http.HandleFunc("/send/voice", func(w http.ResponseWriter, r *http.Request) {
+        to := r.URL.Query().Get("to")
+        file := r.URL.Query().Get("file")
+        secs, _ := strconv.Atoi(r.URL.Query().Get("seconds"))
+        if to == "" || file == "" {
+            http.Error(w, "to and file required", 400)
+            return
+        }
+        if err := sendVoice(to, file, uint32(secs)); err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        w.Write([]byte("ok"))
+    })
+
     http.HandleFunc("/permcheck", func(w http.ResponseWriter, r *http.Request) {
         data, err := os.ReadFile("/usr/share/applications/harbour-whatsapp.desktop")
         d := string(data)
         contacts := err == nil && strings.Contains(d, "Contacts;") && strings.Contains(d, "Privileged;")
         media := err == nil && strings.Contains(d, "UserDirs;") && strings.Contains(d, "MediaIndexing;") && strings.Contains(d, "RemovableMedia;")
         location := err == nil && strings.Contains(d, "Location;")
-        json.NewEncoder(w).Encode(map[string]bool{"contactsPermission": contacts, "mediaPermission": media, "locationPermission": location})
+        mic := err == nil && strings.Contains(d, "Microphone;")
+        json.NewEncoder(w).Encode(map[string]bool{"contactsPermission": contacts, "mediaPermission": media, "locationPermission": location, "micPermission": mic})
     })
 
     http.HandleFunc("/storage", func(w http.ResponseWriter, r *http.Request) {

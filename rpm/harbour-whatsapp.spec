@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.60
+Version:    0.9.63
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -57,7 +57,52 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/applications/harbour-whatsapp-daemon.desktop
 /usr/bin/harbour-whatsapp-daemon
 
+%post
+# gst-launch am exec-erlaubten Ort verfuegbar machen (Voice-Aufnahme):
+# /usr/bin kann im Sailjail auf eine Positivliste reduziert sein
+ln -f /usr/bin/gst-launch-1.0 /usr/share/harbour-whatsapp/gst-launch-1.0 2>/dev/null ||   cp /usr/bin/gst-launch-1.0 /usr/share/harbour-whatsapp/gst-launch-1.0 2>/dev/null || true
+
+%postun
+if [ "$1" = "0" ]; then
+  rm -f /usr/share/harbour-whatsapp/gst-launch-1.0
+fi
+
 %changelog
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.63-1
+- Voice recording vs. the sandbox, round two: launching gst-launch-1.0
+  from /usr/bin fails inside the jail (EACCES - sailjail can reduce
+  /usr/bin to an allowlist), while the manual pipeline works
+  unsandboxed. The recorder is now started from
+  /usr/share/harbour-whatsapp - the path the backend provenly executes
+  from - via a hardlink to the system binary created at install time
+  (%post). Early recorder deaths now report the recorder's actual
+  stderr verbatim instead of just an exit code
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.62-1
+- Voice recording hardened after walking the permission/flow test
+  matrix: the recorder process dies with the app via PR_SET_PDEATHSIG
+  (previously an orphaned gst-launch kept the MICROPHONE hot after
+  closing the app mid-recording - privacy hole); missing microphone
+  permission is reported immediately at start instead of after
+  recording into the void; leaving the chat page cancels a running
+  recording; sub-second double-taps are discarded ("too short")
+  instead of sending 0-second notes; a notice at recording start
+  points out the discard (X) and send controls
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.61-1
+- Voice notes (requested on OpenRepos - "the only thing missing"):
+  tap the mic button (shown while the text field is empty) to record,
+  tap send to stop and send, tap the X to discard. Recording runs via
+  GStreamer (PulseAudio -> Opus/OGG, 16 kHz mono) and is sent as a
+  real WhatsApp voice note - PTT flag, audio/ogg codecs=opus mimetype
+  and duration - which is exactly the combination Android, iOS and
+  Web require to render it as a playable voice message instead of a
+  generic audio attachment
+- Microphone is a new OPTIONAL sailjail permission, handled like the
+  others: status display plus tap-to-copy grant/revoke Terminal
+  commands in Settings; the app keeps shipping with minimal
+  permissions
+
 * Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.60-1
 - Daemon section hints: after enabling, restart the app if the status
   does not switch to running within a few seconds; switching
