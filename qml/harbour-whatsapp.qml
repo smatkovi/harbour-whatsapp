@@ -1,5 +1,6 @@
 import QtQuick 2.0
 import QtMultimedia 5.6
+import Nemo.Notifications 1.0
 import Sailfish.Silica 1.0
 import QtPositioning 5.2
 import Sailfish.Pickers 1.0
@@ -77,6 +78,16 @@ ApplicationWindow {
     // Sailfish Contacts: nur instanziiert, wenn der Opt-in aktiv ist -
     // ohne Einstellung wird die Kontaktdatenbank nie angefasst
     property bool contactsOptIn: false
+    property bool notificationsEnabled: false
+    property var  prevUnread: ({})
+    property bool prevUnreadInit: false
+
+    Notification {
+        id: msgNotification
+        appName: "WhatsApp"
+        appIcon: "harbour-whatsapp"
+        category: "x-nemo.messaging.im"
+    }
     property string globalNotice: ""
 
     // ---- Live-Standort-Freigabe (app-weit, ueberlebt Seitenwechsel) ----
@@ -166,6 +177,7 @@ ApplicationWindow {
             if (xhr.status === 200) {
                 var p = JSON.parse(xhr.responseText) || {}
                 contactsOptIn = p.contactSuggestions === "1"
+                notificationsEnabled = p.notifications === "1"
                 prefsLoaded = true
             } else {
                 globalPrefsRetry.start()
@@ -368,6 +380,27 @@ ApplicationWindow {
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4 && xhr.status === 200) {
                 chats = JSON.parse(xhr.responseText) || []
+                var nu = {}
+                for (var i = 0; i < chats.length; i++) {
+                    var c = chats[i]
+                    nu[c.jid] = c.unread || 0
+                    // Benachrichtigen nur: Feature an, kein Erststart,
+                    // Zaehler gestiegen, nicht stummgeschaltet, App im
+                    // Hintergrund (im Vordergrund sieht man es ohnehin)
+                    if (notificationsEnabled && prevUnreadInit
+                            && nu[c.jid] > (prevUnread[c.jid] || 0)
+                            && !c.muted && !Qt.application.active) {
+                        msgNotification.replacesId = 0
+                        msgNotification.summary = getDisplayName(c.jid, c.name)
+                        msgNotification.body = c.lastMessage || "New message"
+                        msgNotification.previewSummary = msgNotification.summary
+                        msgNotification.previewBody = msgNotification.body
+                        msgNotification.itemCount = nu[c.jid]
+                        msgNotification.publish()
+                    }
+                }
+                prevUnread = nu
+                prevUnreadInit = true
             }
         }
         xhr.send()
@@ -521,6 +554,22 @@ ApplicationWindow {
                                 loadWAContacts()
                                 loadChats()
                             }
+                        }
+                        xhr.send()
+                    }
+                }
+                MenuItem {
+                    text: "Mark all as read"
+                    visible: {
+                        for (var i = 0; i < chats.length; i++)
+                            if ((chats[i].unread || 0) > 0) return true
+                        return false
+                    }
+                    onClicked: {
+                        var xhr = new XMLHttpRequest()
+                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chats/read-all")
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState === 4) loadChats()
                         }
                         xhr.send()
                     }
@@ -1035,6 +1084,20 @@ ApplicationWindow {
                         onClicked: {
                             contactsOptIn = !contactsOptIn
                             setPref("contactSuggestions", contactsOptIn ? "1" : "0")
+                        }
+                    }
+
+                    TextSwitch {
+                        text: "Event screen notifications"
+                        description: "Show a notification on the events screen when a "
+                                   + "chat receives new messages while the app is in the "
+                                   + "background. Works while the app is running (also "
+                                   + "minimised as a cover)."
+                        checked: notificationsEnabled
+                        automaticCheck: false
+                        onClicked: {
+                            notificationsEnabled = !notificationsEnabled
+                            setPref("notifications", notificationsEnabled ? "1" : "0")
                         }
                     }
 

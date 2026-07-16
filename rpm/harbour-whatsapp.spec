@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.45
+Version:    0.9.46
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,17 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.46-1
+- Mark all as read (requested on OpenRepos): pulley menu entry on the
+  chat list clears all unread counters at once (backend endpoint
+  /chats/read-all sets the last-opened marker for every chat)
+- Event screen notifications (requested on OpenRepos), optional and
+  OFF by default: when enabled in Settings, a chat whose unread count
+  rises while the app is in the background publishes a notification
+  (sender name, message preview, count) via Nemo.Notifications. Muted
+  chats stay silent. Works while the app is running, also minimised
+  as a cover; no notifications when the app is closed completely
+
 * Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.45-1
 - Live location update throttle relaxed to 45 seconds (or 75 meters
   of movement, whichever comes first)

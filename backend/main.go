@@ -2355,6 +2355,24 @@ func main() {
         }()
     })
 
+    http.HandleFunc("/chats/read-all", func(w http.ResponseWriter, r *http.Request) {
+        now := time.Now().Unix()
+        n := 0
+        for _, c := range getChats() {
+            if c.Unread == 0 {
+                continue
+            }
+            cs := getChatSettings(c.JID)
+            chatSettingsMutex.Lock()
+            cs.LastOpened = now
+            chatSettingsMutex.Unlock()
+            n++
+        }
+        saveChatSettings()
+        fmt.Printf("📖 marked %d chats as read\n", n)
+        fmt.Fprintf(w, "ok (%d chats)", n)
+    })
+
     http.HandleFunc("/chat/opened", func(w http.ResponseWriter, r *http.Request) {
         chat := r.URL.Query().Get("chat")
         if chat == "" {
