@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.63
+Version:    0.9.73
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -68,6 +68,99 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.73-1
+- Ear-mode gate made fully symmetric: the player enables it only
+  with BOTH explicit tokens (Audio and Sensors) confirmed via
+  /permcheck. Sensors was previously only implicitly gated by the
+  sandbox silencing the proximity sensor - correct today, but the
+  same class of implicit trust that produced the microphone-include
+  mismatch; now the displayed model is enforced on both halves
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.72-1
+- Permission matrix walked across all eight Audio/Sensors/Microphone
+  combinations; one inconsistency found and fixed: with
+  Microphone+Sensors (but no explicit Audio token) the ear mode ran
+  anyway - sailjail's Microphone permission includes Audio - while
+  the status honestly said "needs audio". The player now checks
+  /permcheck on open and enables ear mode ONLY with the explicit
+  Audio token: display model and runtime behaviour now agree in
+  every row of the matrix
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.71-1
+- Ear mode is advertised and checked purely as Audio+Sensors:
+  the microphone permission no longer appears in the readiness
+  logic or as an alternative route - microphone means recording,
+  nothing else. Audio shows plainly granted/not granted by its own
+  token
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.70-1
+- Permission pairs reorganized by purpose: "Audio+Sensors" grants
+  ear-speaker listening WITHOUT any microphone access (Audio brings
+  the routing D-Bus, Sensors the proximity), "Microphone" grants
+  voice-note recording (and includes Audio at the sailjail level, so
+  mic + sensors also enables ear mode). The status now states
+  ear-mode readiness explicitly ("ready" / "needs audio+sensors" /
+  "needs sensors" / "needs audio (or microphone)") and shows Audio
+  as "granted (via microphone)" where applicable
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.69-1
+- Ear-mode test matrix walked, one real hole found and fixed:
+  with headphones or Bluetooth connected, a covered proximity
+  sensor (pocket!) would have yanked audio onto the ear speaker -
+  ear mode now engages only when the active output route is the
+  loudspeaker (ActiveRoutes check on each near event, like the
+  official clients)
+- Sensors is its own separate optional permission again: dedicated
+  grant/revoke tap-to-copy commands next to the microphone pair
+  (microphone = voice notes; sensors = proximity, ear mode needs
+  both and stays safely off with only one granted)
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.68-1
+- Ear mode complete: the proximity sensor needs the Sensors sailjail
+  permission (silently empty without it - found via the file log).
+  The grant/revoke commands in Settings now set/remove BOTH tokens
+  (Microphone + Sensors), /permcheck reports Sensors, and the wake-up
+  unlock is fired twice (immediately and after 300ms) to win the race
+  against the lockscreen engaging after display-on
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.67-1
+- Ear-mode diagnostics to file (~/.local/share/harbour/
+  harbour-whatsapp/ui-debug.log): player page open, Routes reply
+  (raw), earpiece type found, every proximity reading and every
+  earpiece switch - debuggable without terminal launch and without
+  sound, considerate of sleeping households
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.66-1
+- Ear mode wakes up WITHOUT the lockscreen: after req_display_state_on
+  the touch lock mce engages on blanking is lifted again
+  (req_tklock_mode_change unlocked) - a device lock with security
+  code deliberately stays in place. Diagnostic logging around the
+  Routes lookup and earpiece switching to pin down why the in-app
+  switch did not fire
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.65-1
+- The display now turns off while the phone is held to the ear
+  during playback (mce req_display_state_off/on) - also preventing
+  cheek touches on pause/seek - and back on when moving away, when
+  playback ends and when leaving the player. Nemo.KeepAlive holds
+  the device awake during ear mode so the "far" proximity event
+  always gets through (audio playback usually prevents suspend, but
+  guaranteed is better)
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.64-1
+- WhatsApp-style proximity earpiece: holding the phone to your ear
+  while a voice note or audio plays routes the sound to the ear
+  speaker, moving it away routes back (QtSensors proximity + ohm
+  Route Manager Prefer on the system bus - the real signature is
+  string,uint32,uint32, the introspection XML lies). The
+  device-specific earpiece type bits are read from the Routes list
+  at runtime instead of being hardcoded. Reset is guaranteed
+  threefold: on far, on playback stop/end, and on leaving the
+  player page. Requires the microphone permission (its included
+  Audio permission whitelists the Route Manager D-Bus interface);
+  without it the calls fail silently and playback stays on the
+  loudspeaker
+
 * Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.63-1
 - Voice recording vs. the sandbox, round two: launching gst-launch-1.0
   from /usr/bin fails inside the jail (EACCES - sailjail can reduce

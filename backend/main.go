@@ -4428,7 +4428,9 @@ func main() {
         media := err == nil && strings.Contains(d, "UserDirs;") && strings.Contains(d, "MediaIndexing;") && strings.Contains(d, "RemovableMedia;")
         location := err == nil && strings.Contains(d, "Location;")
         mic := err == nil && strings.Contains(d, "Microphone;")
-        json.NewEncoder(w).Encode(map[string]bool{"contactsPermission": contacts, "mediaPermission": media, "locationPermission": location, "micPermission": mic})
+        sensors := err == nil && strings.Contains(d, "Sensors;")
+        audio := err == nil && strings.Contains(d, ";Audio;")
+        json.NewEncoder(w).Encode(map[string]bool{"contactsPermission": contacts, "mediaPermission": media, "locationPermission": location, "micPermission": mic, "sensorsPermission": sensors, "audioPermission": audio})
     })
 
     http.HandleFunc("/storage", func(w http.ResponseWriter, r *http.Request) {

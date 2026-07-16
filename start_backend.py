@@ -24,6 +24,16 @@ DAEMON_UNIT = "harbour-whatsapp-daemon.service"
 voice_process = None
 voice_path = None
 
+def debug_log(msg):
+    """UI-Diagnose in Datei (Journal ist auf dem Geraet unzugaenglich)."""
+    try:
+        p = os.path.expanduser("~/.local/share/harbour/harbour-whatsapp/ui-debug.log")
+        with open(p, "a") as f:
+            f.write("%s %s\n" % (time.strftime("%H:%M:%S"), msg))
+    except Exception:
+        pass
+    return True
+
 def voice_start():
     """Sprachaufnahme starten: PulseAudio -> Opus/OGG (16 kHz mono, wie
     WhatsApp-Voice-Notes). SIGINT + -e finalisiert die Datei sauber."""

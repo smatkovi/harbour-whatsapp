@@ -1,5 +1,8 @@
 import QtQuick 2.0
 import QtMultimedia 5.6
+import QtSensors 5.0
+import Nemo.DBus 2.0
+import Nemo.KeepAlive 1.2
 import Nemo.Notifications 1.0
 import Sailfish.Silica 1.0
 import QtPositioning 5.2
@@ -1383,10 +1386,17 @@ Label {
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
                         property bool micGranted: false
+                        property bool sensorsGranted: false
+                        property bool audioGranted: false
                         text: "Contacts permission: " + (granted ? "granted" : "not granted")
                               + "\nMedia storage permission: " + (mediaGranted ? "granted" : "not granted")
                               + "\nLocation permission: " + (locationGranted ? "granted" : "not granted")
                               + "\nMicrophone permission: " + (micGranted ? "granted" : "not granted")
+                              + "\nAudio permission: " + (audioGranted ? "granted" : "not granted")
+                              + "\nSensors permission: " + (sensorsGranted ? "granted" : "not granted")
+                              + "\nEar-speaker switching: " + ((sensorsGranted && audioGranted) ? "ready"
+                                  : (!sensorsGranted && !audioGranted) ? "needs audio+sensors"
+                                  : !sensorsGranted ? "needs sensors" : "needs audio")
                         color: Theme.highlightColor
                         font.pixelSize: Theme.fontSizeSmall
                         wrapMode: Text.Wrap
@@ -1401,6 +1411,8 @@ Label {
                                     mediaGranted = p.mediaPermission === true
                                     locationGranted = p.locationPermission === true
                                     micGranted = p.micPermission === true
+                                    sensorsGranted = p.sensorsPermission === true
+                                    audioGranted = p.audioPermission === true
                                 }
                             }
                             xhr.send()
@@ -1550,7 +1562,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "\u25b8 Copy command to GRANT microphone permission (voice notes)"
+                            text: "\u25b8 Copy command to GRANT microphone permission (record voice notes)"
                             color: Theme.highlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -1570,6 +1582,44 @@ Label {
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
                             text: "\u25b8 Copy command to REVOKE microphone permission"
+                            color: Theme.secondaryHighlightColor
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
+                    BackgroundItem {
+                        width: parent.width
+                        height: grantSensLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Audio;/!s/$/Audio;/; /Sensors;/!s/$/Sensors;/}' /usr/share/applications/harbour-whatsapp.desktop"
+                            copiedHint.text = "Audio+Sensors grant command copied - paste in Terminal, then restart the app"
+                        }
+                        Label {
+                            id: grantSensLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            wrapMode: Text.Wrap
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "\u25b8 Copy command to GRANT audio+sensors permissions (listen to voice notes at the ear, no microphone access)"
+                            color: Theme.highlightColor
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
+                    BackgroundItem {
+                        width: parent.width
+                        height: revokeSensLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Audio;//g; s/Sensors;//g}' /usr/share/applications/harbour-whatsapp.desktop"
+                            copiedHint.text = "Audio+Sensors revoke command copied - paste in Terminal"
+                        }
+                        Label {
+                            id: revokeSensLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            wrapMode: Text.Wrap
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "\u25b8 Copy command to REVOKE audio+sensors permissions"
                             color: Theme.secondaryHighlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -4914,6 +4964,153 @@ Label {
                 id: aplayer
                 source: "file://" + apPage.audioPath
                 autoPlay: true
+                onPlaybackStateChanged: {
+                    // Wiedergabe zu Ende/pausiert: Ohrhoerer-Praeferenz weg
+                    if (playbackState !== MediaPlayer.PlayingState) apPage.setEarpiece(false)
+                }
+            }
+
+            // --- Proximity-Earpiece: Telefon ans Ohr -> kleiner Lautsprecher
+            // (Route Manager braucht die Audio-Berechtigung, die in der
+            // Mikrofon-Berechtigung enthalten ist; ohne sie scheitert der
+            // D-Bus-Ruf stumm und alles bleibt beim Lautsprecher)
+            property int earpieceType: 0     // geraetespezifisch, aus Routes gelesen
+            property bool earpieceOn: false
+
+            DBusInterface {
+                id: routeMgr
+                bus: DBus.SystemBus
+                service: "org.nemomobile.Route.Manager"
+                path: "/org/nemomobile/Route/Manager"
+                iface: "org.nemomobile.Route.Manager"
+            }
+
+            DBusInterface {
+                id: mce
+                bus: DBus.SystemBus
+                service: "com.nokia.mce"
+                path: "/com/nokia/mce/request"
+                iface: "com.nokia.mce.request"
+            }
+
+            // Waehrend der Ohr-Modus aktiv ist, darf das Geraet nicht
+            // einschlafen - sonst kaeme das "far"-Ereignis nie an und das
+            // Display bliebe schwarz
+            KeepAlive {
+                enabled: apPage.earpieceOn
+            }
+
+            Timer {
+                id: unlockRetry
+                interval: 300
+                repeat: false
+                onTriggered: mce.call("req_tklock_mode_change", ["unlocked"])
+            }
+
+            function setDisplay(on) {
+                mce.call(on ? "req_display_state_on" : "req_display_state_off", [])
+                if (on) {
+                    unlockRetry.restart()
+                    // Touch-Sperre aufheben, die mce beim Blank einlegt -
+                    // sonst landet man beim Absetzen auf dem Lockscreen
+                    // statt in der App (eine Geraetesperre mit Code bleibt
+                    // bewusst bestehen)
+                    mce.call("req_tklock_mode_change", ["unlocked"])
+                }
+            }
+
+            function setEarpiece(on) {
+                console.log("setEarpiece", on, "type", earpieceType)
+                python.call('start_backend.debug_log', ["setEarpiece on=" + on + " type=" + earpieceType])
+                if (on === earpieceOn || earpieceType === 0) return
+                earpieceOn = on
+                setDisplay(!on)  // Display aus, solange das Telefon am Ohr ist
+                // Prefer(name, type, set) - Signatur laut ohm-Quelltext s,u,u
+                routeMgr.typedCall("Prefer",
+                    [{ "type": "s", "value": "earpiece" },
+                     { "type": "u", "value": earpieceType },
+                     { "type": "u", "value": on ? 1 : 0 }],
+                    function() {}, function() { earpieceOn = false })
+            }
+
+            ProximitySensor {
+                id: proxSensor
+                active: aplayer.playbackState === MediaPlayer.PlayingState
+                        && apPage.status === PageStatus.Active
+                onReadingChanged: {
+                    python.call('start_backend.debug_log', ["proximity near=" + reading.near])
+                    if (reading.near) {
+                        // Kopfhoerer-Wache: nur vom LAUTSPRECHER wegschalten -
+                        // niemandem mit Headset das Audio auf den Ohrhoerer reissen
+                        routeMgr.typedCall("ActiveRoutes", [], function(outDev) {
+                            python.call('start_backend.debug_log', ["active output=" + outDev])
+                            if (outDev === "speaker") apPage.setEarpiece(true)
+                        }, function() {})
+                    } else {
+                        apPage.setEarpiece(false)
+                    }
+                }
+            }
+
+            function initEarpiece() {
+                // earpiece-Typ des Geraets aus der Routenliste holen (die
+                // Typ-Bits sind vendor-abhaengig, nicht hartkodierbar)
+                routeMgr.typedCall("Routes", [], function(routes) {
+                    console.log("Routes reply, entries:", routes ? routes.length : "null")
+                    python.call('start_backend.debug_log',
+                        ["Routes reply entries=" + (routes ? routes.length : "null")
+                         + " raw=" + JSON.stringify(routes).substring(0, 400)])
+                    for (var i = 0; i < routes.length; i++) {
+                        var name = routes[i][0], t = routes[i][1]
+                        if (name === undefined && routes[i].length === undefined) {
+                            // manche Nemo.DBus-Versionen liefern Objekte
+                            name = routes[i][0] !== undefined ? routes[i][0] : routes[i]["0"]
+                        }
+                        if (name === "earpiece" && (t & 1)) {
+                            apPage.earpieceType = t
+                            console.log("earpiece route type:", t)
+                            python.call('start_backend.debug_log', ["earpiece type=" + t])
+                            break
+                        }
+                    }
+                    if (apPage.earpieceType === 0)
+                        console.log("earpiece route NOT found - raw:", JSON.stringify(routes).substring(0, 300))
+                }, function() {
+                    console.log("Routes call FAILED")
+                    python.call('start_backend.debug_log', ["Routes call FAILED (dbus error)"])
+                })
+            }
+
+            Component.onCompleted: {
+                python.call('start_backend.debug_log', ["audioPlayer opened"])
+                // Modell = Laufzeit: Ohr-Modus NUR bei explizitem Audio-Token.
+                // (Die Mikrofon-Berechtigung schliesst Audio auf sailjail-Ebene
+                // zwar mit ein, aber die Anzeige verspricht den Modus nur fuer
+                // Audio+Sensors - also aktiviert ihn auch nur diese Kombination.)
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/permcheck")
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState !== 4) return
+                    try {
+                        var p = JSON.parse(xhr.responseText)
+                        if (p.audioPermission === true && p.sensorsPermission === true) apPage.initEarpiece()
+                        else python.call('start_backend.debug_log', ["ear mode off: needs explicit Audio+Sensors tokens (audio=" + p.audioPermission + " sensors=" + p.sensorsPermission + ")"])
+                    } catch (e) {}
+                }
+                xhr.send()
+            }
+
+            Component.onDestruction: {
+                // Rueckstell-Garantie: nie mit klebendem Ohrhoerer oder
+                // schwarzem Display zuruecklassen
+                if (earpieceOn) setDisplay(true)
+                if (earpieceOn && earpieceType !== 0) {
+                    routeMgr.typedCall("Prefer",
+                        [{ "type": "s", "value": "earpiece" },
+                         { "type": "u", "value": earpieceType },
+                         { "type": "u", "value": 0 }],
+                        function() {}, function() {})
+                }
             }
 
             Column {
