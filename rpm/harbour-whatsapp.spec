@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.46
+Version:    0.9.56
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -27,6 +27,10 @@ install -m 755 %{_sourcedir}/wa-backend %{buildroot}/usr/share/harbour-whatsapp/
 install -m 644 %{_sourcedir}/start_backend.py %{buildroot}/usr/share/harbour-whatsapp/
 echo %{version} > %{buildroot}/usr/share/harbour-whatsapp/VERSION
 
+# Opt-in-Daemon (systemd user unit)
+mkdir -p %{buildroot}/usr/lib/systemd/user
+install -m 644 %{_sourcedir}/harbour-whatsapp-daemon.service %{buildroot}/usr/lib/systemd/user/
+
 # QML files
 mkdir -p %{buildroot}/usr/share/harbour-whatsapp/qml
 cp -r %{_sourcedir}/qml/* %{buildroot}/usr/share/harbour-whatsapp/qml/
@@ -34,6 +38,11 @@ cp -r %{_sourcedir}/qml/* %{buildroot}/usr/share/harbour-whatsapp/qml/
 # Desktop file
 mkdir -p %{buildroot}/usr/share/applications
 install -m 644 %{_sourcedir}/harbour-whatsapp.desktop %{buildroot}/usr/share/applications/
+install -m 644 %{_sourcedir}/harbour-whatsapp-daemon.desktop %{buildroot}/usr/share/applications/
+# Daemon-Binary: sailjail verlangt ein ELF (kein Skript) in /usr/bin -
+# Hardlink auf das Backend, cpio dedupliziert (kein Groessenzuwachs)
+mkdir -p %{buildroot}/usr/bin
+ln %{buildroot}/usr/share/harbour-whatsapp/wa-backend %{buildroot}/usr/bin/harbour-whatsapp-daemon
 
 # Icons
 mkdir -p %{buildroot}/usr/share/icons/hicolor
@@ -44,8 +53,109 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/harbour-whatsapp
 %config(noreplace) /usr/share/applications/harbour-whatsapp.desktop
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
+/usr/lib/systemd/user/harbour-whatsapp-daemon.service
+/usr/share/applications/harbour-whatsapp-daemon.desktop
+/usr/bin/harbour-whatsapp-daemon
 
 %changelog
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.56-1
+- cwd guard: the backend derives its data directory from the working
+  directory - started manually (or with the sandbox mapping the cwd
+  to $HOME), it created a FRESH empty wa.db in $HOME and reported
+  "need to pair" although the real database exists. With cwd at
+  $HOME or /, it now switches to the canonical app data directory
+  (~/.local/share/harbour/harbour-whatsapp) by itself
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.55-1
+- Daemon launch, layer four: sailjail additionally requires the
+  launched file to be an ELF binary (shell wrapper rejected: "is not
+  elf binary"). /usr/bin/harbour-whatsapp-daemon is now a hardlink to
+  the backend itself - same file under a second name, no size
+  increase (cpio deduplicates hardlinks). The stale-backend pkill
+  fallback also matches the daemon process name now
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.54-1
+- Daemon launch, layer three: the desktop-profile validation passed
+  (one-time permissions confirmation), but firejail refuses to launch
+  executables from /usr/share ("no suitable ... executable found") -
+  the launcher enforces noexec there, while exec from within the
+  running jail is fine. The daemon now starts through a small wrapper
+  at /usr/bin/harbour-whatsapp-daemon (harbour convention), which
+  execs the backend; desktop file and unit point at it
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.53-1
+- Daemon vs. sailjail exec validation: sailjail refuses to launch a
+  binary that is not named in the profile's Exec line ("Exec line
+  does not contain .../wa-backend"), and the app desktop naturally
+  says sailfish-qml. The daemon now uses its own hidden desktop file
+  (NoDisplay, Exec=wa-backend) with the SAME OrganizationName and
+  ApplicationName, keeping the secrets identity - whether sailjail
+  additionally requires the desktop filename to match ApplicationName
+  is being verified empirically on device
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.52-1
+- Daemon takeover: started via systemctl while the app is open, the
+  daemon now politely /quits any existing backend before binding -
+  previously two backends fought over the WhatsApp session and the
+  daemon ran with stale prefs (loaded before you toggled
+  notifications), so the watchdog killed it right after closing the
+  app ("daemon off despite enable"). The open GUI finds the daemon
+  again through its port rescan
+- The daemon watchdog reloads prefs from disk before deciding to
+  exit, so a notifications toggle written by another backend instance
+  is always respected
+- setPref no longer loses writes silently: one delayed retry (backend
+  may still be starting), then a visible error notice
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.51-1
+- Daemon command rows now show the full systemctl command: the labels
+  wrap across lines (smaller monospace, row height adapts) instead of
+  truncating - what you tap is exactly what gets copied
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.50-1
+- Daemon control reworked for the sandbox reality: Sailjail denies
+  systemctl (errno 13), so the settings now show a live status line
+  ("Background daemon: running/not running", reported by the backend
+  itself via WA_DAEMON=1 from the unit) plus tap-to-copy enable and
+  disable commands for the Terminal. The notifications rule is now
+  enforced by the daemon itself: running without notifications
+  enabled and without an attached GUI, it exits cleanly (silent
+  zombies quit on their own; Restart=on-failure leaves clean exits
+  alone)
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.49-1
+- Notifications, two explicit stages: stage 1 notifies about incoming
+  messages while the app runs in the background (Lipstick
+  notifications via D-Bus, per-chat deduplication with a counter,
+  muted chats stay silent, opening the chat clears them, nothing
+  fires while the app is in the foreground - the GUI reports its
+  state and missing polls mean the app is gone); stage 2 ("also when
+  the app is closed") is the background daemon and can only be
+  enabled when notifications are on - switching notifications off
+  also disables the daemon. Both default to off
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.48-1
+- Daemon toggle now hands over cleanly in both directions: enabling
+  first stops the app-owned child backend (two backends with the same
+  credentials would make WhatsApp kick one connection) and waits for
+  the daemon to hold the port; disabling stops the daemon and
+  immediately respawns a child backend so the open app is never left
+  without one. The GUI keeps running on the same port either way
+
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.47-1
+- Backend lifetime hardened: the backend now receives SIGTERM from
+  the kernel (PR_SET_PDEATHSIG) whenever the app process dies - even
+  on a crash or OOM kill, where the QML destruction handler never
+  runs. No more orphaned connections between a hard app death and
+  the next launch
+- Opt-in background daemon (Whisperfish pattern): a systemd user
+  unit starts the backend via sailjail with the app's own sandbox
+  identity - required so the daemon may open the sailfish-secrets
+  collection holding the store key. Toggle in Settings (with
+  Terminal command fallback in case systemctl is blocked inside the
+  sandbox); default remains off - the app stays silent once closed
+  unless you explicitly opt in
+
 * Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.46-1
 - Mark all as read (requested on OpenRepos): pulley menu entry on the
   chat list clears all unread counters at once (backend endpoint

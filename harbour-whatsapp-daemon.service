@@ -1,0 +1,22 @@
+[Unit]
+Description=WhatsApp backend daemon (harbour-whatsapp, opt-in)
+# Nach dem Whisperfish-Muster: User-Unit, startet nach der UI-Session.
+# sailjail -p sorgt fuer dieselbe Sandbox-Identitaet wie die App selbst -
+# nur damit darf der Daemon die sailfish-secrets-Collection oeffnen
+# (Stores sind SQLCipher-verschluesselt, Schluessel liegt im Secrets-Daemon).
+Requires=lipstick.service
+After=lipstick.service
+
+[Service]
+Type=simple
+Environment=WA_DAEMON=1
+ExecStartPre=/bin/mkdir -p %h/.local/share/harbour/harbour-whatsapp
+WorkingDirectory=%h/.local/share/harbour/harbour-whatsapp
+ExecStart=/usr/bin/sailjail -p harbour-whatsapp-daemon.desktop -- /usr/bin/harbour-whatsapp-daemon
+# on-failure: ein sauberes /quit (App-Update tauscht das Backend) darf
+# NICHT sofort wieder hochgezogen werden - die App uebernimmt dann
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=post-user-session.target

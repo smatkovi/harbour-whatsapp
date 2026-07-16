@@ -1,6 +1,7 @@
 package main
 
 import (
+    "github.com/godbus/dbus/v5"
     "context"
     "encoding/hex"
     "encoding/base64"
@@ -110,6 +111,136 @@ func saveKnownChannels() {
     knownChannelsMutex.RLock()
     defer knownChannelsMutex.RUnlock()
     SaveEncrypted(knownChannelsFile, knownChannels)
+}
+
+// ---- Benachrichtigungen (Nemo/Lipstick via org.freedesktop.Notifications) ----
+// Stufe 1: aktiv solange die App laeuft (Cover), Stufe 2: mit Daemon auch
+// danach. Gesendet wird nur, wenn die GUI nicht aktiv ist: sie meldet ihren
+// Zustand via /ui/state; bleiben zusaetzlich die /chats-Polls >10s aus, gilt
+// die GUI als weg (Daemon-Fall).
+var uiActive bool
+var uiLastSeen time.Time
+var uiStateMutex sync.Mutex
+
+// Als Daemon gestartet? (systemd-Unit setzt WA_DAEMON=1)
+var isDaemon = os.Getenv("WA_DAEMON") == "1"
+
+var notifIDs = map[string]uint32{}   // chatJid -> Notification-ID (Dedupe)
+var notifCounts = map[string]int{}   // chatJid -> ungemeldete Nachrichten
+var notifMutex sync.Mutex
+
+// daemonTakeover: laeuft bereits ein (Kind-)Backend, wird es hoeflich per
+// /quit beendet, bevor der Daemon den Port uebernimmt - sonst kaempfen zwei
+// Backends mit denselben Credentials um die WhatsApp-Session, und der Daemon
+// startet mit veralteten Prefs. Die offene GUI findet den Daemon danach
+// ueber ihren Port-Rescan von selbst.
+func daemonTakeover() {
+    if !isDaemon {
+        return
+    }
+    cl := &http.Client{Timeout: 2 * time.Second}
+    for p := 8085; p <= 8089; p++ {
+        if _, err := cl.Get(fmt.Sprintf("http://127.0.0.1:%d/status", p)); err == nil {
+            fmt.Printf("👑 daemon takeover: asking backend on :%d to quit\n", p)
+            cl.Get(fmt.Sprintf("http://127.0.0.1:%d/quit", p))
+        }
+    }
+    for i := 0; i < 30; i++ { // bis 3s warten, bis der Port frei ist
+        if _, err := cl.Get("http://127.0.0.1:8085/status"); err != nil {
+            break
+        }
+        time.Sleep(100 * time.Millisecond)
+    }
+}
+
+func daemonWatchdog() {
+    if !isDaemon {
+        return
+    }
+    for {
+        time.Sleep(30 * time.Second)
+        if !storesLoaded {
+            continue
+        }
+        fresh := map[string]string{}
+        if err := LoadEncrypted(prefsFile, &fresh); err == nil {
+            prefsMutex.Lock()
+            prefs = fresh
+            prefsMutex.Unlock()
+        }
+        prefsMutex.RLock()
+        notif := prefs["notifications"] == "1"
+        prefsMutex.RUnlock()
+        if !notif && !guiPresent() {
+            fmt.Println("🔔 daemon exiting: notifications disabled and no GUI attached (rule: daemon requires notifications)")
+            os.Exit(0)
+        }
+    }
+}
+
+func guiPresent() bool {
+    uiStateMutex.Lock()
+    defer uiStateMutex.Unlock()
+    if time.Since(uiLastSeen) > 10*time.Second {
+        return false // keine Polls mehr: App zu (Daemon-Fall)
+    }
+    return uiActive
+}
+
+func notifyIncoming(chatJid, title, preview string) {
+    prefsMutex.RLock()
+    enabled := prefs["notifications"] == "1"
+    prefsMutex.RUnlock()
+    if !enabled || guiPresent() || getChatSettings(chatJid).Muted {
+        return
+    }
+    notifMutex.Lock()
+    notifCounts[chatJid]++
+    count := notifCounts[chatJid]
+    replaces := notifIDs[chatJid]
+    notifMutex.Unlock()
+    body := preview
+    if count > 1 {
+        body = fmt.Sprintf("%d new messages", count)
+    }
+    conn, err := dbus.SessionBus()
+    if err != nil {
+        fmt.Printf("🔔 notification bus error: %v\n", err)
+        return
+    }
+    obj := conn.Object("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
+    hints := map[string]dbus.Variant{
+        "x-nemo-preview-summary": dbus.MakeVariant(title),
+        "x-nemo-preview-body":    dbus.MakeVariant(body),
+        "category":               dbus.MakeVariant("x-nemo.messaging.im"),
+    }
+    var id uint32
+    call := obj.Call("org.freedesktop.Notifications.Notify", 0,
+        "WhatsApp", replaces, "harbour-whatsapp", title, body,
+        []string{}, hints, int32(-1))
+    if call.Err != nil {
+        fmt.Printf("🔔 notification failed: %v\n", call.Err)
+        return
+    }
+    call.Store(&id)
+    notifMutex.Lock()
+    notifIDs[chatJid] = id
+    notifMutex.Unlock()
+}
+
+func clearNotification(chatJid string) {
+    notifMutex.Lock()
+    id := notifIDs[chatJid]
+    delete(notifIDs, chatJid)
+    delete(notifCounts, chatJid)
+    notifMutex.Unlock()
+    if id == 0 {
+        return
+    }
+    if conn, err := dbus.SessionBus(); err == nil {
+        conn.Object("org.freedesktop.Notifications", "/org/freedesktop/Notifications").
+            Call("org.freedesktop.Notifications.CloseNotification", 0, id)
+    }
 }
 
 // Gruppeninfo-Cache (Paket-Ebene, damit ihn jeder Handler invalidieren
@@ -371,6 +502,19 @@ func initPaths() {
     homeDir = os.Getenv("HOME")
     if homeDir == "" {
         homeDir = "/home/defaultuser"
+    }
+    // cwd-Wache: der Datenordner leitet sich aus dem Arbeitsverzeichnis ab.
+    // Wer das Backend von Hand startet (oder wessen cwd die Sandbox nach
+    // $HOME mappt), wuerde sonst eine FRISCHE wa.db in $HOME anlegen und
+    // "need to pair" sehen, obwohl die echte Datenbank existiert - passiert
+    // beim manuellen sailjail-Test. In dem Fall in den kanonischen
+    // App-Datenordner wechseln.
+    if wd, err := os.Getwd(); err == nil && (wd == homeDir || wd == "/") {
+        canonical := filepath.Join(homeDir, ".local", "share", "harbour", "harbour-whatsapp")
+        os.MkdirAll(canonical, 0700)
+        if err := os.Chdir(canonical); err == nil {
+            fmt.Printf("📁 cwd was %s - switched to data dir %s\n", wd, canonical)
+        }
     }
     
     picturesDir = filepath.Join(homeDir, "Pictures", "WhatsApp")
@@ -1526,6 +1670,20 @@ func eventHandler(evt interface{}) {
             } else {
                 fmt.Printf("📩 %s: %s\n", chatJid, text)
             }
+            if !v.Info.IsFromMe && chatJid != "status" {
+                title := v.Info.PushName
+                if title == "" {
+                    title = sender
+                }
+                preview := text
+                if preview == "" {
+                    preview = "[" + mediaType + "]"
+                }
+                if len(preview) > 120 {
+                    preview = preview[:120] + "…"
+                }
+                go notifyIncoming(chatJid, title, preview)
+            }
         }
         
     case *events.MediaRetry:
@@ -2064,6 +2222,8 @@ func sendMedia(to string, filePath string, caption string) error {
 func main() {
     // Initialize paths first
     initPaths()
+    daemonTakeover()
+    go daemonWatchdog()
 
     // Bind the HTTP port FIRST, before the (potentially slow) Secrets
     // handshake and DB initialization. The launcher and the UI can then
@@ -2145,6 +2305,7 @@ func main() {
             "state":     state,
             "lastError": lastError,
             "version":   version,
+            "daemon":    isDaemon,
             "paired":    client != nil && client.Store != nil && client.Store.ID != nil,
         })
     })
@@ -2373,6 +2534,14 @@ func main() {
         fmt.Fprintf(w, "ok (%d chats)", n)
     })
 
+    http.HandleFunc("/ui/state", func(w http.ResponseWriter, r *http.Request) {
+        uiStateMutex.Lock()
+        uiActive = r.URL.Query().Get("active") == "1"
+        uiLastSeen = time.Now()
+        uiStateMutex.Unlock()
+        w.Write([]byte("ok"))
+    })
+
     http.HandleFunc("/chat/opened", func(w http.ResponseWriter, r *http.Request) {
         chat := r.URL.Query().Get("chat")
         if chat == "" {
@@ -2384,10 +2553,14 @@ func main() {
         cs.LastOpened = time.Now().Unix()
         chatSettingsMutex.Unlock()
         saveChatSettings()
+        clearNotification(chat)
         w.Write([]byte("ok"))
     })
 
     http.HandleFunc("/chats", func(w http.ResponseWriter, r *http.Request) {
+        uiStateMutex.Lock()
+        uiLastSeen = time.Now()
+        uiStateMutex.Unlock()
         w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(getChats())
     })

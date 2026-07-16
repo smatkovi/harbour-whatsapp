@@ -61,6 +61,7 @@ ApplicationWindow {
             importModule('start_backend', function() {
                 call('start_backend.start', [])
             })
+            reportTimer.start()
         }
         
         Component.onDestruction: {
@@ -91,6 +92,7 @@ ApplicationWindow {
     property string globalNotice: ""
 
     // ---- Live-Standort-Freigabe (app-weit, ueberlebt Seitenwechsel) ----
+    property bool   daemonRunning: false
     property bool   liveActive: false
     property string liveChatJid: ""
     property double liveUntil: 0
@@ -111,6 +113,23 @@ ApplicationWindow {
         liveStarted = false
         liveActive = true
         globalNotice = "Waiting for GPS fix to start live location\u2026"
+    }
+
+    Timer {
+        id: reportTimer
+        interval: 3000
+        repeat: false
+        onTriggered: reportUiState()
+    }
+    function reportUiState() {
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/ui/state?active="
+                 + (Qt.application.active ? "1" : "0"))
+        xhr.send()
+    }
+    Connections {
+        target: Qt.application
+        onActiveChanged: reportUiState()
     }
 
     function stopLiveShare() {
@@ -192,10 +211,31 @@ ApplicationWindow {
         onTriggered: loadPrefs()
     }
 
-    function setPref(key, value) {
+    function setPref(key, value, isRetry) {
         var xhr = new XMLHttpRequest()
-        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/prefs/set?key=" + key + "&value=" + encodeURIComponent(value))
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/prefs/set?key=" + key
+                 + "&value=" + encodeURIComponent(value))
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== 4) return
+            if (xhr.status === 200) return
+            if (!isRetry) {
+                // Backend startet evtl. noch (503) - einmal kurz spaeter erneut
+                setPrefRetry.key = key
+                setPrefRetry.value = value
+                setPrefRetry.start()
+            } else {
+                globalNotice = "Saving setting failed: " + xhr.responseText
+            }
+        }
         xhr.send()
+    }
+    Timer {
+        id: setPrefRetry
+        property string key
+        property string value
+        interval: 1500
+        repeat: false
+        onTriggered: setPref(key, value, true)
     }
     
     // Landesvorwahl aus der eigenen Nummer ableiten (1/7 einstellig,
@@ -362,6 +402,7 @@ ApplicationWindow {
                 connState = data.state || ""
                 lastError = data.lastError || ""
                 paired = data.paired === true
+                daemonRunning = data.daemon === true
                 if (!prefsLoaded && connState !== "starting") {
                     loadPrefs()
                 }
@@ -1098,6 +1139,92 @@ ApplicationWindow {
                         onClicked: {
                             notificationsEnabled = !notificationsEnabled
                             setPref("notifications", notificationsEnabled ? "1" : "0")
+                        }
+                    }
+
+                    SectionHeader { text: "Notifications" }
+
+                    TextSwitch {
+                        id: notifySwitch
+                        text: "Notifications"
+                        description: "Notify about incoming messages while the app is "
+                                   + "running in the background (muted chats stay silent)"
+                        checked: false
+                        Component.onCompleted: checked = downloadPrefs["notifications"] === "1"
+                        Connections {
+                            target: settingsPage
+                            onDownloadPrefsChanged: notifySwitch.checked = downloadPrefs["notifications"] === "1"
+                        }
+                        onClicked: {
+                            if (!prefsReady) { checked = !checked; return }
+                            var p = downloadPrefs
+                            p["notifications"] = checked ? "1" : "0"
+                            downloadPrefs = p
+                            setPref("notifications", checked ? "1" : "0")
+                        }
+                    }
+
+Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: daemonRunning ? Theme.highlightColor : Theme.secondaryColor
+                        text: "Background daemon: " + (daemonRunning ? "running" : "not running")
+                        visible: notifySwitch.checked || daemonRunning
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                        visible: notifySwitch.checked || daemonRunning
+                        text: "Keeps notifications coming after the app is closed. "
+                            + "systemd cannot be controlled from inside the sandbox - "
+                            + "tap a command below to copy it, then paste in Terminal. "
+                            + "The daemon quits by itself when notifications are "
+                            + "switched off and the app is closed."
+                    }
+
+                    BackgroundItem {
+                        visible: notifySwitch.checked
+                        height: enableCmdLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "systemctl --user enable --now harbour-whatsapp-daemon.service"
+                            globalNotice = "Enable command copied - paste in Terminal"
+                        }
+                        Label {
+                            id: enableCmdLabel
+                            x: Theme.horizontalPageMargin
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - 2*Theme.horizontalPageMargin
+                            wrapMode: Text.WrapAnywhere
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            font.family: "monospace"
+                            color: Theme.primaryColor
+                            text: "systemctl --user enable --now harbour-whatsapp-daemon.service"
+                        }
+                    }
+
+                    BackgroundItem {
+                        visible: notifySwitch.checked || daemonRunning
+                        height: disableCmdLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "systemctl --user disable --now harbour-whatsapp-daemon.service"
+                            globalNotice = "Disable command copied - paste in Terminal"
+                        }
+                        Label {
+                            id: disableCmdLabel
+                            x: Theme.horizontalPageMargin
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - 2*Theme.horizontalPageMargin
+                            wrapMode: Text.WrapAnywhere
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            font.family: "monospace"
+                            color: Theme.primaryColor
+                            text: "systemctl --user disable --now harbour-whatsapp-daemon.service"
                         }
                     }
 

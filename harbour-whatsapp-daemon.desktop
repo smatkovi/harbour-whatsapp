@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=WhatsApp Daemon
+Icon=harbour-whatsapp
+Exec=/usr/bin/harbour-whatsapp-daemon
+NoDisplay=true
+
+[X-Sailjail]
+Permissions=Internet;Secrets;
+OrganizationName=harbour
+ApplicationName=harbour-whatsapp

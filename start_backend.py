@@ -6,6 +6,62 @@ import pyotherside
 
 backend_process = None
 
+def _pdeathsig():
+    """Kind stirbt mit dem Elternprozess - auch bei Crash/OOM-Kill der App.
+    Ohne das lief das Backend nach einem harten App-Tod als Waise weiter,
+    bis der naechste App-Start aufraeumte."""
+    try:
+        import ctypes, signal
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        PR_SET_PDEATHSIG = 1
+        libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
+    except Exception:
+        pass  # besser ohne Absicherung starten als gar nicht
+
+DAEMON_UNIT = "harbour-whatsapp-daemon.service"
+
+def daemon_enabled():
+    try:
+        r = subprocess.run(["systemctl", "--user", "is-enabled", DAEMON_UNIT],
+                           capture_output=True, text=True, timeout=5)
+        return r.stdout.strip() == "enabled"
+    except Exception:
+        return False
+
+def daemon_set(enable):
+    """Daemon ein-/ausschalten MIT sauberer Uebergabe. Liefert (ok, meldung).
+
+    Einschalten: erst das eigene Kind-Backend beenden (sonst laufen zwei
+    Backends mit denselben Credentials - WhatsApp kickt eine Verbindung),
+    dann den Daemon starten und warten, bis er den Port haelt; die GUI
+    laeuft am selben Port nahtlos weiter.
+    Ausschalten: Daemon stoppen, dann sofort ein Kind-Backend nachstarten,
+    damit die offene App nicht ohne Backend dasteht.
+    Innerhalb der Sailjail-Sandbox kann systemctl blockiert sein - dann
+    bekommt der Nutzer die Terminal-Kommandos gezeigt (Fallback in der UI)."""
+    try:
+        subprocess.run(["systemctl", "--user", "daemon-reload"],
+                       capture_output=True, timeout=5)
+        if enable:
+            stop()  # Kind-Backend raeumen, Port freigeben
+            r = subprocess.run(["systemctl", "--user", "enable", "--now", DAEMON_UNIT],
+                               capture_output=True, text=True, timeout=10)
+            if r.returncode == 0:
+                for _ in range(40):  # bis 8s auf den Daemon warten
+                    if find_backend_port():
+                        return True, "ok"
+                    time.sleep(0.2)
+                return False, "daemon enabled but backend did not come up - check journalctl --user -u " + DAEMON_UNIT
+        else:
+            r = subprocess.run(["systemctl", "--user", "disable", "--now", DAEMON_UNIT],
+                               capture_output=True, text=True, timeout=10)
+            if r.returncode == 0:
+                start()  # Kind-Backend fuer die laufende Sitzung nachstarten
+                return True, "ok"
+        return False, (r.stderr or r.stdout or "systemctl failed").strip()
+    except Exception as e:
+        return False, str(e)
+
 def installed_version():
     try:
         with open("/usr/share/harbour-whatsapp/VERSION") as f:
@@ -33,7 +89,7 @@ def stop_stale_backend(port):
             time.sleep(0.1)
         except Exception:
             return True  # Port frei
-    subprocess.call(["pkill", "-f", "wa-backend"])
+    subprocess.call(["pkill", "-f", "wa-backend|harbour-whatsapp-daemon"])
     time.sleep(0.5)
     return True
 
@@ -95,7 +151,8 @@ def start():
             ["/usr/share/harbour-whatsapp/wa-backend"],
             cwd=data_dir,
             stdout=log_file,
-            stderr=subprocess.STDOUT
+            stderr=subprocess.STDOUT,
+            preexec_fn=_pdeathsig
         )
         
         # Wait for backend to be ready. Cold start after a reboot can be slow
@@ -121,7 +178,8 @@ def start():
                     ["/usr/share/harbour-whatsapp/wa-backend"],
                     cwd=data_dir,
                     stdout=log_file2,
-                    stderr=subprocess.STDOUT
+                    stderr=subprocess.STDOUT,
+                    preexec_fn=_pdeathsig
                 )
                 continue
             break
