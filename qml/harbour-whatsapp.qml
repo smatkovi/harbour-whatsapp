@@ -839,6 +839,11 @@ ApplicationWindow {
 
                 menu: ContextMenu {
                     MenuItem {
+                        text: "Stop live location"
+                        visible: liveActive && liveChatJid === modelData.jid
+                        onClicked: stopLiveShare()
+                    }
+                    MenuItem {
                         text: modelData.pinned ? "Unpin" : "Pin"
                         visible: modelData.jid !== "status"
                         onClicked: chatSetting(modelData.pinned ? "unpin" : "pin")
@@ -883,6 +888,8 @@ ApplicationWindow {
                                   + (modelData.muted ? " 🔇" : "")
                                   + (modelData.archived ? " · archived" : "")
                             font.pixelSize: Theme.fontSizeMedium
+                            font.bold: (modelData.unread || 0) > 0
+                            color: (modelData.unread || 0) > 0 ? Theme.highlightColor : Theme.primaryColor
                             truncationMode: TruncationMode.Fade
                             width: parent.width
                             opacity: modelData.archived ? Theme.opacityLow : 1.0
@@ -900,12 +907,32 @@ ApplicationWindow {
                         }
                     }
 
-                    Label {
-                        id: timeLabel
-                        text: formatTime(modelData.lastTime)
-                        font.pixelSize: Theme.fontSizeSmall
-                        color: Theme.secondaryColor
+                    Column {
                         anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.paddingSmall / 2
+
+                        Label {
+                            id: timeLabel
+                            text: formatTime(modelData.lastTime)
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.secondaryColor
+                            anchors.right: parent.right
+                        }
+                        Rectangle {
+                            visible: (modelData.unread || 0) > 0
+                            anchors.right: parent.right
+                            width: Math.max(unreadLabel.width + Theme.paddingSmall * 2, height)
+                            height: unreadLabel.height + Theme.paddingSmall
+                            radius: height / 2
+                            color: Theme.highlightBackgroundColor
+                            Label {
+                                id: unreadLabel
+                                anchors.centerIn: parent
+                                text: modelData.unread > 99 ? "99+" : modelData.unread
+                                font.pixelSize: Theme.fontSizeExtraSmall
+                                font.bold: true
+                            }
+                        }
                     }
                 }
             }
@@ -2928,16 +2955,29 @@ ApplicationWindow {
                 return palette[h % palette.length]
             }
 
+            property string lastMsgsJson: ""
             function load() {
                 var xhr = new XMLHttpRequest()
                 xhr.open("GET", "http://127.0.0.1:" + backendPort + "/messages?jid=" + chatJid)
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState === 4 && xhr.status === 200) {
+                        // Unveraendert -> NICHTS tun: die frueher bedingungslose
+                        // Neuzuweisung baute das Modell alle 2 s neu auf und
+                        // sprang ans Ende - Hochscrollen war ein Kampf gegen
+                        // den Poll-Timer (bei Live-Location im Sekundentakt)
+                        if (xhr.responseText === lastMsgsJson) return
+                        lastMsgsJson = xhr.responseText
+                        markOpened() // Chat ist offen: Neues gilt als gelesen
+                        stickToEnd = msgList.atYEnd
+                        var keepY = msgList.contentY
                         msgs = JSON.parse(xhr.responseText) || []
+                        if (!stickToEnd) restoreY = keepY
                     }
                 }
                 xhr.send()
             }
+            property bool stickToEnd: true
+            property real restoreY: -1
 
             function send() {
                 if (input.text === "") return
@@ -2989,8 +3029,13 @@ ApplicationWindow {
                 xhr.send()
             }
 
+            function markOpened() {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chat/opened?chat=" + chatJid)
+                xhr.send()
+            }
             Timer { interval: 2000; running: true; repeat: true; onTriggered: load() }
-            Component.onCompleted: load()
+            Component.onCompleted: { load(); markOpened() }
 
             Component {
                 id: imagePicker
@@ -3025,10 +3070,171 @@ ApplicationWindow {
                     id: positionTimer
                     interval: 200
                     repeat: false
-                    onTriggered: msgList.positionViewAtIndex(msgList.count - 1, ListView.End)
+                    onTriggered: {
+                        if (stickToEnd) {
+                            msgList.positionViewAtIndex(msgList.count - 1, ListView.End)
+                        } else if (restoreY >= 0) {
+                            // Nutzer las weiter oben: Leseposition erhalten
+                            msgList.contentY = restoreY
+                            restoreY = -1
+                        }
+                    }
                 }
                 onCountChanged: positionTimer.start()
                 Component.onCompleted: positionTimer.start()
+
+                PushUpMenu {
+                    // Spiegel des oberen Pulley-Menues: am unteren Ende ist
+                    // man in einem Chat ohnehin - kein Scrollen an den Anfang
+                    // mehr noetig, um eine Aktion zu erreichen
+
+                    MenuItem {
+                        text: "Refresh channel"
+                        visible: isChannel
+                        onClicked: {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/messages?jid=" + chatJid)
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) load()
+                            }
+                            xhr.send()
+                        }
+                    }
+                    MenuItem {
+                        text: "Unfollow channel"
+                        visible: isChannel
+                        onClicked: blockRemorse.execute("Unfollowing channel", function() {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/unfollow?jid=" + chatJid)
+                            xhr.send()
+                        })
+                    }
+                    MenuItem {
+                        text: "Load history from phone"
+                        visible: chatJid !== "status" && !isChannel
+                        onClicked: {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/history/request?chat=" + chatJid)
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) {
+                                    globalNotice = xhr.status === 200 ? xhr.responseText : ("History request failed: " + xhr.responseText)
+                                }
+                            }
+                            xhr.send()
+                        }
+                    }
+                    MenuItem {
+                        text: "Search in chat"
+                        onClicked: pageStack.push(searchPage, { scopeJid: chatJid, scopeName: chatName })
+                    }
+                    MenuItem {
+                        text: "Share live location\u2026"
+                        visible: chatJid !== "status" && !isChannel && !(liveActive && liveChatJid === chatJid)
+                        onClicked: {
+                            var dlg = pageStack.push(liveDurationDialog)
+                            dlg.accepted.connect(function() {
+                                startLiveShare(chatJid, [15, 60, 480][dlg.durationIndex])
+                            })
+                        }
+                    }
+                    MenuItem {
+                        text: "Stop live location"
+                        visible: liveActive && liveChatJid === chatJid
+                        onClicked: stopLiveShare()
+                    }
+                    MenuItem {
+                        text: "Send location\u2026"
+                        visible: chatJid !== "status" && !isChannel
+                        onClicked: {
+                            var dlg = pageStack.push(locationDialog)
+                            dlg.accepted.connect(function() {
+                                var xhr = new XMLHttpRequest()
+                                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/send/location?to=" + chatJid
+                                         + "&lat=" + dlg.lat + "&lon=" + dlg.lon
+                                         + "&name=" + encodeURIComponent(dlg.locName))
+                                xhr.onreadystatechange = function() {
+                                    if (xhr.readyState === 4) load()
+                                }
+                                xhr.send()
+                            })
+                        }
+                    }
+                    MenuItem {
+                        text: "Disappearing messages\u2026"
+                        visible: chatJid !== "status" && !isChannel
+                        onClicked: {
+                            var dlg = pageStack.push(disappearingDialog, { chatJid: chatJid })
+                        }
+                    }
+                    MenuItem {
+                        text: "Clear chat"
+                        visible: chatJid !== "status"
+                        onClicked: blockRemorse.execute("Clearing chat", function() {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chat/clear?jid=" + chatJid)
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) load()
+                            }
+                            xhr.send()
+                        })
+                    }
+                    MenuItem {
+                        text: "Delete chat"
+                        visible: chatJid !== "status" && !isChannel
+                        onClicked: blockRemorse.execute("Deleting chat", function() {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chat/delete?jid=" + chatJid)
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) pageStack.pop()
+                            }
+                            xhr.send()
+                        })
+                    }
+                    MenuItem {
+                        text: "Load older messages"
+                        visible: chatJid !== "status" && !isChannel && !isChannel
+                        onClicked: {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/loadolder?chat=" + chatJid)
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) {
+                                    downloadError = xhr.responseText
+                                    lastDownloadFailId = ""
+                                    if (xhr.status === 200) reloadTimer.start()
+                                }
+                            }
+                            xhr.send()
+                        }
+                    }
+                    MenuItem {
+                        text: "Create poll"
+                        visible: chatJid !== "status" && !isChannel
+                        onClicked: pageStack.push(createPollPage, { targetChat: chatJid })
+                    }
+                    MenuItem {
+                        text: "Group info"
+                        visible: isGroupChat
+                        onClicked: pageStack.push(groupInfoPage, { groupJid: chatJid })
+                    }
+                    MenuItem {
+                        text: "Block contact"
+                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        onClicked: blockRemorse.execute("Blocking +" + chatJid, function() { blockAction("block") })
+                    }
+                    MenuItem {
+                        text: "Unblock contact"
+                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        onClicked: blockAction("unblock")
+                    }
+                    MenuItem {
+                        text: "Call +" + chatJid
+                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        onClicked: Qt.openUrlExternally("tel:+" + chatJid)
+                    }
+                    MenuItem { text: "Send file"; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(filePicker) }
+                    MenuItem { text: "Send image"; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(imagePicker) }
+                    MenuItem { text: "Refresh"; onClicked: load() }
+                }
 
                 PullDownMenu {
                     MenuItem {
@@ -3431,7 +3637,13 @@ ApplicationWindow {
 
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: Qt.openUrlExternally("geo:" + modelData.latitude + "," + modelData.longitude)
+                                onClicked: {
+                                    if (!modelData.latitude && !modelData.longitude) {
+                                        globalNotice = "No coordinates in this message (sharing may have ended before a fix arrived)"
+                                        return
+                                    }
+                                    Qt.openUrlExternally("geo:" + modelData.latitude + "," + modelData.longitude)
+                                }
                             }
                         }
 

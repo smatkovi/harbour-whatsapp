@@ -75,6 +75,7 @@ var pendingRetries = make(map[string][]byte) // msgID -> mediaKey
 var pendingRetriesMutex sync.Mutex
 
 type ChatSettings struct {
+    LastOpened int64 `json:"lastOpened,omitempty"`
     Pinned   bool `json:"pinned,omitempty"`
     Muted    bool `json:"muted,omitempty"`
     Archived bool `json:"archived,omitempty"`
@@ -354,6 +355,7 @@ type Chat struct {
     FromMe      bool   `json:"fromMe"`
     IsGroup     bool   `json:"isGroup"`
     Avatar      string `json:"avatar,omitempty"`
+    Unread      int    `json:"unread,omitempty"`
 }
 
 func writeFileAtomic(filename string, data []byte) error {
@@ -797,6 +799,12 @@ func setMessagePinned(chatJid, msgID string, pinned bool) {
 // Absenders im Chat in place. Liefert false, wenn keiner existiert (dann
 // wird die Nachricht normal als neuer Eintrag angelegt).
 func updateLiveLocation(chatJid, sender string, lat, lon float64, ts int64) bool {
+    if lat == 0 && lon == 0 {
+        // Beim Beenden schickt WhatsApp oft ein letztes Paket ohne echte
+        // Koordinaten - das darf die letzte bekannte Position nicht mit
+        // 0/0 ueberschreiben (geo:0,0 scheitert dann stumm in Karten-Apps)
+        return true // konsumieren, Blase friert beim letzten Stand ein
+    }
     msgMutex.Lock()
     defer msgMutex.Unlock()
     for i := len(messages) - 1; i >= 0; i-- {
@@ -1736,6 +1744,24 @@ func eventHandler(evt interface{}) {
             }
         }()
         
+    case *events.Receipt:
+        // Ebene 2 der Ungelesen-Logik: liest man den Chat am TELEFON,
+        // verteilt WhatsApp ein Receipt an alle Geraete - read-self bei
+        // deaktivierten Lesebestaetigungen, sonst read vom eigenen JID
+        if v.Type == types.ReceiptTypeReadSelf ||
+            (v.Type == types.ReceiptTypeRead && client.Store.ID != nil && v.MessageSource.Sender.User == client.Store.ID.User) {
+            chat := v.MessageSource.Chat.User
+            cs := getChatSettings(chat)
+            ts := v.Timestamp.Unix()
+            chatSettingsMutex.Lock()
+            if ts > cs.LastOpened {
+                cs.LastOpened = ts
+            }
+            chatSettingsMutex.Unlock()
+            go saveChatSettings()
+            fmt.Printf("📖 read on phone: %s\n", chat)
+        }
+
     case *events.PairError:
         // Der Grund fuer ein Scheitern NACH angenommenem Code (Telefon
         // zeigt nur "there was an error") steckt genau hier - vorher
@@ -1868,11 +1894,22 @@ func eventHandler(evt interface{}) {
 func getChats() []Chat {
     msgMutex.RLock()
     defer msgMutex.RUnlock()
+    // LastOpened-Marker vorab einsammeln (Ebene 1 der Ungelesen-Logik)
+    lastOpened := map[string]int64{}
+    chatSettingsMutex.RLock()
+    for j, cs := range chatSettings {
+        lastOpened[j] = cs.LastOpened
+    }
+    chatSettingsMutex.RUnlock()
+    unread := map[string]int{}
     chatMap := make(map[string]*Chat)
     for _, msg := range messages {
         jid := msg.ChatJID
         if jid == "" {
             jid = msg.Sender
+        }
+        if !msg.FromMe && msg.Timestamp > lastOpened[jid] {
+            unread[jid]++
         }
         isGroup := len(jid) > 15
         lastMsg := msg.Text
@@ -1902,6 +1939,7 @@ func getChats() []Chat {
         if cs, ok := chatSettings[c.JID]; ok {
             c.Pinned, c.Muted, c.Archived, c.Ephemeral = cs.Pinned, cs.Muted, cs.Archived, cs.Ephemeral
         }
+        c.Unread = unread[c.JID]
         knownChannelsMutex.RLock()
         c.IsChannel = knownChannels[c.JID]
         knownChannelsMutex.RUnlock()
@@ -1926,7 +1964,9 @@ func getMessagesForChat(jid string) []Message {
     defer msgMutex.RUnlock()
     var result []Message
     for _, msg := range messages {
-        if msg.ChatJID == jid || msg.Sender == jid {
+        // Sender-Fallback NUR fuer Altnachrichten ohne ChatJID - sonst
+        // erscheinen Gruppen-Beitraege einer Person auch im 1:1-Chat
+        if msg.ChatJID == jid || (msg.ChatJID == "" && msg.Sender == jid) {
             result = append(result, msg)
         }
     }
@@ -2301,6 +2341,20 @@ func main() {
             client.Connect()
             fmt.Println("📱 Ready for new pairing")
         }()
+    })
+
+    http.HandleFunc("/chat/opened", func(w http.ResponseWriter, r *http.Request) {
+        chat := r.URL.Query().Get("chat")
+        if chat == "" {
+            http.Error(w, "chat required", 400)
+            return
+        }
+        cs := getChatSettings(chat)
+        chatSettingsMutex.Lock()
+        cs.LastOpened = time.Now().Unix()
+        chatSettingsMutex.Unlock()
+        saveChatSettings()
+        w.Write([]byte("ok"))
     })
 
     http.HandleFunc("/chats", func(w http.ResponseWriter, r *http.Request) {

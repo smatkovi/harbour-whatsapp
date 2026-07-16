@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.38
+Version:    0.9.43
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -46,6 +46,52 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 
 %changelog
+* Thu Jul 16 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.43-1
+- Group messages no longer leak into 1:1 chats: the per-chat message
+  filter also matched on sender, so a person's group posts appeared
+  in their direct chat as well. The sender match is now restricted to
+  its intended purpose - legacy messages without a chat jid
+
+* Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.42-1
+- Tapping another person's (ended) live location no longer does
+  nothing: WhatsApp often sends a final live-location packet without
+  real coordinates when sharing ends, which overwrote the last known
+  position with 0/0 - geo:0,0 then failed silently in maps apps.
+  Zero-coordinate updates are now consumed without touching the
+  bubble (it freezes at the last real position), and tapping a
+  bubble that has no coordinates shows an explanatory notice instead
+  of failing silently
+
+* Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.41-1
+- Unread indication (requested on OpenRepos): chats with new messages
+  show a highlighted bold name and an unread-count badge next to the
+  time. A per-chat last-opened marker (persisted in chat settings)
+  counts incoming messages newer than your last visit; opening a chat
+  or receiving messages while it is open clears it. Reading a chat on
+  the PHONE clears it too: WhatsApp distributes read receipts to all
+  devices (read-self, or read from the own jid when read receipts are
+  enabled) and the marker follows (📖 log line). Read receipts are
+  only RECEIVED - the app still never sends blue ticks
+
+* Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.40-1
+- The bottom pushup menu in chats now mirrors the complete top pulley
+  menu (all entries incl. visibility conditions) instead of a
+  three-item selection - every chat action is reachable from the
+  bottom where you already are
+
+* Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.39-1
+- Chat scrolling no longer fights the poll timer: the 2-second poll
+  reassigned the whole message model even when nothing changed,
+  rebuilding the view and jumping to the end - with live location
+  updates this made reaching the top (pulley menu) impossible.
+  Unchanged responses are now skipped entirely, and on real changes
+  the reading position is preserved unless you were already at the
+  bottom
+- Live location can be stopped from the chat overview (long-press the
+  chat) and from a new bottom pushup menu inside the chat - no need
+  to scroll to the top anymore. The pushup menu also carries Search
+  in chat and Group info as reachable shortcuts
+
 * Wed Jul 15 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.38-1
 - Pairing failures now tell you WHY: the PairError event (fired when
   the phone accepts the code but the handshake fails afterwards -
