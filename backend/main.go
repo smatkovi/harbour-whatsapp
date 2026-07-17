@@ -305,14 +305,22 @@ func startReplyService() {
         conn, err := dbus.SessionBus()
         if err == nil {
             conn.Export(replyService{}, "/", "harbour.whatsapp.Backend")
-            reply, err := conn.RequestName("harbour.whatsapp.backend", dbus.NameFlagDoNotQueue)
-            if err == nil && reply == dbus.RequestNameReplyPrimaryOwner {
+            reply, rerr := conn.RequestName("harbour.whatsapp.backend", dbus.NameFlagDoNotQueue)
+            if rerr == nil && reply == dbus.RequestNameReplyPrimaryOwner {
                 fmt.Println("↩️ notification reply service ready (harbour.whatsapp.backend)")
                 return
+            }
+            // Stilles Scheitern hat uns schon einmal in die Irre gefuehrt -
+            // Fehlschlaege gehoeren ins Log (haeufigste Ursache: Jail ohne
+            // dbus-Erlaubnis, weil das Desktop-File die X-Maemo-Service-
+            // Zeile noch nicht hat -> %post-Migration + App-Neustart)
+            if i%4 == 0 {
+                fmt.Printf("↩️ reply service: cannot own harbour.whatsapp.backend yet (reply=%v err=%v) - desktop file missing X-Maemo-Service? retrying\n", reply, rerr)
             }
         }
         time.Sleep(15 * time.Second)
     }
+    fmt.Println("↩️ reply service: giving up - notification replies will be lost")
 }
 
 // clearAllNotifications schliesst alle offenen Eintraege in der

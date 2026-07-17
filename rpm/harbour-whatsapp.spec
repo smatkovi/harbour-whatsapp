@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.89
+Version:    0.9.90
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -62,6 +62,14 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/bin/harbour-whatsapp-daemon
 
 %post
+# Desktop-File-Migration: harbour-whatsapp.desktop ist %config(noreplace),
+# damit Nutzer-Grants (Microphone etc.) Updates ueberleben - neue Pflicht-
+# Schluessel muessen daher idempotent nachgeruestet werden, sonst fehlt
+# dem Jail die dbus-Erlaubnis (Reply) bzw. die Aktivierung (Tap-Kaltstart)
+D=/usr/share/applications/harbour-whatsapp.desktop
+grep -q '^X-Maemo-Service=' $D || sed -i '/^\[X-Sailjail\]/i X-Maemo-Service=harbour.whatsapp.backend' $D
+grep -q '^ExecDBus=' $D || printf 'ExecDBus=/usr/bin/sailjail -p harbour-whatsapp.desktop -- /usr/bin/sailfish-qml harbour-whatsapp\n' >> $D
+
 # gst-launch am exec-erlaubten Ort verfuegbar machen (Voice-Aufnahme):
 # /usr/bin kann im Sailjail auf eine Positivliste reduziert sein
 ln -f /usr/bin/gst-launch-1.0 /usr/share/harbour-whatsapp/gst-launch-1.0 2>/dev/null ||   cp /usr/bin/gst-launch-1.0 /usr/share/harbour-whatsapp/gst-launch-1.0 2>/dev/null || true
@@ -73,6 +81,20 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.90-1
+- Notification reply repaired on updated installs: the main desktop
+  file is %config(noreplace) so user permission grants survive
+  updates - which also meant the 0.9.87 additions (X-Maemo-Service
+  for the backend reply bus name, ExecDBus for tap-to-open cold
+  start) never reached modified installations; the new file sat
+  unused as .rpmnew, the jail lacked the dbus grant, RequestName
+  failed silently and lipstick discarded typed replies. %post now
+  migrates the installed desktop file idempotently (user grants
+  untouched), and the reply service logs its failures instead of
+  retrying in silence. After the update: fully close and reopen the
+  app (and restart the daemon if enabled) so the jail is composed
+  with the new grant
+
 * Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.89-1
 - Gallery visibility (community suggestion): optional per-type
   .nomedia markers hide the WhatsApp media folders from Gallery and
