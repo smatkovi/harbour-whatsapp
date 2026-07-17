@@ -83,6 +83,41 @@ ApplicationWindow {
     // ohne Einstellung wird die Kontaktdatenbank nie angefasst
     property bool contactsOptIn: false
     property bool notificationsEnabled: false
+
+    // Tippen auf eine Benachrichtigung: lipstick ruft openChat(jid) am
+    // kanonischen Busnamen (harbour.harbour-whatsapp) - laeuft die App
+    // nicht, startet sailjaild sie via ExecDBus und der Aufruf kommt
+    // nach dem Start hier an
+    DBusAdaptor {
+        service: "harbour.harbour-whatsapp"
+        path: "/"
+        iface: "harbour.whatsapp.Gui"
+        function openChat(jid) {
+            openChatExternal(jid)
+        }
+    }
+
+    function openChatExternal(jid) {
+        var name = jid
+        var avatar = ""
+        var channel = false
+        for (var i = 0; i < chats.length; i++) {
+            if (chats[i].jid === jid) {
+                name = getDisplayName(jid, chats[i].name)
+                avatar = chats[i].avatar || ""
+                channel = chats[i].isChannel === true
+                break
+            }
+        }
+        pageStack.pop(null, PageStackAction.Immediate)
+        pageStack.push(chatPage, {
+            chatJid: jid,
+            chatName: name,
+            chatAvatar: avatar,
+            isChannel: channel
+        }, PageStackAction.Immediate)
+        activate()
+    }
     property var  prevUnread: ({})
     property bool prevUnreadInit: false
 

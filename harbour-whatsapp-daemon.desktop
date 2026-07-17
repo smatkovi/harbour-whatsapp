@@ -5,6 +5,8 @@ Icon=harbour-whatsapp
 Exec=/usr/bin/harbour-whatsapp-daemon
 NoDisplay=true
 
+X-Maemo-Service=harbour.whatsapp.backend
+
 [X-Sailjail]
 Permissions=Internet;Secrets;
 OrganizationName=harbour

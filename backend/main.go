@@ -241,12 +241,16 @@ func notifyIncoming(chatJid, title, preview string) {
     // Remote-Action mit type=input - lipstick zeigt Pfeil+Eingabefeld und
     // ruft unser Reply(chatJid, <text>) am Session-Bus
     hints["x-nemo-remote-action-reply"] = dbus.MakeVariant(
-        "harbour.harbour-whatsapp / harbour.whatsapp.Backend Reply " + qvariantStringB64(chatJid))
+        "harbour.whatsapp.backend / harbour.whatsapp.Backend Reply " + qvariantStringB64(chatJid))
     hints["x-nemo-remote-action-type-reply"] = dbus.MakeVariant("input")
+    // Tippen auf den Eintrag oeffnet die Konversation: default-Aktion an
+    // den GUI-Namen - laeuft die App nicht, startet sailjaild sie (ExecDBus)
+    hints["x-nemo-remote-action-default"] = dbus.MakeVariant(
+        "harbour.harbour-whatsapp / harbour.whatsapp.Gui openChat " + qvariantStringB64(chatJid))
     var id uint32
     call := obj.Call("org.freedesktop.Notifications.Notify", 0,
         "WhatsApp", replaces, "harbour-whatsapp", title, body,
-        []string{"reply", "Reply"}, hints, int32(-1))
+        []string{"default", "", "reply", "Reply"}, hints, int32(-1))
     if call.Err != nil {
         fmt.Printf("🔔 notification failed: %v\n", call.Err)
         return
@@ -301,9 +305,9 @@ func startReplyService() {
         conn, err := dbus.SessionBus()
         if err == nil {
             conn.Export(replyService{}, "/", "harbour.whatsapp.Backend")
-            reply, err := conn.RequestName("harbour.harbour-whatsapp", dbus.NameFlagDoNotQueue)
+            reply, err := conn.RequestName("harbour.whatsapp.backend", dbus.NameFlagDoNotQueue)
             if err == nil && reply == dbus.RequestNameReplyPrimaryOwner {
-                fmt.Println("↩️ notification reply service ready (harbour.harbour-whatsapp)")
+                fmt.Println("↩️ notification reply service ready (harbour.whatsapp.backend)")
                 return
             }
         }

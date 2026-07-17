@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.86
+Version:    0.9.87
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -69,6 +69,17 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.87-1
+- Tapping a notification opens the conversation: the default remote
+  action calls openChat(jid) on the canonical bus name
+  harbour.harbour-whatsapp, now owned by the GUI (DBusAdaptor) - and
+  if the app is not running, sailjaild starts it via the new ExecDBus
+  line in the desktop file and delivers the call after startup, so
+  the tap works from a cold start too. The backend reply service
+  moves to a second name (harbour.whatsapp.backend) declared via
+  X-Maemo-Service in both desktop files - sailjaild turns that key
+  into a dbus-user.own grant (sailjailclient.c line 854)
+
 * Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.86-1
 - One notification per message again: group messages produced two -
   a reply-less one titled with the group (legacy QML-side publishing)
