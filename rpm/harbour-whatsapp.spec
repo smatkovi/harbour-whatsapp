@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.79
+Version:    0.9.84
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -69,6 +69,51 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.84-1
+- Reply directly from the events view, like SMS: notifications carry
+  a named remote action with type=input (the mechanism learned from
+  the commhistory-daemon and nemo-qml-plugin-notifications sources) -
+  lipstick shows the reply arrow with a text field and calls
+  Reply(chat, text) on the backend via the session bus. The backend
+  owns the sandbox-permitted bus name harbour.harbour-whatsapp
+  (sailjailclient.c grants OrganizationName.ApplicationName),
+  delegates to its own /send (identical local echo and ephemeral
+  handling) and closes the notification. Because the BACKEND answers,
+  replying works even with the app closed, through the daemon
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.83-1
+- Duplicate notifications switches merged: "Event screen
+  notifications" (older wording, better description) and
+  "Notifications" (daemon-era logic) both wrote the same backend
+  pref with separate UI state that could contradict each other. One
+  switch remains, carrying the old name and description and the new
+  logic (immediate daemon handover, prefs-ready guard, state kept in
+  sync with the in-app trigger logic). Sound and vibration toggles
+  are thereby coupled to "Event screen notifications" - and to
+  nothing else
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.82-1
+- Notification sound/vibration toggles are shown together with the
+  notifications feature they belong to (stage 1), while remaining
+  fully independent of the background daemon - the description now
+  says exactly that
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.81-1
+- Notification sound and vibration toggles are independent settings
+  now, always visible and configurable regardless of the
+  notifications stage or daemon state - they simply apply whenever a
+  notification fires
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.80-1
+- Notification sound and vibration are separately switchable
+  (sub-toggles under Notifications, both default on): the
+  x-nemo-feedback list names the ngfd events ("chat" for sound,
+  "vibra" for vibration); actual behaviour additionally follows the
+  ringtone profile
+- Events view cleans itself: bringing the app to the foreground
+  closes all of its notification entries - previously only opening
+  the specific chat cleared its entry
+
 * Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.79-1
 - Permission wording polish: the Audio+Sensors grant note now also
   mentions the earpiece volume control it enables and states

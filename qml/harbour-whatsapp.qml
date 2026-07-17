@@ -1069,7 +1069,11 @@ ApplicationWindow {
             // Anzeige-Sync direkt am Eigentuemer der Property: das
             // Connections-Konstrukt in Kind-Elementen hat sich schon bei
             // den Auto-Download-Boxen als unzuverlaessig erwiesen
-            onDownloadPrefsChanged: notifySwitch.checked = downloadPrefs["notifications"] === "1"
+            onDownloadPrefsChanged: {
+                notifySwitch.checked = downloadPrefs["notifications"] === "1"
+                notifSoundSwitch.checked = downloadPrefs["notif_sound"] !== "0"
+                notifVibrateSwitch.checked = downloadPrefs["notif_vibrate"] !== "0"
+            }
             property var storageInfo: ({})
 
             function loadStorage() {
@@ -1135,31 +1139,21 @@ ApplicationWindow {
                         }
                     }
 
-                    TextSwitch {
-                        text: "Event screen notifications"
-                        description: "Show a notification on the events screen when a "
-                                   + "chat receives new messages while the app is in the "
-                                   + "background. Works while the app is running (also "
-                                   + "minimised as a cover)."
-                        checked: notificationsEnabled
-                        automaticCheck: false
-                        onClicked: {
-                            notificationsEnabled = !notificationsEnabled
-                            setPref("notifications", notificationsEnabled ? "1" : "0")
-                        }
-                    }
-
                     SectionHeader { text: "Notifications" }
 
                     TextSwitch {
                         id: notifySwitch
-                        text: "Notifications"
-                        description: "Notify about incoming messages while the app is "
-                                   + "running in the background (muted chats stay silent)"
+                        text: "Event screen notifications"
+                        description: "Show a notification on the events screen when a "
+                                   + "chat receives new messages while the app is in the "
+                                   + "background (muted chats stay silent). Works while "
+                                   + "the app is running, also minimised as a cover - the "
+                                   + "background daemon below extends this to a closed app."
                         checked: false
                         Component.onCompleted: checked = downloadPrefs["notifications"] === "1"
                         onClicked: {
                             if (!prefsReady) { checked = !checked; return }
+                            notificationsEnabled = checked
                             var p = downloadPrefs
                             p["notifications"] = checked ? "1" : "0"
                             downloadPrefs = p
@@ -1174,6 +1168,33 @@ ApplicationWindow {
                                     globalNotice = "Background daemon stopped (autostart link remains - it exits by itself at next login while notifications are off)"
                                 })
                             }
+                        }
+                    }
+
+                    TextSwitch {
+                        id: notifSoundSwitch
+                        text: "Notification sound"
+                        description: "Applies to all notifications - with or without the background daemon"
+                        checked: true
+                        visible: notifySwitch.checked
+                        onClicked: {
+                            var p = downloadPrefs
+                            p["notif_sound"] = checked ? "1" : "0"
+                            downloadPrefs = p
+                            setPref("notif_sound", checked ? "1" : "0")
+                        }
+                    }
+
+                    TextSwitch {
+                        id: notifVibrateSwitch
+                        text: "Notification vibration"
+                        checked: true
+                        visible: notifySwitch.checked
+                        onClicked: {
+                            var p = downloadPrefs
+                            p["notif_vibrate"] = checked ? "1" : "0"
+                            downloadPrefs = p
+                            setPref("notif_vibrate", checked ? "1" : "0")
                         }
                     }
 

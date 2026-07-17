@@ -1,6 +1,8 @@
 package main
 
 import (
+    "unicode/utf16"
+    neturl "net/url"
     "github.com/godbus/dbus/v5"
     "context"
     "encoding/hex"
@@ -125,6 +127,10 @@ var uiStateMutex sync.Mutex
 // Als Daemon gestartet? (systemd-Unit setzt WA_DAEMON=1)
 var isDaemon = os.Getenv("WA_DAEMON") == "1"
 
+// Vom HTTP-Server gebundener Port (8085-8089) - u.a. fuer den
+// D-Bus-Reply-Handler, der ans eigene /send delegiert
+var boundPort int
+
 var notifIDs = map[string]uint32{}   // chatJid -> Notification-ID (Dedupe)
 var notifCounts = map[string]int{}   // chatJid -> ungemeldete Nachrichten
 var notifMutex sync.Mutex
@@ -214,10 +220,33 @@ func notifyIncoming(chatJid, title, preview string) {
         "x-nemo-preview-body":    dbus.MakeVariant(body),
         "category":               dbus.MakeVariant("x-nemo.messaging.im"),
     }
+    // Ton und Vibration getrennt schaltbar: die x-nemo-feedback-Liste
+    // benennt ngfd-Ereignisse ("chat" = Ton, "vibra" = Vibration); das
+    // tatsaechliche Verhalten folgt zusaetzlich dem Klingelprofil
+    prefsMutex.RLock()
+    sound := prefs["notif_sound"] != "0"
+    vibrate := prefs["notif_vibrate"] != "0"
+    prefsMutex.RUnlock()
+    var fb []string
+    if sound {
+        fb = append(fb, "chat")
+    }
+    if vibrate {
+        fb = append(fb, "vibra")
+    }
+    if len(fb) > 0 {
+        hints["x-nemo-feedback"] = dbus.MakeVariant(strings.Join(fb, ","))
+    }
+    // Antworten direkt aus der Ereignisansicht (wie bei SMS): benannte
+    // Remote-Action mit type=input - lipstick zeigt Pfeil+Eingabefeld und
+    // ruft unser Reply(chatJid, <text>) am Session-Bus
+    hints["x-nemo-remote-action-reply"] = dbus.MakeVariant(
+        "harbour.harbour-whatsapp / harbour.whatsapp.Backend Reply " + qvariantStringB64(chatJid))
+    hints["x-nemo-remote-action-type-reply"] = dbus.MakeVariant("input")
     var id uint32
     call := obj.Call("org.freedesktop.Notifications.Notify", 0,
         "WhatsApp", replaces, "harbour-whatsapp", title, body,
-        []string{}, hints, int32(-1))
+        []string{"reply", "Reply"}, hints, int32(-1))
     if call.Err != nil {
         fmt.Printf("🔔 notification failed: %v\n", call.Err)
         return
@@ -226,6 +255,85 @@ func notifyIncoming(chatJid, title, preview string) {
     notifMutex.Lock()
     notifIDs[chatJid] = id
     notifMutex.Unlock()
+}
+
+// qvariantStringB64 serialisiert einen QString als QDataStream-QVariant
+// (Base64), wie nemo-qml-plugin-notifications encodeDBusCall es tut:
+// quint32 TypeId(10=QString) + qint8 isNull + quint32 Bytelaenge + UTF-16BE
+func qvariantStringB64(s string) string {
+    u16 := utf16.Encode([]rune(s))
+    buf := make([]byte, 0, 9+2*len(u16))
+    buf = append(buf, 0, 0, 0, 10) // QVariant::String
+    buf = append(buf, 0)           // not null
+    n := 2 * len(u16)
+    buf = append(buf, byte(n>>24), byte(n>>16), byte(n>>8), byte(n))
+    for _, c := range u16 {
+        buf = append(buf, byte(c>>8), byte(c))
+    }
+    return base64.StdEncoding.EncodeToString(buf)
+}
+
+// replyService nimmt die Eingabe-Aktion der Benachrichtigung entgegen
+// (lipstick ruft Reply(chatJid, text) - der getippte Text wird von
+// lipstick als letztes Argument angehaengt) und delegiert ans eigene
+// /send, damit Local-Echo und Ephemeral-Logik identisch bleiben.
+type replyService struct{}
+
+func (replyService) Reply(chatJid string, text string) *dbus.Error {
+    fmt.Printf("↩️ notification reply to %s\n", chatJid)
+    if boundPort != 0 && text != "" {
+        url := fmt.Sprintf("http://127.0.0.1:%d/send?to=%s&text=%s",
+            boundPort, neturl.QueryEscape(chatJid), neturl.QueryEscape(text))
+        if _, err := http.Get(url); err != nil {
+            fmt.Printf("↩️ reply send failed: %v\n", err)
+        }
+    }
+    clearNotification(chatJid)
+    return nil
+}
+
+// startReplyService besetzt den sandbox-erlaubten Busnamen
+// (sailjailclient.c: --dbus-user.own=OrganizationName.ApplicationName ->
+// harbour.harbour-whatsapp) und exportiert Reply. Retry, weil der Name
+// waehrend einer Takeover-Uebergabe noch dem Vorgaenger gehoeren kann.
+func startReplyService() {
+    for i := 0; i < 40; i++ {
+        conn, err := dbus.SessionBus()
+        if err == nil {
+            conn.Export(replyService{}, "/", "harbour.whatsapp.Backend")
+            reply, err := conn.RequestName("harbour.harbour-whatsapp", dbus.NameFlagDoNotQueue)
+            if err == nil && reply == dbus.RequestNameReplyPrimaryOwner {
+                fmt.Println("↩️ notification reply service ready (harbour.harbour-whatsapp)")
+                return
+            }
+        }
+        time.Sleep(15 * time.Second)
+    }
+}
+
+// clearAllNotifications schliesst alle offenen Eintraege in der
+// Ereignisansicht - aufgerufen, wenn die App in den Vordergrund kommt
+// (wer die App oeffnet, hat die Benachrichtigungen gesehen)
+func clearAllNotifications() {
+    notifMutex.Lock()
+    ids := make([]uint32, 0, len(notifIDs))
+    for _, id := range notifIDs {
+        if id != 0 {
+            ids = append(ids, id)
+        }
+    }
+    notifIDs = map[string]uint32{}
+    notifCounts = map[string]int{}
+    notifMutex.Unlock()
+    if len(ids) == 0 {
+        return
+    }
+    if conn, err := dbus.SessionBus(); err == nil {
+        obj := conn.Object("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
+        for _, id := range ids {
+            obj.Call("org.freedesktop.Notifications.CloseNotification", 0, id)
+        }
+    }
 }
 
 func clearNotification(chatJid string) {
@@ -2263,6 +2371,7 @@ func main() {
     // Initialize paths first
     initPaths()
     daemonTakeover()
+    go startReplyService()
     go daemonWatchdog()
 
     // Bind the HTTP port FIRST, before the (potentially slow) Secrets
@@ -2285,6 +2394,7 @@ func main() {
         fmt.Println("❌ No free port in 8085-8089, exiting")
         os.Exit(1)
     }
+    boundPort = port
     os.WriteFile("backend.port", []byte(fmt.Sprintf("%d", port)), 0600)
     fmt.Printf("🚀 Backend listening on http://127.0.0.1:%d (initializing…)\n", port)
     go http.Serve(listener, nil)
@@ -2589,9 +2699,15 @@ func main() {
 
     http.HandleFunc("/ui/state", func(w http.ResponseWriter, r *http.Request) {
         uiStateMutex.Lock()
+        wasActive := uiActive
         uiActive = r.URL.Query().Get("active") == "1"
+        nowActive := uiActive
         uiLastSeen = time.Now()
         uiStateMutex.Unlock()
+        // App kam in den Vordergrund: Ereignisansicht aufraeumen
+        if nowActive && !wasActive {
+            go clearAllNotifications()
+        }
         w.Write([]byte("ok"))
     })
 
