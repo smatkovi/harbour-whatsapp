@@ -428,20 +428,10 @@ ApplicationWindow {
                 for (var i = 0; i < chats.length; i++) {
                     var c = chats[i]
                     nu[c.jid] = c.unread || 0
-                    // Benachrichtigen nur: Feature an, kein Erststart,
-                    // Zaehler gestiegen, nicht stummgeschaltet, App im
-                    // Hintergrund (im Vordergrund sieht man es ohnehin)
-                    if (notificationsEnabled && prevUnreadInit
-                            && nu[c.jid] > (prevUnread[c.jid] || 0)
-                            && !c.muted && !Qt.application.active) {
-                        msgNotification.replacesId = 0
-                        msgNotification.summary = getDisplayName(c.jid, c.name)
-                        msgNotification.body = c.lastMessage || "New message"
-                        msgNotification.previewSummary = msgNotification.summary
-                        msgNotification.previewBody = msgNotification.body
-                        msgNotification.itemCount = nu[c.jid]
-                        msgNotification.publish()
-                    }
+                    // Benachrichtigungen kommen ausschliesslich vom Backend
+                    // (mit Reply-Aktion, Dedup und Muted-Logik) - die alte
+                    // QML-Publikation hier erzeugte eine zweite, pfeillose
+                    // Benachrichtigung pro Gruppen-Nachricht
                 }
                 prevUnread = nu
                 prevUnreadInit = true

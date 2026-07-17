@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.85
+Version:    0.9.86
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -69,6 +69,16 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.86-1
+- One notification per message again: group messages produced two -
+  a reply-less one titled with the group (legacy QML-side publishing)
+  and one titled with the sender (backend). The QML duplicate is
+  removed; the backend notification is the only one and carries the
+  reply action
+- Group notifications are titled with the GROUP name now, the sender
+  moves into the preview ("Sender: message") - replying from the
+  notification answers into the group, as expected
+
 * Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.85-1
 - Clearer permission guidance after an OpenRepos report ("permissions
   are granted but a message says no permission"): the app ships with

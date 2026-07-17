@@ -1779,13 +1779,23 @@ func eventHandler(evt interface{}) {
                 fmt.Printf("📩 %s: %s\n", chatJid, text)
             }
             if !v.Info.IsFromMe && chatJid != "status" {
-                title := v.Info.PushName
-                if title == "" {
-                    title = sender
+                senderName := v.Info.PushName
+                if senderName == "" {
+                    senderName = sender
                 }
+                title := senderName
                 preview := text
                 if preview == "" {
                     preview = "[" + mediaType + "]"
+                }
+                // Gruppen: Titel = Gruppenname, Absender gehoert in den Text -
+                // sonst sieht die Benachrichtigung aus, als kaeme sie von der
+                // Person statt aus der Gruppe
+                if v.Info.IsGroup {
+                    if gname := getContactName(chatJid); gname != "" && gname != chatJid {
+                        title = gname
+                        preview = senderName + ": " + preview
+                    }
                 }
                 if len(preview) > 120 {
                     preview = preview[:120] + "…"
