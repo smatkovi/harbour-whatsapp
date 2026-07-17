@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.84
+Version:    0.9.85
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -69,6 +69,15 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.85-1
+- Clearer permission guidance after an OpenRepos report ("permissions
+  are granted but a message says no permission"): the app ships with
+  a minimal desktop file, so the Sailfish Settings app has no
+  Microphone entry to grant - the permission must first be ADDED via
+  the tap-to-copy Terminal command in the app's own settings. The
+  microphone notice now says exactly that and where, and the Sailjail
+  permissions section explains the two levels up front
+
 * Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.84-1
 - Reply directly from the events view, like SMS: notifications carry
   a named remote action with type=input (the mechanism learned from

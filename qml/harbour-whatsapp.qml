@@ -1409,7 +1409,12 @@ Label {
                         property bool micGranted: false
                         property bool sensorsGranted: false
                         property bool audioGranted: false
-                        text: "Contacts permission: " + (granted ? "granted" : "not granted")
+                        property string permIntro: "These optional permissions are added to the app's "
+                            + "desktop file via the Terminal commands below (tap to copy, run with devel-su, "
+                            + "then restart the app). The Sailfish Settings app can only manage permissions "
+                            + "AFTER they have been added here.\n\n"
+                        text: permIntro
+                              + "Contacts permission: " + (granted ? "granted" : "not granted")
                               + "\nMedia storage permission: " + (mediaGranted ? "granted" : "not granted")
                               + "\nLocation permission: " + (locationGranted ? "granted" : "not granted")
                               + "\nMicrophone permission: " + (micGranted ? "granted" : "not granted")
@@ -4460,7 +4465,7 @@ Label {
                                     var mic = false
                                     try { mic = JSON.parse(pxr.responseText).micPermission === true } catch (e) {}
                                     if (!mic) {
-                                        globalNotice = "Voice notes need the Microphone permission - grant it in Settings and restart the app"
+                                        globalNotice = "Voice notes need the Microphone permission. Open Settings INSIDE this app \u2192 'Sailjail permissions' \u2192 tap the GRANT microphone command (copies to clipboard), run it in Terminal, restart the app. The Sailfish Settings app cannot add it."
                                         return
                                     }
                                 python.call('start_backend.voice_start', [], function(res) {
