@@ -1392,10 +1392,11 @@ Label {
                               + "\nMedia storage permission: " + (mediaGranted ? "granted" : "not granted")
                               + "\nLocation permission: " + (locationGranted ? "granted" : "not granted")
                               + "\nMicrophone permission: " + (micGranted ? "granted" : "not granted")
-                              + "\nAudio permission: " + (audioGranted ? "granted" : "not granted")
+                              + "\nAudio permission: " + (audioGranted ? "granted"
+                                    : (micGranted ? "included in Microphone" : "not granted"))
                               + "\nSensors permission: " + (sensorsGranted ? "granted" : "not granted")
-                              + "\nEar-speaker switching: " + ((sensorsGranted && audioGranted) ? "ready"
-                                  : (!sensorsGranted && !audioGranted) ? "needs audio+sensors"
+                              + "\nEar-speaker switching: " + ((sensorsGranted && (audioGranted || micGranted)) ? "ready"
+                                  : (!sensorsGranted && !(audioGranted || micGranted)) ? "needs audio+sensors"
                                   : !sensorsGranted ? "needs sensors" : "needs audio")
                         color: Theme.highlightColor
                         font.pixelSize: Theme.fontSizeSmall
@@ -1562,7 +1563,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "\u25b8 Copy command to GRANT microphone permission (record voice notes)"
+                            text: "\u25b8 Copy command to GRANT microphone permission (record voice notes; includes the Audio permission)"
                             color: Theme.highlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -1600,7 +1601,12 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "\u25b8 Copy command to GRANT audio+sensors permissions (listen to voice notes at the ear, no microphone access)"
+                            text: "\u25b8 Copy command to GRANT audio+sensors permissions (listen to voice notes at the ear, "
+                                + "incl. earpiece volume control). Note: the system prompt will say 'Play and record "
+                                + "audio' - that is the OS label of the Audio permission itself (audio streams are not "
+                                + "separable yet). This app never records with only these permissions: recording "
+                                + "happens solely via the mic button, which additionally requires the Microphone "
+                                + "permission and refuses otherwise"
                             color: Theme.highlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -4419,7 +4425,23 @@ Label {
                             } else if (input.text.length > 0) {
                                 send()
                             } else {
-                                // Aufnahme starten (Mikrofon-Berechtigung noetig)
+                                // Aufnahme starten - aber nur mit ausgewiesener
+                                // Mikrofon-Berechtigung: die Audio-Permission
+                                // wuerde pulsesrc technisch auch erlauben
+                                // (upstream-FIXME: Streams nicht trennbar),
+                                // doch die Settings versprechen Aufnahme nur
+                                // fuer Microphone - dieses Versprechen haelt
+                                // die App selbst ein
+                                var pxr = new XMLHttpRequest()
+                                pxr.open("GET", "http://127.0.0.1:" + backendPort + "/permcheck")
+                                pxr.onreadystatechange = function() {
+                                    if (pxr.readyState !== 4) return
+                                    var mic = false
+                                    try { mic = JSON.parse(pxr.responseText).micPermission === true } catch (e) {}
+                                    if (!mic) {
+                                        globalNotice = "Voice notes need the Microphone permission - grant it in Settings and restart the app"
+                                        return
+                                    }
                                 python.call('start_backend.voice_start', [], function(res) {
                                     if (res === true) {
                                         inputRow.recSeconds = 0
@@ -4430,6 +4452,8 @@ Label {
                                                      + "microphone permission in Settings and restart the app"
                                     }
                                 })
+                                }
+                                pxr.send()
                             }
                         }
                     }
@@ -4976,6 +5000,12 @@ Label {
             // D-Bus-Ruf stumm und alles bleibt beim Lautsprecher)
             property int earpieceType: 0     // geraetespezifisch, aus Routes gelesen
             property bool earpieceOn: false
+            // Wiedergabe endet oft, waehrend das Telefon noch am Ohr ist:
+            // die komplette Freigabe (Route, Call-State, Lautstaerke) dann
+            // bis zum echten "far" aufschieben - mce weckt das Display beim
+            // Absetzen selbst, solange der Anrufzustand aktiv ist
+            property bool pendingRelease: false
+            property string savedVolume: ""
 
             DBusInterface {
                 id: routeMgr
@@ -4997,57 +5027,102 @@ Label {
             // einschlafen - sonst kaeme das "far"-Ereignis nie an und das
             // Display bliebe schwarz
             KeepAlive {
-                enabled: apPage.earpieceOn
+                enabled: apPage.earpieceOn || apPage.pendingRelease
             }
 
+            // Sicherheitsnetz: kommt kein "far" (Telefon abgelegt), den
+            // Pseudo-Anruf nach 25s trotzdem beenden. mce selbst raeumt
+            // zusaetzlich auf, wenn unser D-Bus-Client verschwindet
+            // (callstate.c: restore to "none" on client exit)
             Timer {
-                id: unlockRetry
-                interval: 300
+                id: releaseTimer
+                interval: 25000
                 repeat: false
-                onTriggered: mce.call("req_tklock_mode_change", ["unlocked"])
+                onTriggered: apPage.releaseEarpiece()
             }
 
-            function setDisplay(on) {
-                mce.call(on ? "req_display_state_on" : "req_display_state_off", [])
-                if (on) {
-                    unlockRetry.restart()
-                    // Touch-Sperre aufheben, die mce beim Blank einlegt -
-                    // sonst landet man beim Absetzen auf dem Lockscreen
-                    // statt in der App (eine Geraetesperre mit Code bleibt
-                    // bewusst bestehen)
-                    mce.call("req_tklock_mode_change", ["unlocked"])
+            // Kein manuelles Display-Wecken mehr: echte Anrufe melden mce
+            // einen Anrufzustand und lassen dessen Proximity-Logik arbeiten
+            // (tklock.c, UIEXCEPTION_TYPE_CALL: Route=Handset + bedeckt ->
+            // blank, nicht bedeckt -> activate). Wir machen es genauso.
+            function callState(active) {
+                mce.typedCall("req_call_state_change",
+                    [{ "type": "s", "value": active ? "active" : "none" },
+                     { "type": "s", "value": "normal" }],
+                    function() {}, function() {})
+            }
+
+            function releaseEarpiece() {
+                // Komplette Freigabe: Route zurueck, Lautstaerke zurueck,
+                // Pseudo-Anruf beenden (mce aktiviert das Display beim
+                // far-Uebergang von selbst, solange der Anruf noch lief)
+                releaseTimer.stop()
+                pendingRelease = false
+                if (savedVolume !== "") {
+                    python.call('start_backend.sink_volume_set', [savedVolume])
+                    savedVolume = ""
                 }
+                if (earpieceOn) {
+                    earpieceOn = false
+                    routeMgr.typedCall("Prefer",
+                        [{ "type": "s", "value": "earpiece" },
+                         { "type": "u", "value": earpieceType },
+                         { "type": "u", "value": 0 }],
+                        function() {}, function() {})
+                }
+                callState(false)
             }
 
             function setEarpiece(on) {
-                console.log("setEarpiece", on, "type", earpieceType)
-                python.call('start_backend.debug_log', ["setEarpiece on=" + on + " type=" + earpieceType])
-                if (on === earpieceOn || earpieceType === 0) return
-                earpieceOn = on
-                setDisplay(!on)  // Display aus, solange das Telefon am Ohr ist
-                // Prefer(name, type, set) - Signatur laut ohm-Quelltext s,u,u
-                routeMgr.typedCall("Prefer",
-                    [{ "type": "s", "value": "earpiece" },
-                     { "type": "u", "value": earpieceType },
-                     { "type": "u", "value": on ? 1 : 0 }],
-                    function() {}, function() { earpieceOn = false })
+                if (earpieceType === 0) return
+                if (on) {
+                    if (earpieceOn) return
+                    earpieceOn = true
+                    pendingRelease = false
+                    releaseTimer.stop()
+                    // Pseudo-Anruf: mce uebernimmt Blank (bedeckt) und
+                    // Aufwecken (frei) mit seinem eigenen Sensor
+                    callState(true)
+                    // Ohrhoerer ist leise und die Lautstaerketasten greifen in
+                    // dieser Streamklasse nicht - definierte 60% setzen und
+                    // die alte Lautstaerke fuers Zurueckschalten merken
+                    python.call('start_backend.sink_volume_get', [], function(v) {
+                        apPage.savedVolume = v
+                        python.call('start_backend.sink_volume_set', ["60%"])
+                    })
+                    routeMgr.typedCall("Prefer",
+                        [{ "type": "s", "value": "earpiece" },
+                         { "type": "u", "value": earpieceType },
+                         { "type": "u", "value": 1 }],
+                        function() {}, function() { apPage.earpieceOn = false })
+                } else {
+                    if (!earpieceOn && !pendingRelease) return
+                    if (proxSensor.reading && proxSensor.reading.near) {
+                        // Telefon noch am Ohr (Wiedergabe zu Ende): alles
+                        // erst beim "far" freigeben, sonst weckt der
+                        // Routenwechsel das Display am Ohr
+                        pendingRelease = true
+                        releaseTimer.restart()
+                    } else {
+                        releaseEarpiece()
+                    }
+                }
             }
 
             ProximitySensor {
                 id: proxSensor
-                active: aplayer.playbackState === MediaPlayer.PlayingState
+                active: (aplayer.playbackState === MediaPlayer.PlayingState
+                         || apPage.earpieceOn || apPage.pendingRelease)
                         && apPage.status === PageStatus.Active
                 onReadingChanged: {
-                    python.call('start_backend.debug_log', ["proximity near=" + reading.near])
                     if (reading.near) {
                         // Kopfhoerer-Wache: nur vom LAUTSPRECHER wegschalten -
                         // niemandem mit Headset das Audio auf den Ohrhoerer reissen
                         routeMgr.typedCall("ActiveRoutes", [], function(outDev) {
-                            python.call('start_backend.debug_log', ["active output=" + outDev])
                             if (outDev === "speaker") apPage.setEarpiece(true)
                         }, function() {})
                     } else {
-                        apPage.setEarpiece(false)
+                        apPage.releaseEarpiece()
                     }
                 }
             }
@@ -5057,9 +5132,6 @@ Label {
                 // Typ-Bits sind vendor-abhaengig, nicht hartkodierbar)
                 routeMgr.typedCall("Routes", [], function(routes) {
                     console.log("Routes reply, entries:", routes ? routes.length : "null")
-                    python.call('start_backend.debug_log',
-                        ["Routes reply entries=" + (routes ? routes.length : "null")
-                         + " raw=" + JSON.stringify(routes).substring(0, 400)])
                     for (var i = 0; i < routes.length; i++) {
                         var name = routes[i][0], t = routes[i][1]
                         if (name === undefined && routes[i].length === undefined) {
@@ -5069,7 +5141,6 @@ Label {
                         if (name === "earpiece" && (t & 1)) {
                             apPage.earpieceType = t
                             console.log("earpiece route type:", t)
-                            python.call('start_backend.debug_log', ["earpiece type=" + t])
                             break
                         }
                     }
@@ -5077,40 +5148,33 @@ Label {
                         console.log("earpiece route NOT found - raw:", JSON.stringify(routes).substring(0, 300))
                 }, function() {
                     console.log("Routes call FAILED")
-                    python.call('start_backend.debug_log', ["Routes call FAILED (dbus error)"])
                 })
             }
 
             Component.onCompleted: {
-                python.call('start_backend.debug_log', ["audioPlayer opened"])
-                // Modell = Laufzeit: Ohr-Modus NUR bei explizitem Audio-Token.
-                // (Die Mikrofon-Berechtigung schliesst Audio auf sailjail-Ebene
-                // zwar mit ein, aber die Anzeige verspricht den Modus nur fuer
-                // Audio+Sensors - also aktiviert ihn auch nur diese Kombination.)
+                // Anzeige = Laufzeit: die Mikrofon-Berechtigung schliesst
+                // Audio auf sailjail-Ebene ein, also aktiviert (Audio ODER
+                // Microphone) + Sensors den Ohr-Modus - exakt wie die
+                // "Ear-speaker switching"-Statuszeile es verspricht
                 var xhr = new XMLHttpRequest()
                 xhr.open("GET", "http://127.0.0.1:" + backendPort + "/permcheck")
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState !== 4) return
                     try {
                         var p = JSON.parse(xhr.responseText)
-                        if (p.audioPermission === true && p.sensorsPermission === true) apPage.initEarpiece()
-                        else python.call('start_backend.debug_log', ["ear mode off: needs explicit Audio+Sensors tokens (audio=" + p.audioPermission + " sensors=" + p.sensorsPermission + ")"])
+                        if ((p.audioPermission === true || p.micPermission === true)
+                                && p.sensorsPermission === true) apPage.initEarpiece()
                     } catch (e) {}
                 }
                 xhr.send()
             }
 
             Component.onDestruction: {
-                // Rueckstell-Garantie: nie mit klebendem Ohrhoerer oder
-                // schwarzem Display zuruecklassen
-                if (earpieceOn) setDisplay(true)
-                if (earpieceOn && earpieceType !== 0) {
-                    routeMgr.typedCall("Prefer",
-                        [{ "type": "s", "value": "earpiece" },
-                         { "type": "u", "value": earpieceType },
-                         { "type": "u", "value": 0 }],
-                        function() {}, function() {})
-                }
+                // Rueckstell-Garantie: nie mit klebendem Ohrhoerer,
+                // haengendem Pseudo-Anruf oder verstellter Lautstaerke
+                // zuruecklassen (mce raeumt den Call-State zusaetzlich
+                // selbst, falls die App abstuerzt)
+                releaseEarpiece()
             }
 
             Column {

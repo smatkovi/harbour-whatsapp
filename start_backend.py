@@ -34,6 +34,31 @@ def debug_log(msg):
         pass
     return True
 
+def _pactl():
+    p = "/usr/share/harbour-whatsapp/pactl"
+    return p if os.path.exists(p) else "pactl"
+
+def sink_volume_get():
+    """Aktuelle Lautstaerke des Standard-Sinks, z.B. '45%' ('' bei Fehler)."""
+    try:
+        out = subprocess.check_output([_pactl(), "get-sink-volume", "@DEFAULT_SINK@"],
+                                      stderr=subprocess.DEVNULL, timeout=3).decode()
+        for tok in out.replace("/", " ").split():
+            if tok.endswith("%"):
+                return tok
+    except Exception:
+        pass
+    return ""
+
+def sink_volume_set(vol):
+    """Lautstaerke des Standard-Sinks setzen, vol z.B. '60%'."""
+    try:
+        subprocess.call([_pactl(), "set-sink-volume", "@DEFAULT_SINK@", vol],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+        return True
+    except Exception:
+        return False
+
 def voice_start():
     """Sprachaufnahme starten: PulseAudio -> Opus/OGG (16 kHz mono, wie
     WhatsApp-Voice-Notes). SIGINT + -e finalisiert die Datei sauber."""

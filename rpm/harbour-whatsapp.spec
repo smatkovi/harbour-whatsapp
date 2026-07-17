@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.73
+Version:    0.9.79
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -61,13 +61,82 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 # gst-launch am exec-erlaubten Ort verfuegbar machen (Voice-Aufnahme):
 # /usr/bin kann im Sailjail auf eine Positivliste reduziert sein
 ln -f /usr/bin/gst-launch-1.0 /usr/share/harbour-whatsapp/gst-launch-1.0 2>/dev/null ||   cp /usr/bin/gst-launch-1.0 /usr/share/harbour-whatsapp/gst-launch-1.0 2>/dev/null || true
+ln -f /usr/bin/pactl /usr/share/harbour-whatsapp/pactl 2>/dev/null ||   cp /usr/bin/pactl /usr/share/harbour-whatsapp/pactl 2>/dev/null || true
 
 %postun
 if [ "$1" = "0" ]; then
-  rm -f /usr/share/harbour-whatsapp/gst-launch-1.0
+  rm -f /usr/share/harbour-whatsapp/gst-launch-1.0 /usr/share/harbour-whatsapp/pactl
 fi
 
 %changelog
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.79-1
+- Permission wording polish: the Audio+Sensors grant note now also
+  mentions the earpiece volume control it enables and states
+  explicitly that the app NEVER records with only these permissions
+  (recording happens solely via the mic button, which requires the
+  Microphone permission and refuses otherwise); the Microphone grant
+  row notes that it includes the Audio permission, so its system
+  prompt surprises nobody either
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.78-1
+- Earpiece debug logging removed now that the feature is verified:
+  the per-event cost was negligible, but ui-debug.log grew without
+  bound. The mce reachability probe is gone as well (question
+  settled: reachable, call model works)
+- Runtime gate matched to the status display: (Audio OR Microphone)
+  plus Sensors enables ear-speaker switching - previously the
+  runtime required the explicit Audio token while the 0.9.77 status
+  line already promised readiness for Microphone+Sensors
+- Sensors stays a required permission for the feature: upstream
+  sailjail-permissions shows Sensors.permission is exactly the
+  com.nokia.SensorService D-Bus grant and the base profile contains
+  no sensor access - without it the proximity sensor is silent in
+  the sandbox
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.77-1
+- Permission display fixes: the ear-speaker readiness line now
+  accounts for Microphone including Audio (Microphone+Sensors showed
+  a wrong "needs audio" although switching works), and the Audio
+  status line says "included in Microphone" in that case instead of
+  "not granted"
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.76-1
+- Earpiece display handling rebuilt on the call model, straight from
+  the mce sources (tklock.c UIEXCEPTION_TYPE_CALL): instead of
+  fighting mce with manual display/tklock requests, the app now
+  declares a call state ("req_call_state_change active/none") while
+  audio plays on the earpiece - mce then natively blanks when the
+  sensor is covered and ACTIVATES the display when it is uncovered,
+  exactly like a real phone call, with its own sensor. All manual
+  wake juggling removed. When playback ends at the ear, the full
+  release (route, volume, call state) is deferred until "far" (25s
+  safety timeout); mce additionally restores the call state itself
+  if the app vanishes from D-Bus. Leaving the player page releases
+  everything including the saved volume
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.75-1
+- Earpiece wake hardening: taking the phone off the ear DURING
+  playback left the device locked. The wake sequence (display on +
+  tklock unlock) now repeats three times over ~1s - mce can see
+  "call + near" right after the route flip and cancel an early wake
+  - and is additionally re-sent once the Route Manager confirms the
+  route is back on speaker. An mce reachability probe at player
+  start logs whether com.nokia.mce is even callable from the
+  sandbox, settling the filter question for good
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.74-1
+- Proximity earpiece polish after on-device testing: waking the
+  display is deferred until the sensor actually reports "far" -
+  voice notes often END while the phone is still at the ear, and
+  waking immediately made mce blank and lock the screen again
+  (stuck lockscreen). The sensor stays active while the ear mode
+  is winding down so the far event is never missed
+- Earpiece volume: the earpiece stream class is quiet and the
+  volume keys do not reach it - entering ear mode now sets the sink
+  to a defined 60% (via pactl, hardlinked to the exec-allowed app
+  dir like gst-launch) and restores the previous volume when
+  switching back
+
 * Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.73-1
 - Ear-mode gate made fully symmetric: the player enables it only
   with BOTH explicit tokens (Audio and Sensors) confirmed via
