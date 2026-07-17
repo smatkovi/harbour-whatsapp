@@ -1164,6 +1164,56 @@ ApplicationWindow {
                         }
                     }
 
+                    SectionHeader {
+                        text: "Gallery visibility"
+                        visible: permStatus.mediaGranted
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                        visible: permStatus.mediaGranted
+                        text: "Hide WhatsApp media folders from Gallery and Media apps "
+                            + "by placing a .nomedia marker (community suggestion). The "
+                            + "tracker picks the change up on its next indexing run - "
+                            + "existing entries can take a while to disappear."
+                    }
+
+                    Column {
+                        id: nomediaCol
+                        width: parent.width
+                        visible: permStatus.mediaGranted
+                        property var nomediaState: ({})
+                        Component.onCompleted: {
+                            python.call('start_backend.nomedia_get', [], function(st) {
+                                nomediaState = st || {}
+                            })
+                        }
+
+                        Repeater {
+                            model: [
+                                { key: "images",    label: "Hide received images" },
+                                { key: "videos",    label: "Hide received videos" },
+                                { key: "audio",     label: "Hide voice notes and audio" },
+                                { key: "documents", label: "Hide received documents" },
+                                { key: "avatars",   label: "Hide profile pictures" }
+                            ]
+                            delegate: TextSwitch {
+                                text: modelData.label
+                                checked: nomediaCol.nomediaState[modelData.key] === true
+                                automaticCheck: false
+                                onClicked: {
+                                    python.call('start_backend.nomedia_set',
+                                        [modelData.key, !(nomediaCol.nomediaState[modelData.key] === true)],
+                                        function(st) { nomediaCol.nomediaState = st || {} })
+                                }
+                            }
+                        }
+                    }
+
                     SectionHeader { text: "Notifications" }
 
                     TextSwitch {

@@ -59,6 +59,38 @@ def sink_volume_set(vol):
     except Exception:
         return False
 
+NOMEDIA_DIRS = {
+    "images":    "Pictures/WhatsApp",
+    "videos":    "Videos/WhatsApp",
+    "audio":     "Music/WhatsApp",
+    "documents": "Documents/WhatsApp",
+    "avatars":   "Pictures/WhatsApp/avatars",
+}
+
+def nomedia_get():
+    """Welche Medienordner tragen ein .nomedia (Galerie blendet sie aus)?"""
+    out = {}
+    for key, rel in NOMEDIA_DIRS.items():
+        out[key] = os.path.exists(os.path.expanduser("~/" + rel + "/.nomedia"))
+    return out
+
+def nomedia_set(key, enable):
+    """.nomedia im jeweiligen Medienordner anlegen/entfernen."""
+    rel = NOMEDIA_DIRS.get(key)
+    if not rel:
+        return nomedia_get()
+    d = os.path.expanduser("~/" + rel)
+    try:
+        os.makedirs(d, exist_ok=True)
+        marker = os.path.join(d, ".nomedia")
+        if enable:
+            open(marker, "w").close()
+        elif os.path.exists(marker):
+            os.remove(marker)
+    except Exception:
+        pass
+    return nomedia_get()
+
 def voice_start():
     """Sprachaufnahme starten: PulseAudio -> Opus/OGG (16 kHz mono, wie
     WhatsApp-Voice-Notes). SIGINT + -e finalisiert die Datei sauber."""
@@ -73,7 +105,17 @@ def voice_start():
     # startet von dort); der Hardlink wird bei der Installation angelegt
     gst = "/usr/share/harbour-whatsapp/gst-launch-1.0"
     if not os.path.exists(gst):
-        gst = "gst-launch-1.0"
+        # Buendel-Kopie fehlt (z.B. gstreamer1.0-tools war bei der
+        # Installation nicht vorhanden) - Fallback-Kette versuchen und
+        # den Befund im Fehlerfall WOERTLICH melden
+        if os.path.exists("/usr/bin/gst-launch-1.0"):
+            gst = "/usr/bin/gst-launch-1.0"
+        else:
+            return ("recorder missing: neither the bundled copy "
+                    "(/usr/share/harbour-whatsapp/gst-launch-1.0) nor "
+                    "/usr/bin/gst-launch-1.0 exists. Install it with: "
+                    "devel-su pkcon install gstreamer1.0-tools - then "
+                    "REINSTALL this app (the installer bundles the recorder)")
     errlog = os.path.join(media, "recorder.err")
     try:
         errf = open(errlog, "w")

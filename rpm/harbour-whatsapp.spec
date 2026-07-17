@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.87
+Version:    0.9.89
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -13,6 +13,10 @@ Group:      Applications/Communications
 Requires:   sailfishsilica-qt5
 Requires:   nemo-qml-plugin-contacts-qt5
 Requires:   pyotherside-qml-plugin-python3-qt5
+# Voice-Aufnahme: der Rekorder wird bei der Installation an einen
+# exec-erlaubten Ort gebuendelt - ohne dieses Paket lief %post ins Leere
+# und die Aufnahme scheiterte mit einem irrefuehrenden Errno 13
+Requires:   gstreamer1.0-tools
 #Requires:   sqlcipher (statisch gelinkt)
 
 %description
@@ -69,6 +73,27 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.89-1
+- Gallery visibility (community suggestion): optional per-type
+  .nomedia markers hide the WhatsApp media folders from Gallery and
+  Media apps - separate toggles for received images, videos, voice
+  notes/audio, documents and profile pictures (Settings, shown when
+  media storage access is granted). The switches reflect the actual
+  marker files on disk; the tracker picks changes up on its next
+  indexing run
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.88-1
+- Voice recording on devices without gstreamer1.0-tools (OpenRepos
+  report: "all permissions granted" but errno 13 on gst-launch-1.0):
+  the recorder is bundled at install time by hardlinking the system
+  gst-launch-1.0 - on devices where that tool was never installed,
+  %post silently had nothing to bundle and recording failed with a
+  misleading permission error (execvp aggregates EACCES over jailed
+  PATH entries). gstreamer1.0-tools is now a declared RPM dependency,
+  so the store installs it automatically, and the runtime fallback
+  chain reports its findings verbatim (bundled copy -> /usr/bin ->
+  precise install instructions) instead of a bare errno
+
 * Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.87-1
 - Tapping a notification opens the conversation: the default remote
   action calls openChat(jid) on the canonical bus name
