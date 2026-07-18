@@ -65,8 +65,10 @@ ApplicationWindow {
             })
             
             importModule('start_backend', function() {
+                pythonReady = true
                 call('start_backend.start', [])
             })
+            importWatchdog.start()
             reportTimer.start()
         }
         
@@ -76,6 +78,31 @@ ApplicationWindow {
         
         onError: {
             console.log("Python error:", traceback)
+            if (!pythonReady) {
+                // Der erste Fehler vor erfolgreichem Import IST der
+                // Import-Traceback - genau die Zeile, die uns Nutzer-
+                // Reports bisher nie liefern konnten (nur Konsole)
+                backendFailed = true
+                pairErrorMsg = "Python module failed to load:\n" + traceback
+                             + "\nPlease report this text."
+            }
+        }
+    }
+
+    property bool pythonReady: false
+
+    Timer {
+        id: importWatchdog
+        interval: 6000
+        repeat: false
+        onTriggered: {
+            if (!pythonReady && pairErrorMsg === "") {
+                backendFailed = true
+                pairErrorMsg = "Python module start_backend did not load "
+                             + "(no error reported). Check that "
+                             + "/usr/share/harbour-whatsapp/start_backend.py "
+                             + "exists and report your Sailfish OS version."
+            }
         }
     }
 
@@ -869,14 +896,23 @@ ApplicationWindow {
                         inputMethodHints: Qt.ImhDigitsOnly
                     }
 
-                    Label {
+                    BackgroundItem {
                         visible: pairErrorMsg !== ""
-                        width: parent.width - 2*Theme.horizontalPageMargin
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: pairErrorMsg
-                        wrapMode: Text.Wrap
-                        font.pixelSize: Theme.fontSizeSmall
-                        color: Theme.errorColor
+                        width: parent.width
+                        height: pairErrLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = pairErrorMsg
+                            globalNotice = "Error text copied to clipboard"
+                        }
+                        Label {
+                            id: pairErrLabel
+                            width: parent.width - 2*Theme.horizontalPageMargin
+                            anchors.centerIn: parent
+                            text: pairErrorMsg + "\n(tap to copy)"
+                            wrapMode: Text.Wrap
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.errorColor
+                        }
                     }
 
                     Button {

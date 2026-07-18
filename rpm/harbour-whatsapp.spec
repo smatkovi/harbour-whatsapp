@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.93
+Version:    0.9.95
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -86,6 +86,23 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Jul 18 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.95-1
+- The startup/pairing error message is tappable now and copies
+  itself to the clipboard ("tap to copy") - multi-line import
+  tracebacks travel into a bug report with one tap instead of
+  being retyped from a screenshot
+
+* Sat Jul 18 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.94-1
+- Self-diagnosing startup for a field report (Xperia 10 III, latest
+  version: python module fails to import, so the backend never
+  starts): the import traceback was only ever printed to the
+  console no user sees. The first Python error before a successful
+  import is now shown verbatim on the error screen with a "please
+  report this text" note, and an import watchdog names the module
+  and asks for the OS version if no error surfaces at all. The
+  module itself audits clean for older-Python syntax - the next
+  report will contain the actual reason on-screen
+
 * Sat Jul 18 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.93-1
 - Daemon lifecycle hardened for switching at will: running the
   disable command in the Terminal while the app was open killed the
