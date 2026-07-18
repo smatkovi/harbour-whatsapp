@@ -67,6 +67,15 @@ NOMEDIA_DIRS = {
     "avatars":   "Pictures/WhatsApp/avatars",
 }
 
+def installed_version():
+    """Version des installierten Pakets (fuer Update-Lag-Erkennung:
+    laufender Daemon vs. frisch installierte App)."""
+    try:
+        with open("/usr/share/harbour-whatsapp/VERSION") as f:
+            return f.read().strip()
+    except Exception:
+        return ""
+
 def nomedia_get():
     """Welche Medienordner tragen ein .nomedia (Galerie blendet sie aus)?"""
     out = {}

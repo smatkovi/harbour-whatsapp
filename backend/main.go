@@ -240,8 +240,11 @@ func notifyIncoming(chatJid, title, preview string) {
     // Antworten direkt aus der Ereignisansicht (wie bei SMS): benannte
     // Remote-Action mit type=input - lipstick zeigt Pfeil+Eingabefeld und
     // ruft unser Reply(chatJid, <text>) am Session-Bus
-    hints["x-nemo-remote-action-reply"] = dbus.MakeVariant(
-        "harbour.whatsapp.backend / harbour.whatsapp.Backend Reply " + qvariantStringB64(chatJid))
+    replyTarget := "harbour.harbour-whatsapp / harbour.whatsapp.Gui replyFromNotification "
+    if isDaemon {
+        replyTarget = "harbour.whatsapp.backend / harbour.whatsapp.Backend Reply "
+    }
+    hints["x-nemo-remote-action-reply"] = dbus.MakeVariant(replyTarget + qvariantStringB64(chatJid))
     hints["x-nemo-remote-action-type-reply"] = dbus.MakeVariant("input")
     // Tippen auf den Eintrag oeffnet die Konversation: default-Aktion an
     // den GUI-Namen - laeuft die App nicht, startet sailjaild sie (ExecDBus)
@@ -301,6 +304,12 @@ func (replyService) Reply(chatJid string, text string) *dbus.Error {
 // harbour.harbour-whatsapp) und exportiert Reply. Retry, weil der Name
 // waehrend einer Takeover-Uebergabe noch dem Vorgaenger gehoeren kann.
 func startReplyService() {
+    // Nur der Daemon besitzt harbour.whatsapp.backend (Grant via
+    // Daemon-Desktop-File). Laeuft die App, beantwortet die GUI den
+    // Reply ueber ihren eigenen Namen - das Kind-Backend braucht keinen
+    if !isDaemon {
+        return
+    }
     for i := 0; i < 40; i++ {
         conn, err := dbus.SessionBus()
         if err == nil {

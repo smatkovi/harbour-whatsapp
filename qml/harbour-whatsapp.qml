@@ -43,6 +43,9 @@ ApplicationWindow {
         id: python
         
         Component.onCompleted: {
+        python.call('start_backend.installed_version', [], function(v) {
+            installedVersion = v || ""
+        })
             addImportPath(Qt.resolvedUrl('..'))
             
             setHandler('backendReady', function(success, port) {
@@ -95,6 +98,22 @@ ApplicationWindow {
         function openChat(jid) {
             openChatExternal(jid)
         }
+        function replyFromNotification(jid, text) {
+            // lipstick haengt den getippten Text als zweites Argument an;
+            // Senden ueber /send (identisches Local-Echo), /chat/opened
+            // schliesst die Benachrichtigung und markiert gelesen
+            if (!text) return
+            var xhr = new XMLHttpRequest()
+            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/send?to=" + jid
+                     + "&text=" + encodeURIComponent(text))
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState !== 4) return
+                var c = new XMLHttpRequest()
+                c.open("GET", "http://127.0.0.1:" + backendPort + "/chat/opened?jid=" + jid)
+                c.send()
+            }
+            xhr.send()
+        }
     }
 
     function openChatExternal(jid) {
@@ -131,6 +150,8 @@ ApplicationWindow {
 
     // ---- Live-Standort-Freigabe (app-weit, ueberlebt Seitenwechsel) ----
     property bool   daemonRunning: false
+    property string backendVersion: ""
+    property string installedVersion: ""
     property bool   liveActive: false
     property string liveChatJid: ""
     property double liveUntil: 0
@@ -402,7 +423,19 @@ ApplicationWindow {
     }
 
 
+    property int backendLossCount: 0
+
     function rescanBackendPort() {
+        // Totalverlust (z.B. Daemon per Terminal disabled, waehrend die App
+        // offen war - frueher blieb sie backendlos bis zum Neustart): nach
+        // drei erfolglosen Zyklen selbst ein Kind-Backend nachstarten
+        backendLossCount++
+        if (backendLossCount === 3) {
+            console.log("Backend lost entirely - respawning child backend")
+            python.call('start_backend.start', [], function() {})
+        }
+        if (backendLossCount > 12) backendLossCount = 4 // Zaehler deckeln
+
         // Backend kann auf 8085-8089 liegen; falls der gemerkte Port tot ist
         // (z.B. Launcher-Timeout, Backend kam spaeter auf anderem Port hoch),
         // alle Kandidaten durchprobieren
@@ -416,6 +449,7 @@ ApplicationWindow {
                         console.log("Backend rediscovered on port " + port)
                         backendPort = port
                         backendFailed = false
+                        backendLossCount = 0
                         checkStatus()
                     }
                 }
@@ -432,6 +466,7 @@ ApplicationWindow {
                 rescanBackendPort()
             }
             if (xhr.readyState === 4 && xhr.status === 200) {
+                backendLossCount = 0
                 var data = JSON.parse(xhr.responseText)
                 var wasConnected = connected
                 connected = data.connected
@@ -441,6 +476,7 @@ ApplicationWindow {
                 lastError = data.lastError || ""
                 paired = data.paired === true
                 daemonRunning = data.daemon === true
+                backendVersion = data.version || ""
                 if (!prefsLoaded && connState !== "starting") {
                     loadPrefs()
                 }
@@ -1279,7 +1315,12 @@ Label {
                         wrapMode: Text.Wrap
                         font.pixelSize: Theme.fontSizeSmall
                         color: daemonRunning ? Theme.highlightColor : Theme.secondaryColor
+                        property bool versionLag: daemonRunning && installedVersion !== ""
+                                                  && backendVersion !== "" && backendVersion !== installedVersion
                         text: "Background daemon: " + (daemonRunning ? "running" : "not running")
+                              + (versionLag ? ("\u26a0 running version " + backendVersion
+                                 + ", installed is " + installedVersion
+                                 + " - restart the daemon (command below)") : "")
                         visible: notifySwitch.checked || daemonRunning || downloadPrefs["daemon_autostart"] === "1"
                     }
 
@@ -1321,6 +1362,27 @@ Label {
                             font.family: "monospace"
                             color: Theme.primaryColor
                             text: "systemctl --user enable --now harbour-whatsapp-daemon.service"
+                        }
+                    }
+
+                    BackgroundItem {
+                        visible: daemonRunning && installedVersion !== ""
+                                 && backendVersion !== "" && backendVersion !== installedVersion
+                        height: restartCmdLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            Clipboard.text = "systemctl --user restart harbour-whatsapp-daemon.service"
+                            globalNotice = "Restart command copied - paste in Terminal"
+                        }
+                        Label {
+                            id: restartCmdLabel
+                            x: Theme.horizontalPageMargin
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - 2*Theme.horizontalPageMargin
+                            wrapMode: Text.WrapAnywhere
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            font.family: "monospace"
+                            color: Theme.primaryColor
+                            text: "systemctl --user restart harbour-whatsapp-daemon.service"
                         }
                     }
 

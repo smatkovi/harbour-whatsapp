@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.90
+Version:    0.9.93
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -42,6 +42,7 @@ cp -r %{_sourcedir}/qml/* %{buildroot}/usr/share/harbour-whatsapp/qml/
 # Desktop file
 mkdir -p %{buildroot}/usr/share/applications
 install -m 644 %{_sourcedir}/harbour-whatsapp.desktop %{buildroot}/usr/share/applications/
+echo %{version} > %{buildroot}/usr/share/harbour-whatsapp/VERSION
 install -m 644 %{_sourcedir}/harbour-whatsapp-daemon.desktop %{buildroot}/usr/share/applications/
 # Daemon-Binary: sailjail verlangt ein ELF (kein Skript) in /usr/bin -
 # Hardlink auf das Backend, cpio dedupliziert (kein Groessenzuwachs)
@@ -59,6 +60,7 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 /usr/lib/systemd/user/harbour-whatsapp-daemon.service
 /usr/share/applications/harbour-whatsapp-daemon.desktop
+/usr/share/harbour-whatsapp/VERSION
 /usr/bin/harbour-whatsapp-daemon
 
 %post
@@ -67,7 +69,10 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 # Schluessel muessen daher idempotent nachgeruestet werden, sonst fehlt
 # dem Jail die dbus-Erlaubnis (Reply) bzw. die Aktivierung (Tap-Kaltstart)
 D=/usr/share/applications/harbour-whatsapp.desktop
-grep -q '^X-Maemo-Service=' $D || sed -i '/^\[X-Sailjail\]/i X-Maemo-Service=harbour.whatsapp.backend' $D
+# X-Maemo-Service im HAUPT-Desktop lenkt den Icon-Start auf einen
+# D-Bus-Ruf um und macht die App vom Launcher aus unstartbar (0.9.90-
+# Lehrstueck) - die Zeile gehoert nur ins Daemon-Desktop-File
+sed -i '/^X-Maemo-Service=/d' $D
 grep -q '^ExecDBus=' $D || printf 'ExecDBus=/usr/bin/sailjail -p harbour-whatsapp.desktop -- /usr/bin/sailfish-qml harbour-whatsapp\n' >> $D
 
 # gst-launch am exec-erlaubten Ort verfuegbar machen (Voice-Aufnahme):
@@ -81,6 +86,54 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Jul 18 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.93-1
+- Daemon lifecycle hardened for switching at will: running the
+  disable command in the Terminal while the app was open killed the
+  daemon the GUI was attached to and left the app backend-less until
+  restart (only the notifications-toggle path respawned). The GUI
+  now detects total backend loss - three consecutive failed status
+  cycles including fruitless port rescans - and respawns a child
+  backend by itself; the counter resets on every successful status
+  so sporadic hiccups never accumulate into a spurious respawn.
+  Enable/disable/re-enable now cycles cleanly in every order and
+  from either place (settings toggle or Terminal)
+
+* Sat Jul 18 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.92-1
+- Update-lag detection for daemon users: jails and binaries are
+  composed at process start, and RPM does not restart user units -
+  so a running daemon silently stays on the old version after every
+  app update. The app now knows its installed version (packaged
+  VERSION file) and, when the daemon it talks to reports a different
+  one, the daemon status line shows a warning and a tap-to-copy
+  restart command appears. Without the daemon nothing changes: the
+  child backend dies with the app and every app start is fully
+  current automatically
+
+* Sat Jul 18 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.92-1
+- Update-lag detection for the daemon: jails and binaries are
+  composed at process start, and RPM updates never restart user
+  units - so a running daemon silently keeps serving the OLD version
+  after every update (yesterday's lesson). The app now ships its
+  version as a file, compares it against the version of the backend
+  it talks to, and when the running daemon is older, the settings
+  show a warning plus a tap-to-copy restart command. Enabling the
+  daemon itself needs no desktop rewriting: the daemon desktop file
+  is plainly packaged (never user-modified, replaced on every
+  update) and its jail is composed fresh at daemon start
+
+* Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.91-1
+- App launches from the icon again: X-Maemo-Service in the MAIN
+  desktop file makes lipstick "launch" the app via a D-Bus call
+  instead of Exec - which goes nowhere on icon tap (manual sailjail
+  launch worked, proving the file parsed fine). The key now lives
+  ONLY in the daemon desktop file (NoDisplay, never icon-launched),
+  and %post removes it from installed main desktop files
+- Reply architecture split by mode: the daemon owns
+  harbour.whatsapp.backend and answers directly (app closed); while
+  the app runs, the notification reply targets the GUI's own bus
+  name (replyFromNotification), which sends via the backend and
+  closes the notification - no bus name needed in the child jail
+
 * Fri Jul 17 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.90-1
 - Notification reply repaired on updated installs: the main desktop
   file is %config(noreplace) so user permission grants survive
