@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.95
+Version:    0.9.96
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -86,6 +86,17 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Jul 18 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.96-1
+- Startup race fixed (found through a field log): the installed-
+  version query ran in the root Component.onCompleted while
+  importModule was still in flight - fast devices won the race,
+  slower ones (Xperia 10 III report) logged a scary NameError before
+  the import finished, and 0.9.94 instantly painted it as "module
+  failed to load". The query now runs inside the import callback,
+  onError only collects while the import is pending, and the 6s
+  watchdog is the sole judge - showing the LAST real error verbatim
+  (tap to copy) only if the import truly never completes
+
 * Sat Jul 18 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.95-1
 - The startup/pairing error message is tappable now and copies
   itself to the clipboard ("tap to copy") - multi-line import

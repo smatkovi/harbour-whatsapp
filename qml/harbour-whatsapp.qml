@@ -43,9 +43,6 @@ ApplicationWindow {
         id: python
         
         Component.onCompleted: {
-        python.call('start_backend.installed_version', [], function(v) {
-            installedVersion = v || ""
-        })
             addImportPath(Qt.resolvedUrl('..'))
             
             setHandler('backendReady', function(success, port) {
@@ -67,6 +64,9 @@ ApplicationWindow {
             importModule('start_backend', function() {
                 pythonReady = true
                 call('start_backend.start', [])
+                call('start_backend.installed_version', [], function(v) {
+                    installedVersion = v || ""
+                })
             })
             importWatchdog.start()
             reportTimer.start()
@@ -78,16 +78,14 @@ ApplicationWindow {
         
         onError: {
             console.log("Python error:", traceback)
-            if (!pythonReady) {
-                // Der erste Fehler vor erfolgreichem Import IST der
-                // Import-Traceback - genau die Zeile, die uns Nutzer-
-                // Reports bisher nie liefern konnten (nur Konsole)
-                backendFailed = true
-                pairErrorMsg = "Python module failed to load:\n" + traceback
-                             + "\nPlease report this text."
-            }
+            // Nicht sofort urteilen: fruehe Aufrufe koennen den async-Import
+            // ueberholen (harmlose Race auf langsamen Geraeten). Der Waechter
+            // zeigt den letzten Fehler, falls der Import wirklich scheitert.
+            if (!pythonReady) lastPythonError = traceback
         }
     }
+
+    property string lastPythonError: ""
 
     property bool pythonReady: false
 
@@ -98,10 +96,13 @@ ApplicationWindow {
         onTriggered: {
             if (!pythonReady && pairErrorMsg === "") {
                 backendFailed = true
-                pairErrorMsg = "Python module start_backend did not load "
-                             + "(no error reported). Check that "
-                             + "/usr/share/harbour-whatsapp/start_backend.py "
-                             + "exists and report your Sailfish OS version."
+                pairErrorMsg = lastPythonError !== ""
+                    ? ("Python module failed to load:\n" + lastPythonError
+                       + "\nPlease report this text.")
+                    : ("Python module start_backend did not load "
+                       + "(no error reported). Check that "
+                       + "/usr/share/harbour-whatsapp/start_backend.py "
+                       + "exists and report your Sailfish OS version.")
             }
         }
     }
