@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.96
+Version:    0.9.97
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -86,6 +86,16 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Jul 18 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.97-1
+- Message edits (OpenRepos report): the receive pipeline existed
+  end to end (backend replaces text and sets the edited flag, the
+  chat shows "edited" next to the time) - but the edit handler
+  ignored the update result and logged nothing, so a non-matching
+  message ID vanished without a trace. Every received edit now
+  leaves a log line (found or not, or unhandled shape), and edited
+  image/video captions are extracted too. If the reported case
+  recurs, the backend log will name the reason verbatim
+
 * Sat Jul 18 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.96-1
 - Startup race fixed (found through a field log): the installed-
   version query ran in the root Component.onCompleted while

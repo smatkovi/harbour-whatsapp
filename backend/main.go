@@ -1527,11 +1527,24 @@ func eventHandler(evt interface{}) {
                     if newText == "" {
                         newText = em.GetExtendedTextMessage().GetText()
                     }
+                    // Caption-Edits: bearbeitete Bild-/Video-Beschriftungen
+                    if newText == "" {
+                        newText = em.GetImageMessage().GetCaption()
+                    }
+                    if newText == "" {
+                        newText = em.GetVideoMessage().GetCaption()
+                    }
+                    editID := pm.GetKey().GetID()
                     if newText != "" {
-                        updateMessage("", pm.GetKey().GetID(), func(m *Message) {
+                        found := updateMessage("", editID, func(m *Message) {
                             m.Text = newText
                             m.Edited = true
                         })
+                        // Stille war hier schon einmal ein Fehler: jeder
+                        // Edit hinterlaesst eine Logspur, gefunden oder nicht
+                        fmt.Printf("✏️ edit for %s (found=%v): %.60q\n", editID, found, newText)
+                    } else {
+                        fmt.Printf("✏️ edit for %s with EMPTY text - unhandled shape: %v\n", editID, em)
                     }
                 }
                 return
