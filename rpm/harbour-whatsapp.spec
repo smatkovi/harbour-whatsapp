@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.97
+Version:    0.9.98
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -86,6 +86,22 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sun Jul 19 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.98-1
+- Notifications carry x-nemo-item-count with the real per-chat
+  count (OpenRepos report: switcher badge patch always showed 1) -
+  badge patches sum item counts instead of counting entries
+
+* Sun Jul 19 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.97-1
+- backend.log is trimmed to the last 128 KB at startup once it
+  exceeds 512 KB (field report: 600 KB and growing) - deleting it
+  manually remains safe at any time
+- The "file is not a database" startup error now prints its own
+  remedy into the log: delete ~/.local/share/harbour/harbour-whatsapp
+  (NOT the unused legacy path without /harbour/) and pair again -
+  exactly the guidance whose absence cost a three-comment support
+  round. Message edit handling itself already exists (text, extended
+  text, image/video captions, with a guaranteed log line per edit)
+
 * Sat Jul 18 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.97-1
 - Message edits (OpenRepos report): the receive pipeline existed
   end to end (backend replaces text and sets the edited flag, the

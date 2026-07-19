@@ -219,6 +219,9 @@ func notifyIncoming(chatJid, title, preview string) {
         "x-nemo-preview-summary": dbus.MakeVariant(title),
         "x-nemo-preview-body":    dbus.MakeVariant(body),
         "category":               dbus.MakeVariant("x-nemo.messaging.im"),
+        // echte Anzahl je Chat-Eintrag - Switcher-Badge-Patches u.ae.
+        // summieren item-counts statt Eintraege zu zaehlen
+        "x-nemo-item-count":      dbus.MakeVariant(int32(count)),
     }
     // Ton und Vibration getrennt schaltbar: die x-nemo-feedback-Liste
     // benennt ngfd-Ereignisse ("chat" = Ton, "vibra" = Vibration); das
@@ -2592,6 +2595,12 @@ func main() {
     // Initialize encrypted database
     if err := initDatabase(); err != nil {
         fmt.Printf("❌ Database error: %v\n", err)
+        // Selbsthilfe direkt ins Log: die haeufigste Ursache ist eine
+        // unlesbare wa.db (alter Klartext-Bestand oder fremder Schluessel) -
+        // ohne diesen Hinweis kostete genau dieser Fall drei Support-Runden
+        if strings.Contains(err.Error(), "not a database") {
+            fmt.Println("💡 wa.db is unreadable (old install or wrong key). Fresh start: delete ~/.local/share/harbour/harbour-whatsapp (NOT ~/.local/share/harbour-whatsapp - that legacy folder is unused) and pair again.")
+        }
         return
     }
     fmt.Println("🔐 Database initialized with encryption")

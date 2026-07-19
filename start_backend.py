@@ -303,6 +303,19 @@ def start():
     # which made the login disappear on every app restart.
     data_dir = os.path.expanduser("~/.local/share/harbour/harbour-whatsapp")
     os.makedirs(data_dir, exist_ok=True)
+    # backend.log wuchs bisher unbegrenzt (Feldbericht: 600 kB) - beim
+    # Start auf die letzten 128 kB stutzen, Kopfzeile markiert den Schnitt
+    try:
+        logp = os.path.join(data_dir, "backend.log")
+        if os.path.exists(logp) and os.path.getsize(logp) > 512 * 1024:
+            with open(logp, "rb") as f:
+                f.seek(-128 * 1024, os.SEEK_END)
+                tail = f.read()
+            with open(logp, "wb") as f:
+                f.write(b"[log trimmed at startup]\n")
+                f.write(tail)
+    except Exception:
+        pass
     # Die fruehere Einmal-Migration aus ~/.local/share/harbour-whatsapp ist
     # entfernt: sie hat nach "Reset & pair again" die dort liegende uralte
     # Klartext-wa.db immer wieder zurueckkopiert und so eine Endlosschleife
