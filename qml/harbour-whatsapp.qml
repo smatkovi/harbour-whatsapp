@@ -4599,6 +4599,15 @@ Label {
                     TextArea {
                         id: input
                         width: parent.width - sendBtn.width - parent.children[0].width
+                        // Wachstum bei ~5 Zeilen deckeln (OpenRepos-Wunsch:
+                        // lange Texte fuellten den ganzen Schirm) - darueber
+                        // scrollt der Inhalt innerhalb des Felds. Zeilenhoehe
+                        // aus font.pixelSize genaehert (~1.4x) statt
+                        // FontMetrics: der Typ braucht QtQuick 2.4+ und
+                        // liess die gesamte QML-Ladung sterben (weisser
+                        // Schirm auf dem Geraet)
+                        height: Math.min(implicitHeight,
+                                         Math.ceil(font.pixelSize * 1.4) * 5 + Theme.paddingLarge * 2)
                         placeholderText: inputRow.recording
                                          ? ("Recording… " + Math.floor(inputRow.recSeconds / 60)
                                             + ":" + (inputRow.recSeconds % 60 < 10 ? "0" : "")

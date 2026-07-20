@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.100
+Version:    0.9.102
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -92,6 +92,19 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.102-1
+- White-screen hotfix for 0.9.101: the five-line input cap used
+  FontMetrics, a type that requires QtQuick 2.4 while the app
+  imports QtQuick 2.0 - the unknown type killed the entire QML load.
+  The cap now derives the line height from font.pixelSize (x1.4),
+  no new types, same five-line behaviour at any text size
+
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.101-1
+- The growing message input stops at about five lines (OpenRepos
+  follow-up: long texts filled the whole screen) - beyond that the
+  content scrolls inside the field; the cap follows the actual font
+  metrics, so it stays five lines at any text size
+
 * Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.100-1
 - Multi-line message input (OpenRepos request): the chat input is a
   growing TextArea now - Enter inserts a new line by default and
