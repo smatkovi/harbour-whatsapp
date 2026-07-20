@@ -114,6 +114,7 @@ ApplicationWindow {
     // ohne Einstellung wird die Kontaktdatenbank nie angefasst
     property bool contactsOptIn: false
     property bool notificationsEnabled: false
+    property bool sendByEnter: false
 
     // Tippen auf eine Benachrichtigung: lipstick ruft openChat(jid) am
     // kanonischen Busnamen (harbour.harbour-whatsapp) - laeuft die App
@@ -284,6 +285,7 @@ ApplicationWindow {
                 var p = JSON.parse(xhr.responseText) || {}
                 contactsOptIn = p.contactSuggestions === "1"
                 notificationsEnabled = p.notifications === "1"
+                sendByEnter = p.send_by_enter === "1"
                 prefsLoaded = true
             } else {
                 globalPrefsRetry.start()
@@ -1169,6 +1171,7 @@ ApplicationWindow {
             // den Auto-Download-Boxen als unzuverlaessig erwiesen
             onDownloadPrefsChanged: {
                 notifySwitch.checked = downloadPrefs["notifications"] === "1"
+                sendByEnterSwitch.checked = downloadPrefs["send_by_enter"] === "1"
                 notifSoundSwitch.checked = downloadPrefs["notif_sound"] !== "0"
                 notifVibrateSwitch.checked = downloadPrefs["notif_vibrate"] !== "0"
             }
@@ -1234,6 +1237,23 @@ ApplicationWindow {
                         onClicked: {
                             contactsOptIn = !contactsOptIn
                             setPref("contactSuggestions", contactsOptIn ? "1" : "0")
+                        }
+                    }
+
+                    SectionHeader { text: "Chat input" }
+
+                    TextSwitch {
+                        id: sendByEnterSwitch
+                        text: "Send by Enter"
+                        description: "Enter sends the message instead of adding "
+                                   + "a new line (sending by button always works)"
+                        checked: false
+                        onClicked: {
+                            sendByEnter = checked
+                            var p = downloadPrefs
+                            p["send_by_enter"] = checked ? "1" : "0"
+                            downloadPrefs = p
+                            setPref("send_by_enter", checked ? "1" : "0")
                         }
                     }
 
@@ -4576,7 +4596,7 @@ Label {
                         }
                     }
 
-                    TextField {
+                    TextArea {
                         id: input
                         width: parent.width - sendBtn.width - parent.children[0].width
                         placeholderText: inputRow.recording
@@ -4585,7 +4605,19 @@ Label {
                                             + (inputRow.recSeconds % 60))
                                          : "Message..."
                         enabled: !inputRow.recording
-                        EnterKey.onClicked: send()
+                        // Send by Enter ist Opt-in (Settings): default fuegt
+                        // Enter eine neue Zeile ein, gesendet wird per Knopf
+                        EnterKey.iconSource: sendByEnter ? "image://theme/icon-m-enter-accept"
+                                                         : "image://theme/icon-m-enter"
+                        EnterKey.onClicked: {
+                            if (sendByEnter) {
+                                send()
+                            } else {
+                                var p = cursorPosition
+                                text = text.slice(0, p) + "\n" + text.slice(p)
+                                cursorPosition = p + 1
+                            }
+                        }
                         backgroundStyle: TextEditor.NoBackground
                         onTextChanged: updateMentionToken()
                     }

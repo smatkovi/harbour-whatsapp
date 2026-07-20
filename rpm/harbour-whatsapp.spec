@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.98
+Version:    0.9.100
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -15,8 +15,14 @@ Requires:   nemo-qml-plugin-contacts-qt5
 Requires:   pyotherside-qml-plugin-python3-qt5
 # Voice-Aufnahme: der Rekorder wird bei der Installation an einen
 # exec-erlaubten Ort gebuendelt - ohne dieses Paket lief %post ins Leere
-# und die Aufnahme scheiterte mit einem irrefuehrenden Errno 13
+# und die Aufnahme scheiterte mit einem irrefuehrenden Errno 13.
+# Nur aarch64 als harte Abhaengigkeit: auf aelteren armv7hl/i486-Geraeten
+# (XA2-Feldbericht: "Error during install") kann das Paket in den Repos
+# fehlen und wuerde die GESAMTE Installation blockieren - dort greift
+# stattdessen die Laufzeit-Kette mit ihrer praezisen Install-Anweisung
+%ifarch aarch64
 Requires:   gstreamer1.0-tools
+%endif
 #Requires:   sqlcipher (statisch gelinkt)
 
 %description
@@ -86,6 +92,22 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.100-1
+- Multi-line message input (OpenRepos request): the chat input is a
+  growing TextArea now - Enter inserts a new line by default and
+  sending happens via the button, like the native Messages app. For
+  the old behaviour there is an opt-in "Send by Enter" switch in
+  Settings (default off); the enter key icon reflects the mode
+
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.99-1
+- The gstreamer1.0-tools dependency is aarch64-only now: on older
+  armv7hl/i486 devices (XA2 field report: "Error during install")
+  the package can be missing from the configured repos, and a hard
+  Requires blocked the entire installation. On those architectures
+  the app installs cleanly again; if the recorder is absent, voice
+  recording explains the exact one-line install command at runtime
+  (the 0.9.88 fallback chain) instead of the store refusing upfront
+
 * Sun Jul 19 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.98-1
 - Notifications carry x-nemo-item-count with the real per-chat
   count (OpenRepos report: switcher badge patch always showed 1) -
