@@ -12,7 +12,7 @@ import io.thp.pyotherside 1.5
 
 ApplicationWindow {
     id: app
-    initialPage: mainPage
+    initialPage: archPageItem
     cover: undefined
 
     property bool connected: false
@@ -100,6 +100,19 @@ ApplicationWindow {
 
                     PageHeader { title: "More settings" }
 
+                    ComboBox {
+                        label: "Tiles per row"
+                        description: "Grid view only"
+                        currentIndex: gridColumns - 2
+                        menu: ContextMenu {
+                            MenuItem { text: "2"; onClicked: { gridColumns = 2; setPref("grid_columns", "2") } }
+                            MenuItem { text: "3"; onClicked: { gridColumns = 3; setPref("grid_columns", "3") } }
+                            MenuItem { text: "4"; onClicked: { gridColumns = 4; setPref("grid_columns", "4") } }
+                            MenuItem { text: "5"; onClicked: { gridColumns = 5; setPref("grid_columns", "5") } }
+                            MenuItem { text: "6"; onClicked: { gridColumns = 6; setPref("grid_columns", "6") } }
+                        }
+                    }
+
                     TextSwitch {
                         text: "Chat grid view"
                         description: "Show chats as tiles with the avatar as "
@@ -152,6 +165,7 @@ ApplicationWindow {
     property bool notificationsEnabled: false
     property bool sendByEnter: false
     property bool chatGridView: false
+    property int gridColumns: 3
 
     // Tippen auf eine Benachrichtigung: lipstick ruft openChat(jid) am
     // kanonischen Busnamen (harbour.harbour-whatsapp) - laeuft die App
@@ -180,6 +194,15 @@ ApplicationWindow {
             }
             xhr.send()
         }
+    }
+
+    function chatSettingFor(jid, action) {
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chatsetting?chat=" + jid + "&action=" + action)
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) loadChats()
+        }
+        xhr.send()
     }
 
     function openChatExternal(jid) {
@@ -324,6 +347,7 @@ ApplicationWindow {
                 notificationsEnabled = p.notifications === "1"
                 sendByEnter = p.send_by_enter === "1"
                 chatGridView = p.chat_grid === "1"
+                gridColumns = Math.max(2, Math.min(6, parseInt(p.grid_columns || "3")))
                 prefsLoaded = true
             } else {
                 globalPrefsRetry.start()
@@ -712,19 +736,14 @@ ApplicationWindow {
         }
         onStatusChanged: updateAttachedStatus()
 
-        // Kachel-Ansicht (More settings): Avatar als Hintergrund, Name als
-        // Band unten, Ungelesen-Badge oben rechts. Langdruck-Menue gibt es
-        // nur in der Listen-Ansicht - die Kacheln sind bewusst schlicht
-        SilicaGridView {
+        // Kachel-Ansicht als ListView aus Reihen: nur so verdraengt das
+        // Langdruck-Menue die Folgereihen nativ (GridView layoutet stur
+        // nach cellHeight - ListItem-Delegates wachsen und schieben)
+        SilicaListView {
             id: chatGrid
             anchors.fill: parent
-            // Nur der gesunde Fall gehoert dem Grid - Starten, Pairing und
-            // alle Fehlerzustaende zeigen die Liste mit ihrem vollstaendigen
-            // Status-Header (BusyIndicator, secrets/relogin-UI, Fehlertexte)
             visible: chatGridView && connected
-            model: (connected && chatGridView) ? chats : null
-            cellWidth: width / 3
-            cellHeight: cellWidth
+            model: (connected && chatGridView) ? Math.ceil(chats.length / gridColumns) : 0
 
             header: Column {
                 width: parent.width
@@ -739,8 +758,6 @@ ApplicationWindow {
                 }
             }
 
-            // Identisches Pulley wie die Listen-Ansicht - die erste Fassung
-            // hatte nur Logout/Reload und sperrte aus den Settings aus
             PullDownMenu {
                 MenuItem {
                     text: "Logout"
@@ -814,65 +831,101 @@ ApplicationWindow {
                 }
             }
 
-            delegate: BackgroundItem {
-                width: chatGrid.cellWidth
-                height: chatGrid.cellHeight
-                opacity: modelData.archived ? 0.45 : 1.0
-                onClicked: pageStack.push(chatPage, {
-                    chatJid: modelData.jid,
-                    chatName: getDisplayName(modelData.jid, modelData.name),
-                    chatAvatar: modelData.avatar || "",
-                    isChannel: modelData.isChannel === true
-                })
+            delegate: ListItem {
+                id: gridRow
+                width: chatGrid.width
+                contentHeight: chatGrid.width / gridColumns
+                property var rowChats: chats.slice(index * gridColumns, (index + 1) * gridColumns)
+                property var menuChat: ({})
 
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: Theme.paddingSmall / 2
-                    color: Theme.rgba(Theme.highlightBackgroundColor, 0.15)
-
-                    Image {
-                        anchors.fill: parent
-                        source: modelData.avatar || ""
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                    }
-
-                    Rectangle {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.bottom: parent.bottom
-                        height: nameLbl.height + Theme.paddingSmall
-                        color: Theme.rgba("black", 0.55)
-
-                        Label {
-                            id: nameLbl
-                            anchors.centerIn: parent
-                            width: parent.width - Theme.paddingSmall
-                            text: getDisplayName(modelData.jid, modelData.name)
-                            truncationMode: TruncationMode.Fade
-                            horizontalAlignment: Text.AlignHCenter
-                            font.pixelSize: Theme.fontSizeExtraSmall
-                            color: "white"
+                menu: Component {
+                    ContextMenu {
+                        MenuItem {
+                            text: (gridRow.menuChat.pinned ? "Remove from favorites" : "Add to favorites")
+                            onClicked: chatSettingFor(gridRow.menuChat.jid, gridRow.menuChat.pinned ? "unpin" : "pin")
+                        }
+                        MenuItem {
+                            text: (gridRow.menuChat.muted ? "Unmute" : "Mute")
+                            onClicked: chatSettingFor(gridRow.menuChat.jid, gridRow.menuChat.muted ? "unmute" : "mute")
+                        }
+                        MenuItem {
+                            text: (gridRow.menuChat.archived ? "Unarchive" : "Archive")
+                            onClicked: chatSettingFor(gridRow.menuChat.jid, gridRow.menuChat.archived ? "unarchive" : "archive")
                         }
                     }
+                }
 
-                    Rectangle {
-                        visible: (modelData.unread || 0) > 0
-                        anchors.top: parent.top
-                        anchors.right: parent.right
-                        anchors.margins: Theme.paddingSmall
-                        width: unreadLbl.width + Theme.paddingMedium
-                        height: unreadLbl.height + Theme.paddingSmall
-                        radius: height / 2
-                        color: Theme.highlightBackgroundColor
+                Row {
+                    anchors.top: parent.top
+                    Repeater {
+                        model: gridRow.rowChats
+                        delegate: BackgroundItem {
+                            id: gridTile
+                            width: chatGrid.width / gridColumns
+                            height: width
+                            opacity: modelData.archived ? 0.45 : 1.0
+                            onClicked: pageStack.push(chatPage, {
+                                chatJid: modelData.jid,
+                                chatName: getDisplayName(modelData.jid, modelData.name),
+                                chatAvatar: modelData.avatar || "",
+                                isChannel: modelData.isChannel === true
+                            })
+                            onPressAndHold: {
+                                gridRow.menuChat = modelData
+                                gridRow.openMenu()
+                            }
 
-                        Label {
-                            id: unreadLbl
-                            anchors.centerIn: parent
-                            text: modelData.unread || ""
-                            font.pixelSize: Theme.fontSizeExtraSmall
-                            font.bold: true
-                            color: Theme.primaryColor
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: Theme.paddingSmall / 2
+                                color: Theme.rgba(Theme.highlightBackgroundColor, 0.15)
+
+                                Image {
+                                    anchors.fill: parent
+                                    source: modelData.avatar || ""
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                }
+
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    height: nameLbl.height + Theme.paddingSmall
+                                    color: Theme.rgba("black", 0.55)
+
+                                    Label {
+                                        id: nameLbl
+                                        anchors.centerIn: parent
+                                        width: parent.width - Theme.paddingSmall
+                                        text: getDisplayName(modelData.jid, modelData.name)
+                                        truncationMode: TruncationMode.Fade
+                                        horizontalAlignment: Text.AlignHCenter
+                                        font.pixelSize: Theme.fontSizeExtraSmall
+                                        color: "white"
+                                    }
+                                }
+
+                                Rectangle {
+                                    visible: (modelData.unread || 0) > 0
+                                    anchors.top: parent.top
+                                    anchors.right: parent.right
+                                    anchors.margins: Theme.paddingSmall
+                                    width: unreadLbl.width + Theme.paddingMedium
+                                    height: unreadLbl.height + Theme.paddingSmall
+                                    radius: height / 2
+                                    color: Theme.highlightBackgroundColor
+
+                                    Label {
+                                        id: unreadLbl
+                                        anchors.centerIn: parent
+                                        text: modelData.unread || ""
+                                        font.pixelSize: Theme.fontSizeExtraSmall
+                                        font.bold: true
+                                        color: Theme.primaryColor
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1249,7 +1302,7 @@ ApplicationWindow {
                         onClicked: stopLiveShare()
                     }
                     MenuItem {
-                        text: modelData.pinned ? "Unpin" : "Pin"
+                        text: modelData.pinned ? "Remove from favorites" : "Add to favorites"
                         visible: modelData.jid !== "status"
                         onClicked: chatSetting(modelData.pinned ? "unpin" : "pin")
                     }
@@ -2700,6 +2753,176 @@ Label {
                     }
                 }
                 Item { width: 1; height: Theme.paddingLarge }
+            }
+        }
+    }
+
+    // Rechts-Wisch-Kette (Wurzel-Trick): der Stack startet mit
+    // Archive -> Favorites -> Chatliste (beim Start sofort durchgeschoben).
+    // Rechts wischen von der Liste = Favorites, nochmal = Archive; die
+    // Seiten sind persistente Items, weil Silica beim Zurueck-Wischen
+    // Component-Seiten zerstoeren wuerde. Links bleibt der Status.
+    Page {
+        id: favPageItem
+        onStatusChanged: if (status === PageStatus.Active) pageStack.pushAttached(mainPage)
+
+        SilicaListView {
+            anchors.fill: parent
+            header: PageHeader { title: "Favorites" }
+            model: chats.filter(function(c) { return c.pinned === true })
+
+            ViewPlaceholder {
+                enabled: parent.count === 0
+                text: "No favorites yet"
+                hintText: "Long-press a chat in the list and choose Pin - pinned chats appear here and sync to your other devices"
+            }
+
+            delegate: ListItem {
+                width: ListView.view.width
+                contentHeight: Theme.itemSizeMedium
+                menu: ContextMenu {
+                    MenuItem {
+                        text: "Remove from favorites"
+                        onClicked: chatSettingFor(modelData.jid, "unpin")
+                    }
+                    MenuItem {
+                        text: (modelData.muted ? "Unmute" : "Mute")
+                        onClicked: chatSettingFor(modelData.jid, modelData.muted ? "unmute" : "mute")
+                    }
+                    MenuItem {
+                        text: "Archive"
+                        onClicked: chatSettingFor(modelData.jid, "archive")
+                    }
+                }
+                onClicked: pageStack.push(chatPage, {
+                    chatJid: modelData.jid,
+                    chatName: getDisplayName(modelData.jid, modelData.name),
+                    chatAvatar: modelData.avatar || "",
+                    isChannel: modelData.isChannel === true
+                })
+
+                Image {
+                    id: favAvatar
+                    x: Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Theme.itemSizeSmall
+                    height: Theme.itemSizeSmall
+                    source: modelData.avatar || ""
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                }
+
+                Column {
+                    anchors.left: favAvatar.right
+                    anchors.leftMargin: Theme.paddingMedium
+                    anchors.right: favBadge.left
+                    anchors.rightMargin: Theme.paddingMedium
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Label {
+                        width: parent.width
+                        text: getDisplayName(modelData.jid, modelData.name)
+                        truncationMode: TruncationMode.Fade
+                        color: highlighted ? Theme.highlightColor : Theme.primaryColor
+                    }
+                    Label {
+                        width: parent.width
+                        text: modelData.lastMessage || ""
+                        truncationMode: TruncationMode.Fade
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                    }
+                }
+
+                Rectangle {
+                    id: favBadge
+                    visible: (modelData.unread || 0) > 0
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: favBadgeLbl.width + Theme.paddingMedium
+                    height: favBadgeLbl.height + Theme.paddingSmall
+                    radius: height / 2
+                    color: Theme.highlightBackgroundColor
+                    Label {
+                        id: favBadgeLbl
+                        anchors.centerIn: parent
+                        text: modelData.unread || ""
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        font.bold: true
+                    }
+                }
+            }
+        }
+    }
+
+    Page {
+        id: archPageItem
+        property bool stackBuilt: false
+        onStatusChanged: {
+            if (status !== PageStatus.Active) return
+            if (!stackBuilt) {
+                stackBuilt = true
+                pageStack.push(favPageItem, {}, PageStackAction.Immediate)
+                pageStack.push(mainPage, {}, PageStackAction.Immediate)
+            } else {
+                pageStack.pushAttached(favPageItem)
+            }
+        }
+
+        SilicaListView {
+            anchors.fill: parent
+            header: PageHeader { title: "Archive" }
+            model: chats.filter(function(c) { return c.archived === true })
+
+            ViewPlaceholder {
+                enabled: parent.count === 0
+                text: "No archived chats"
+                hintText: "Long-press a chat in the list and choose Archive"
+            }
+
+            delegate: BackgroundItem {
+                width: ListView.view.width
+                height: Theme.itemSizeMedium
+                onClicked: pageStack.push(chatPage, {
+                    chatJid: modelData.jid,
+                    chatName: getDisplayName(modelData.jid, modelData.name),
+                    chatAvatar: modelData.avatar || "",
+                    isChannel: modelData.isChannel === true
+                })
+
+                Image {
+                    id: arcAvatar
+                    x: Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Theme.itemSizeSmall
+                    height: Theme.itemSizeSmall
+                    source: modelData.avatar || ""
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                }
+
+                Column {
+                    anchors.left: arcAvatar.right
+                    anchors.leftMargin: Theme.paddingMedium
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Label {
+                        width: parent.width
+                        text: getDisplayName(modelData.jid, modelData.name)
+                        truncationMode: TruncationMode.Fade
+                        color: highlighted ? Theme.highlightColor : Theme.primaryColor
+                    }
+                    Label {
+                        width: parent.width
+                        text: modelData.lastMessage || ""
+                        truncationMode: TruncationMode.Fade
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                    }
+                }
             }
         }
     }

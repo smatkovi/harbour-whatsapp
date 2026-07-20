@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.107
+Version:    0.9.113
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -92,6 +92,61 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.113-1
+- Grid long-press menu displaces the tiles now: the grid is rebuilt
+  as a list of tile ROWS (GridView cannot displace - the effect
+  comes from growing ListItem delegates), so opening the menu on a
+  tile pushes the following rows apart natively, exactly like the
+  chat list. Same actions, per-tile long press
+- Favorites page has a long-press menu: Remove from favorites,
+  Mute/Unmute, Archive - with native displacement as well
+
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.112-1
+- Grid view has a long-press menu now (one shared ContextMenu for
+  all tiles, opening below the pressed row): the same actions as the
+  list - favorites, mute, archive
+- Both views name the favorites concept directly: the pin entry is
+  "Add to favorites" / "Remove from favorites" (pinning IS the
+  favorites mechanism, synced to other devices; pinned chats appear
+  on the right-swipe Favorites page)
+
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.111-1
+- Root-trick startup fixed (field find: app started at Archive with
+  two black orphan pages behind it): initialPage is applied
+  asynchronously, so pushing the stack in the window's onCompleted
+  raced it and Archive ended up ON TOP of the orphaned pushes. The
+  stack is now built on the root page's own first activation, where
+  the root is guaranteed to be in place - the app starts on the
+  chat list again, right-swipe reaches Favorites and Archive
+
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.110-1
+- Right-swipe navigation (the root-page trick): the page stack now
+  starts as Archive -> Favorites -> chat list, pushed through
+  immediately at launch - so swiping right from the chat list opens
+  Favorites and swiping again opens Archive, exactly the requested
+  direction, while Status stays one swipe to the left. The pages
+  are persistent items because Silica destroys component pages on
+  back-swipe; each page re-attaches its forward neighbour so the
+  cycle works indefinitely. The 0.9.108 left-side chain is removed
+- Tiles per row extends to 5 and 6 columns
+
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.109-1
+- Tiles per row is configurable (OpenRepos idea): 2, 3 or 4 columns
+  for the chat grid view, selectable in More settings, persisted
+  like every other preference. The sub-page talks only to root
+  properties and setPref - the 0.9.106 lesson, now policy
+
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.108-1
+- Favorites and Archive pages (OpenRepos idea), for both view
+  modes: the swipe chain behind the main view is now Status (one
+  swipe, as before), Favorites (two) and Archive (three). Favorites
+  shows the pinned chats (long-press Pin, synced to other devices),
+  Archive collects the archived ones as a proper page instead of
+  only dimmed list entries; both open chats directly and show
+  unread badges. Swiping right is Silica's back navigation, so the
+  chain lives on the left - the requested right-swipe direction is
+  not possible on Sailfish
+
 * Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.107-1
 - Grid view no longer hides startup and error states (field
   question: "no loading on the grid screen - are errors hidden
