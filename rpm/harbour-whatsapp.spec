@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.113
+Version:    0.9.114
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -92,6 +92,11 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.114-1
+- Archive page has its long-press menu too: Unarchive, Mute/Unmute
+  and the favorites toggle, with native displacement - completing
+  long-press parity across chat list, grid, Favorites and Archive
+
 * Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.113-1
 - Grid long-press menu displaces the tiles now: the grid is rebuilt
   as a list of tile ROWS (GridView cannot displace - the effect

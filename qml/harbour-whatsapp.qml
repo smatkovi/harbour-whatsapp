@@ -2881,9 +2881,23 @@ Label {
                 hintText: "Long-press a chat in the list and choose Archive"
             }
 
-            delegate: BackgroundItem {
+            delegate: ListItem {
                 width: ListView.view.width
-                height: Theme.itemSizeMedium
+                contentHeight: Theme.itemSizeMedium
+                menu: ContextMenu {
+                    MenuItem {
+                        text: "Unarchive"
+                        onClicked: chatSettingFor(modelData.jid, "unarchive")
+                    }
+                    MenuItem {
+                        text: (modelData.muted ? "Unmute" : "Mute")
+                        onClicked: chatSettingFor(modelData.jid, modelData.muted ? "unmute" : "mute")
+                    }
+                    MenuItem {
+                        text: (modelData.pinned ? "Remove from favorites" : "Add to favorites")
+                        onClicked: chatSettingFor(modelData.jid, modelData.pinned ? "unpin" : "pin")
+                    }
+                }
                 onClicked: pageStack.push(chatPage, {
                     chatJid: modelData.jid,
                     chatName: getDisplayName(modelData.jid, modelData.name),
