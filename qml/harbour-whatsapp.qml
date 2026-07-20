@@ -87,6 +87,42 @@ ApplicationWindow {
 
     property string lastPythonError: ""
 
+    Component {
+        id: extraSettingsPage
+        Page {
+            SilicaFlickable {
+                anchors.fill: parent
+                contentHeight: extraCol.height
+
+                Column {
+                    id: extraCol
+                    width: parent.width
+
+                    PageHeader { title: "More settings" }
+
+                    TextSwitch {
+                        text: "Chat grid view"
+                        description: "Show chats as tiles with the avatar as "
+                                   + "background instead of a list. The long-press "
+                                   + "menu (pin, mute, archive) stays available in "
+                                   + "the list view"
+                        checked: chatGridView
+                        automaticCheck: false
+                        onClicked: {
+                            // KEIN downloadPrefs hier: das gehoert der
+                            // Haupt-Settings-Seite - von dieser Root-Ebene
+                            // aus warf der Zugriff einen stillen
+                            // ReferenceError NACH dem visuellen Umschalten
+                            // und VOR setPref: Grid an, Save nie gesendet
+                            chatGridView = !chatGridView
+                            setPref("chat_grid", chatGridView ? "1" : "0")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     property bool pythonReady: false
 
     Timer {
@@ -115,6 +151,7 @@ ApplicationWindow {
     property bool contactsOptIn: false
     property bool notificationsEnabled: false
     property bool sendByEnter: false
+    property bool chatGridView: false
 
     // Tippen auf eine Benachrichtigung: lipstick ruft openChat(jid) am
     // kanonischen Busnamen (harbour.harbour-whatsapp) - laeuft die App
@@ -286,6 +323,7 @@ ApplicationWindow {
                 contactsOptIn = p.contactSuggestions === "1"
                 notificationsEnabled = p.notifications === "1"
                 sendByEnter = p.send_by_enter === "1"
+                chatGridView = p.chat_grid === "1"
                 prefsLoaded = true
             } else {
                 globalPrefsRetry.start()
@@ -300,17 +338,22 @@ ApplicationWindow {
         onTriggered: loadPrefs()
     }
 
-    function setPref(key, value, isRetry) {
+    function setPref(key, value, attempt) {
+        var n = attempt || 0
         var xhr = new XMLHttpRequest()
         xhr.open("GET", "http://127.0.0.1:" + backendPort + "/prefs/set?key=" + key
                  + "&value=" + encodeURIComponent(value))
         xhr.onreadystatechange = function() {
             if (xhr.readyState !== 4) return
             if (xhr.status === 200) return
-            if (!isRetry) {
-                // Backend startet evtl. noch (503) - einmal kurz spaeter erneut
+            // Backend laedt evtl. noch die Stores (503 "starting") - das
+            // kann nach einem App-Start mehrere Sekunden dauern; ein
+            // einzelner Retry verlor Einstellungen (Grid-View-Feldfund):
+            // UI zeigte den Schalter an, der Save verpuffte
+            if (n < 10) {
                 setPrefRetry.key = key
                 setPrefRetry.value = value
+                setPrefRetry.attempt = n + 1
                 setPrefRetry.start()
             } else {
                 globalNotice = "Saving setting failed: " + xhr.responseText
@@ -322,9 +365,10 @@ ApplicationWindow {
         id: setPrefRetry
         property string key
         property string value
+        property int attempt: 0
         interval: 1500
         repeat: false
-        onTriggered: setPref(key, value, true)
+        onTriggered: setPref(key, value, attempt)
     }
     
     // Landesvorwahl aus der eigenen Nummer ableiten (1/7 einstellig,
@@ -668,8 +712,176 @@ ApplicationWindow {
         }
         onStatusChanged: updateAttachedStatus()
 
+        // Kachel-Ansicht (More settings): Avatar als Hintergrund, Name als
+        // Band unten, Ungelesen-Badge oben rechts. Langdruck-Menue gibt es
+        // nur in der Listen-Ansicht - die Kacheln sind bewusst schlicht
+        SilicaGridView {
+            id: chatGrid
+            anchors.fill: parent
+            // Nur der gesunde Fall gehoert dem Grid - Starten, Pairing und
+            // alle Fehlerzustaende zeigen die Liste mit ihrem vollstaendigen
+            // Status-Header (BusyIndicator, secrets/relogin-UI, Fehlertexte)
+            visible: chatGridView && connected
+            model: (connected && chatGridView) ? chats : null
+            cellWidth: width / 3
+            cellHeight: cellWidth
+
+            header: Column {
+                width: parent.width
+                Label {
+                    visible: globalNotice !== ""
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2*x
+                    text: globalNotice
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.highlightColor
+                }
+            }
+
+            // Identisches Pulley wie die Listen-Ansicht - die erste Fassung
+            // hatte nur Logout/Reload und sperrte aus den Settings aus
+            PullDownMenu {
+                MenuItem {
+                    text: "Logout"
+                    visible: connected
+                    onClicked: logoutRemorse.execute("Logging out", doLogout, 15000)
+                }
+                MenuItem {
+                    text: "Reload"
+                    visible: connected
+                    onClicked: {
+                        var xhr = new XMLHttpRequest()
+                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/reload")
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState === 4) {
+                                loadWAContacts()
+                                loadChats()
+                            }
+                        }
+                        xhr.send()
+                    }
+                }
+                MenuItem {
+                    text: "Mark all as read"
+                    visible: {
+                        for (var i = 0; i < chats.length; i++)
+                            if ((chats[i].unread || 0) > 0) return true
+                        return false
+                    }
+                    onClicked: {
+                        var xhr = new XMLHttpRequest()
+                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chats/read-all")
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState === 4) loadChats()
+                        }
+                        xhr.send()
+                    }
+                }
+                MenuItem {
+                    text: "Settings"
+                    onClicked: pageStack.push(settingsPage)
+                }
+                MenuItem {
+                    text: "Profile"
+                    visible: connected
+                    onClicked: pageStack.push(profilePage)
+                }
+                MenuItem {
+                    text: "Search"
+                    visible: connected
+                    onClicked: pageStack.push(searchPage)
+                }
+                MenuItem {
+                    text: "Channels"
+                    visible: connected
+                    onClicked: pageStack.push(channelsPage)
+                }
+                MenuItem {
+                    text: "Join via link"
+                    visible: connected
+                    onClicked: pageStack.push(joinLinkPage)
+                }
+                MenuItem {
+                    text: "New group"
+                    visible: connected
+                    onClicked: pageStack.push(newGroupPage)
+                }
+                MenuItem {
+                    text: "New chat"
+                    visible: connected
+                    onClicked: pageStack.push(newChatPage)
+                }
+            }
+
+            delegate: BackgroundItem {
+                width: chatGrid.cellWidth
+                height: chatGrid.cellHeight
+                opacity: modelData.archived ? 0.45 : 1.0
+                onClicked: pageStack.push(chatPage, {
+                    chatJid: modelData.jid,
+                    chatName: getDisplayName(modelData.jid, modelData.name),
+                    chatAvatar: modelData.avatar || "",
+                    isChannel: modelData.isChannel === true
+                })
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: Theme.paddingSmall / 2
+                    color: Theme.rgba(Theme.highlightBackgroundColor, 0.15)
+
+                    Image {
+                        anchors.fill: parent
+                        source: modelData.avatar || ""
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                    }
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        height: nameLbl.height + Theme.paddingSmall
+                        color: Theme.rgba("black", 0.55)
+
+                        Label {
+                            id: nameLbl
+                            anchors.centerIn: parent
+                            width: parent.width - Theme.paddingSmall
+                            text: getDisplayName(modelData.jid, modelData.name)
+                            truncationMode: TruncationMode.Fade
+                            horizontalAlignment: Text.AlignHCenter
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: "white"
+                        }
+                    }
+
+                    Rectangle {
+                        visible: (modelData.unread || 0) > 0
+                        anchors.top: parent.top
+                        anchors.right: parent.right
+                        anchors.margins: Theme.paddingSmall
+                        width: unreadLbl.width + Theme.paddingMedium
+                        height: unreadLbl.height + Theme.paddingSmall
+                        radius: height / 2
+                        color: Theme.highlightBackgroundColor
+
+                        Label {
+                            id: unreadLbl
+                            anchors.centerIn: parent
+                            text: modelData.unread || ""
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            font.bold: true
+                            color: Theme.primaryColor
+                        }
+                    }
+                }
+            }
+        }
+
         SilicaListView {
             anchors.fill: parent
+            visible: !chatGridView || !connected
             model: connected ? chats : null
 
             PullDownMenu {
@@ -1237,6 +1449,18 @@ ApplicationWindow {
                         onClicked: {
                             contactsOptIn = !contactsOptIn
                             setPref("contactSuggestions", contactsOptIn ? "1" : "0")
+                        }
+                    }
+
+                    BackgroundItem {
+                        width: parent.width
+                        height: Theme.itemSizeSmall
+                        onClicked: pageStack.push(extraSettingsPage)
+                        Label {
+                            x: Theme.horizontalPageMargin
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "More settings \u203a"
+                            color: highlighted ? Theme.highlightColor : Theme.primaryColor
                         }
                     }
 

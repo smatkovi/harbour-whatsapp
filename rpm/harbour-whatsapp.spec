@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.102
+Version:    0.9.107
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -92,6 +92,53 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.107-1
+- Grid view no longer hides startup and error states (field
+  question: "no loading on the grid screen - are errors hidden
+  too?" - they were): the list header carries the busy indicator,
+  pairing UI, secrets/relogin recovery and the tap-to-copy error
+  text, and the grid covered all of it. The grid now only takes
+  over the healthy connected state; starting, pairing and every
+  error state automatically shows the list with its full status
+  header. Notices (e.g. "copied to clipboard") appear in a small
+  grid header meanwhile
+
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.106-1
+- Grid view setting truly persists now: the More-settings switch
+  touched downloadPrefs, a property that belongs to the main
+  settings PAGE - from the root-declared More-settings page that
+  access threw a silent ReferenceError after the visual toggle and
+  before setPref ever ran (diagnosed via curl: the key never
+  reached the backend). The switch now toggles and saves directly;
+  the 0.9.105 retry hardening stays as a genuine improvement it
+  turned out not to be the culprit of
+
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.105-1
+- Settings saved right after app start persist reliably now (field
+  find via the grid view toggle "not staying"): the backend answers
+  503 "starting" while its encrypted stores are still loading, which
+  can take several seconds after a launch - and setPref retried
+  exactly once after 1.5s, so the UI showed the toggled switch while
+  the save quietly evaporated. setPref now retries up to ten times
+  while the backend reports starting, and only then complains
+
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.104-1
+- Grid view carries the full pull-down menu now: the first version
+  had only Logout and Reload, which locked the user out of Settings
+  (and Search, Profile, Channels, New chat/group, Join via link,
+  Mark all as read) while grid mode was active - including the very
+  switch to turn grid mode off again
+
+* Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.103-1
+- More settings: a second settings page for less central options,
+  reachable via "More settings" on the main settings page
+- Chat grid view (OpenRepos request), first resident of that page:
+  chats as tiles, three per row, with the avatar as tile background,
+  the name on a dark band at the bottom and the unread badge in the
+  corner; archived chats are dimmed. Pull-down keeps Logout and
+  Reload; the long-press menu (pin, mute, archive) stays available
+  in the classic list view, which remains the default
+
 * Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.102-1
 - White-screen hotfix for 0.9.101: the five-line input cap used
   FontMetrics, a type that requires QtQuick 2.4 while the app
