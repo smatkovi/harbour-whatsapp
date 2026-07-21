@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.115
+Version:    0.9.120
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,47 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.120-1
+- View switcher nudged left (field iteration with all six column
+  buttons): the invisible left spacer shrinks from medium to
+  extra-small, moving the whole row away from the Status glow on
+  the right - there is more room on the left now that the row is
+  wider
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.119-1
+- The top view switcher offers all column counts now: list, 2, 3,
+  4, 5 and 6 - matching the full range from More settings
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.118-1
+- View switcher shifted right via an invisible left spacer (field
+  iteration: compacting alone did not move the hamburger far enough
+  out of the Favorites swipe zone) - the group's centre moves by
+  half the spacer width, keeping "4" away from the Status glow on
+  the right
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.117-1
+- View switcher compacted toward the centre (field find: the list
+  glyph sat close enough to the left edge to trigger the Favorites
+  peek, and the right edge belongs to the Status glow): narrower
+  buttons and tighter spacing keep the group clear of both swipe
+  indicator zones
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.117-1
+- View switcher is right-aligned now: centered, the list glyph sat
+  far enough left that sloppy taps turned into the back-swipe
+  gesture and landed on Favorites
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.116-1
+- Bottom navigation bar on the main page (OpenRepos idea): one-tap
+  access to Archive, Favorites and Status in both view modes; the
+  swipe gestures stay unchanged and "Chats" marks the current
+  location. Plain text buttons by design - Sailfish theme icon
+  names vary between OS versions and an invisible button is worse
+  than a written one
+- View switcher at the top of both views: list or grid with 2/3/4
+  columns, one tap, same preferences as More settings (where 5 and
+  6 columns remain available); the active choice is highlighted
+
 * Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.115-1
 - Tap-to-open from a closed app works for the first time (OpenRepos
   report + local reproduction): sailjaild wraps the ExecDBus line in

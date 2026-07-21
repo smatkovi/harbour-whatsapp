@@ -196,6 +196,66 @@ ApplicationWindow {
         }
     }
 
+    // Ansichts-Umschalter fuer beide Header: Liste oder Grid mit 2/3/4
+    // Spalten - Glyphen statt Theme-Icons (Icon-Namen variieren zwischen
+    // OS-Versionen; ein unsichtbarer Knopf waere der naechste Feldbericht)
+    Component {
+        id: viewSwitcherComp
+        Row {
+            height: Theme.itemSizeExtraSmall
+            // Kompakt in der MITTE: links wohnt der Favorites-Indikator,
+            // rechts der Status-Glow - rechtsbuendig war genauso falsch
+            // wie zu breit zentriert; schmale Knoepfe ruecken von beiden ab
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: Theme.paddingMedium
+
+            // Unsichtbarer Platzhalter links: schiebt die echte Gruppe aus
+            // der Favorites-Wischzone, ohne "4" an den Status-Rand zu
+            // druecken (die Mitte wandert nur um die halbe Breite)
+            Item {
+                width: Theme.itemSizeExtraSmall
+                height: 1
+            }
+
+            Repeater {
+                model: [
+                    { glyph: "\u2630", grid: false, cols: 0 },
+                    { glyph: "2", grid: true, cols: 2 },
+                    { glyph: "3", grid: true, cols: 3 },
+                    { glyph: "4", grid: true, cols: 4 },
+                    { glyph: "5", grid: true, cols: 5 },
+                    { glyph: "6", grid: true, cols: 6 }
+                ]
+                delegate: BackgroundItem {
+                    width: Theme.itemSizeExtraSmall
+                    height: Theme.itemSizeExtraSmall
+                    onClicked: {
+                        if (modelData.grid) {
+                            gridColumns = modelData.cols
+                            setPref("grid_columns", "" + modelData.cols)
+                            if (!chatGridView) {
+                                chatGridView = true
+                                setPref("chat_grid", "1")
+                            }
+                        } else if (chatGridView) {
+                            chatGridView = false
+                            setPref("chat_grid", "0")
+                        }
+                    }
+                    Label {
+                        anchors.centerIn: parent
+                        text: modelData.glyph
+                        font.pixelSize: Theme.fontSizeMedium
+                        color: (modelData.grid
+                                ? (chatGridView && gridColumns === modelData.cols)
+                                : !chatGridView)
+                               ? Theme.highlightColor : Theme.secondaryColor
+                    }
+                }
+            }
+        }
+    }
+
     function chatSettingFor(jid, action) {
         var xhr = new XMLHttpRequest()
         xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chatsetting?chat=" + jid + "&action=" + action)
@@ -736,17 +796,52 @@ ApplicationWindow {
         }
         onStatusChanged: updateAttachedStatus()
 
+        // Bodenleiste (OpenRepos-Idee): Ein-Tipp-Navigation zu Archive,
+        // Favorites und Status - die Wischgesten bleiben unveraendert.
+        // Textknoepfe statt Icon-Roulette; "Chats" markiert den Standort
+        Item {
+            id: navBar
+            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+            height: connected ? Theme.itemSizeExtraSmall : 0
+            visible: connected
+
+            Row {
+                anchors.fill: parent
+                Repeater {
+                    model: [ "Archive", "Favorites", "Chats", "Status" ]
+                    delegate: BackgroundItem {
+                        width: navBar.width / 4
+                        height: navBar.height
+                        enabled: modelData !== "Chats"
+                        onClicked: {
+                            if (modelData === "Archive") pageStack.pop(archPageItem)
+                            else if (modelData === "Favorites") pageStack.pop(favPageItem)
+                            else if (modelData === "Status") pageStack.navigateForward(PageStackAction.Animated)
+                        }
+                        Label {
+                            anchors.centerIn: parent
+                            text: modelData
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: modelData === "Chats" ? Theme.highlightColor
+                                 : (highlighted ? Theme.highlightColor : Theme.primaryColor)
+                        }
+                    }
+                }
+            }
+        }
+
         // Kachel-Ansicht als ListView aus Reihen: nur so verdraengt das
         // Langdruck-Menue die Folgereihen nativ (GridView layoutet stur
         // nach cellHeight - ListItem-Delegates wachsen und schieben)
         SilicaListView {
             id: chatGrid
-            anchors.fill: parent
+            anchors { left: parent.left; right: parent.right; top: parent.top; bottom: navBar.top }
             visible: chatGridView && connected
             model: (connected && chatGridView) ? Math.ceil(chats.length / gridColumns) : 0
 
             header: Column {
                 width: parent.width
+                Loader { width: parent.width; sourceComponent: viewSwitcherComp }
                 Label {
                     visible: globalNotice !== ""
                     x: Theme.horizontalPageMargin
@@ -933,7 +1028,7 @@ ApplicationWindow {
         }
 
         SilicaListView {
-            anchors.fill: parent
+            anchors { left: parent.left; right: parent.right; top: parent.top; bottom: navBar.top }
             visible: !chatGridView || !connected
             model: connected ? chats : null
 
@@ -1014,6 +1109,12 @@ ApplicationWindow {
 
             header: Column {
                 width: parent.width
+
+                Loader {
+                    width: parent.width
+                    active: connected
+                    sourceComponent: viewSwitcherComp
+                }
 
                 PageHeader { 
                     title: "WhatsApp"
