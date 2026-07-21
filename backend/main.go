@@ -3724,6 +3724,32 @@ func main() {
         json.NewEncoder(w).Encode(map[string]string{"name": name, "about": about, "avatar": avatar})
     })
 
+    http.HandleFunc("/userinfo", func(w http.ResponseWriter, r *http.Request) {
+        // Kontakt-Info fuer die Profilseite: About-Text bei Kontakten,
+        // Topic und Mitgliederzahl bei Gruppen
+        jid := r.URL.Query().Get("jid")
+        if jid == "" || client == nil || !client.IsConnected() {
+            http.Error(w, "unavailable", 503)
+            return
+        }
+        out := map[string]interface{}{}
+        if len(jid) > 15 {
+            gj := types.NewJID(jid, "g.us")
+            if gi, err := client.GetGroupInfo(ctx, gj); err == nil && gi != nil {
+                out["topic"] = gi.Topic
+                out["participants"] = len(gi.Participants)
+            }
+        } else {
+            uj := types.NewJID(jid, "s.whatsapp.net")
+            if infos, err := client.GetUserInfo(ctx, []types.JID{uj}); err == nil {
+                if ui, ok := infos[uj]; ok {
+                    out["status"] = ui.Status
+                }
+            }
+        }
+        json.NewEncoder(w).Encode(out)
+    })
+
     http.HandleFunc("/prefs", func(w http.ResponseWriter, r *http.Request) {
         if !storesLoaded {
             // Vor dem Laden wuerde eine leere Map geliefert und die UI

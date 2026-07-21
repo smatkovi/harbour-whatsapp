@@ -114,6 +114,28 @@ ApplicationWindow {
                     }
 
                     TextSwitch {
+                        text: "Top view switcher"
+                        description: "The list/2/3/4/5/6 buttons above the chats"
+                        checked: showViewSwitcher
+                        automaticCheck: false
+                        onClicked: {
+                            showViewSwitcher = !showViewSwitcher
+                            setPref("top_switcher", showViewSwitcher ? "1" : "0")
+                        }
+                    }
+
+                    TextSwitch {
+                        text: "Bottom navigation bar"
+                        description: "Archive, Favorites, Chats and Status at the bottom - the swipe gestures always work"
+                        checked: showNavBar
+                        automaticCheck: false
+                        onClicked: {
+                            showNavBar = !showNavBar
+                            setPref("bottom_bar", showNavBar ? "1" : "0")
+                        }
+                    }
+
+                    TextSwitch {
                         text: "Chat grid view"
                         description: "Show chats as tiles with the avatar as "
                                    + "background instead of a list. The long-press "
@@ -166,6 +188,8 @@ ApplicationWindow {
     property bool sendByEnter: false
     property bool chatGridView: false
     property int gridColumns: 3
+    property bool showViewSwitcher: true
+    property bool showNavBar: true
 
     // Tippen auf eine Benachrichtigung: lipstick ruft openChat(jid) am
     // kanonischen Busnamen (harbour.harbour-whatsapp) - laeuft die App
@@ -408,6 +432,8 @@ ApplicationWindow {
                 sendByEnter = p.send_by_enter === "1"
                 chatGridView = p.chat_grid === "1"
                 gridColumns = Math.max(2, Math.min(6, parseInt(p.grid_columns || "3")))
+                showViewSwitcher = p.top_switcher !== "0"
+                showNavBar = p.bottom_bar !== "0"
                 prefsLoaded = true
             } else {
                 globalPrefsRetry.start()
@@ -802,8 +828,8 @@ ApplicationWindow {
         Item {
             id: navBar
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-            height: connected ? Theme.itemSizeExtraSmall : 0
-            visible: connected
+            height: (connected && showNavBar) ? Theme.itemSizeExtraSmall : 0
+            visible: connected && showNavBar
 
             Row {
                 anchors.fill: parent
@@ -841,7 +867,7 @@ ApplicationWindow {
 
             header: Column {
                 width: parent.width
-                Loader { width: parent.width; sourceComponent: viewSwitcherComp }
+                Loader { width: parent.width; active: showViewSwitcher; sourceComponent: viewSwitcherComp }
                 Label {
                     visible: globalNotice !== ""
                     x: Theme.horizontalPageMargin
@@ -1112,7 +1138,7 @@ ApplicationWindow {
 
                 Loader {
                     width: parent.width
-                    active: connected
+                    active: connected && showViewSwitcher
                     sourceComponent: viewSwitcherComp
                 }
 
@@ -3042,6 +3068,107 @@ Label {
         }
     }
 
+    // Kontakt-Info als attached page am Chat (Glow-Punkt rechts oben):
+    // grosses Profilbild (der Avatar-Cache haelt bereits das Vollbild),
+    // Nummer/About bei Kontakten, Topic/Mitgliederzahl bei Gruppen
+    Component {
+        id: contactInfoPage
+        Page {
+            id: ciPage
+            property string jid: ""
+            property string name: ""
+            property string avatar: ""
+            property bool group: false
+            property bool channel: false
+            property var info: ({})
+            property bool infoLoaded: false
+
+            Component.onCompleted: {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/userinfo?jid=" + jid)
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState !== 4) return
+                    if (xhr.status === 200) {
+                        try { ciPage.info = JSON.parse(xhr.responseText) } catch (e) {}
+                    }
+                    ciPage.infoLoaded = true
+                }
+                xhr.send()
+            }
+
+            SilicaFlickable {
+                anchors.fill: parent
+                contentHeight: ciCol.height
+
+                Column {
+                    id: ciCol
+                    width: parent.width
+                    spacing: Theme.paddingLarge
+
+                    PageHeader { title: ciPage.name }
+
+                    Image {
+                        visible: ciPage.avatar !== ""
+                        width: parent.width - 2 * Theme.horizontalPageMargin
+                        height: width
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        source: ciPage.avatar
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                    }
+
+                    Label {
+                        visible: ciPage.avatar === ""
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "No profile picture"
+                        color: Theme.secondaryColor
+                    }
+
+                    Label {
+                        visible: !ciPage.group && !ciPage.channel
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: "+" + ciPage.jid
+                        font.pixelSize: Theme.fontSizeLarge
+                        color: Theme.highlightColor
+                    }
+
+                    Label {
+                        visible: (ciPage.info.status || "") !== ""
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: ciPage.info.status || ""
+                        wrapMode: Text.Wrap
+                        color: Theme.primaryColor
+                    }
+
+                    Label {
+                        visible: ciPage.group && (ciPage.info.topic || "") !== ""
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: ciPage.info.topic || ""
+                        wrapMode: Text.Wrap
+                        color: Theme.primaryColor
+                    }
+
+                    Label {
+                        visible: ciPage.group && ciPage.info.participants !== undefined
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: (ciPage.info.participants || 0) + " participants"
+                        color: Theme.secondaryColor
+                    }
+
+                    BusyIndicator {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        size: BusyIndicatorSize.Small
+                        running: !ciPage.infoLoaded
+                    }
+                }
+            }
+        }
+    }
+
     Component {
         id: statusPage
         Page {
@@ -4129,6 +4256,12 @@ Label {
             }
             Timer { interval: 2000; running: true; repeat: true; onTriggered: load() }
             Component.onCompleted: { load(); markOpened() }
+            onStatusChanged: if (status === PageStatus.Active)
+                                 pageStack.pushAttached(contactInfoPage, {
+                                     jid: chatJid, name: chatName,
+                                     avatar: chatAvatar,
+                                     group: isGroupChat, channel: isChannel
+                                 })
 
             Component {
                 id: imagePicker

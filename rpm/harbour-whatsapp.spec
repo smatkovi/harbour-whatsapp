@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.120
+Version:    0.9.122
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,21 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.122-1
+- Contact info page (OpenRepos request): every chat carries an
+  attached page now - the glow dot at the top right, or a left
+  swipe, opens the profile with the picture in big view (the
+  avatar cache already holds the full-size image), the phone
+  number and the about text for contacts, topic and participant
+  count for groups (new /userinfo backend endpoint)
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.121-1
+- Both navigation aids are optional now (OpenRepos request from a
+  list-view purist): "Top view switcher" and "Bottom navigation
+  bar" can be disabled in More settings, both default to on so
+  nothing changes unless you want it to; the swipe gestures work
+  regardless
+
 * Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.120-1
 - View switcher nudged left (field iteration with all six column
   buttons): the invisible left spacer shrinks from medium to
