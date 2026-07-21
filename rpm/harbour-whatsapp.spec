@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.122
+Version:    0.9.130
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,83 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.130-1
+- Translation completed - the final surfaces: both chat pull-down
+  menus (history, search, locations, disappearing messages,
+  clear/delete, polls, block, calls, send file/image), the message
+  long-press menu (reply, edit, delete for everyone, copy, forward,
+  join group, call back), media labels (location, tap to download),
+  the empty chat state, the pairing screen (start pairing, tap code
+  to copy, linked-devices walkthrough, re-pair and reset options),
+  the whole group management page (participants, invite links, join
+  requests with approve/reject, descriptions, community groups),
+  create group, forward-to, disappearing messages, send/share
+  location dialogs and the discover channels page - about 75 new
+  keys. The app is now fully bilingual; technical error bodies and
+  copyable commands remain English by policy
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.129-1
+- Startup status line translated: starting backend, connecting,
+  reconnecting, pairing prompts, logged out, action required and
+  the generic fallbacks. Actual error DETAILS (lastError bodies
+  with technical content) stay English by policy - they are meant
+  to be copied into support threads verbatim
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.128-1
+- The last two English paragraphs in the Sailjail section are
+  translated: the permissions intro and the live status block
+  (granted / not granted / included in Microphone / ear-speaker
+  readiness per permission)
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.127-1
+- Translation stage B3, settings completed: the background daemon
+  explanation, the whole Sailjail permissions section (header, long
+  explanation, all nine copy-button labels including the audio+
+  sensors fine print), the Profile page and the Create poll dialog.
+  The copied commands themselves stay English by policy - only the
+  button labels translate
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.126-1
+- Translation stage B2, the big one: the entire main Settings page
+  (address book, chat input, gallery visibility, notifications,
+  daemon status line, automatic downloads with Always/Wi-Fi
+  only/Never, storage), the complete Status page (posting, viewing,
+  captions, empty states), the complete Channels page (list,
+  unfollow, discover, join dialog with link hint), the chat pulley
+  channel entries, the New Chat page and the empty chat list -
+  about 60 new catalog keys in English and German. Command-copy
+  strings remain untranslated by policy
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.125-1
+- Translation stage B1: both pull-down menus (all ten entries), all
+  long-press menus (favorites/mute/archive on every surface), the
+  Favorites and Archive pages including their empty-state hints,
+  and the contact info page are translated now
+- Catalog policy documented in the file header: technical command
+  strings (curl/systemctl/install lines in error messages) are
+  deliberately NOT translated - they must stay copy-pastable
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.124-1
+- White-screen hotfix for 0.9.123: QML requires property names to
+  start with a lowercase letter - the translation dictionary was
+  bound as "property var L", which is a load-time error that kills
+  the entire QML file. The property is "loc" now. Rulebook, again:
+  a new construct gets its naming rules checked before it ships
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.123-1
+- Translation infrastructure (concept credit: rdomschk on
+  OpenRepos): a central catalog file qml/translations.js with an
+  English base and a growing German dictionary - missing keys fall
+  back to English automatically, translators touch exactly one
+  file that survives app updates. A Language entry in Settings
+  opens its own page: System default, English, Deutsch - switching
+  applies INSTANTLY, no restart (property bindings re-evaluate),
+  which is why this beats Qt's qsTr/lrelease here: a runtime
+  language override would need a C++ translator our pure-QML stack
+  does not have
+- First translated surfaces: the settings entries, the whole More
+  settings page and the bottom navigation bar
+
 * Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.122-1
 - Contact info page (OpenRepos request): every chat carries an
   attached page now - the glow dot at the top right, or a left

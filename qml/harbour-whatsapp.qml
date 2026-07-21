@@ -1,4 +1,5 @@
 import QtQuick 2.0
+import "translations.js" as TR
 import QtMultimedia 5.6
 import QtSensors 5.0
 import Nemo.DBus 2.0
@@ -88,6 +89,34 @@ ApplicationWindow {
     property string lastPythonError: ""
 
     Component {
+        id: languagePage
+        Page {
+            SilicaListView {
+                anchors.fill: parent
+                header: PageHeader { title: loc.language }
+                model: TR.languages
+
+                delegate: BackgroundItem {
+                    width: ListView.view.width
+                    height: Theme.itemSizeSmall
+                    onClicked: {
+                        appLanguage = modelData.code
+                        setPref("app_language", modelData.code)
+                    }
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.name || loc[modelData.key]
+                        color: (appLanguage === modelData.code)
+                               ? Theme.highlightColor
+                               : (highlighted ? Theme.highlightColor : Theme.primaryColor)
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
         id: extraSettingsPage
         Page {
             SilicaFlickable {
@@ -98,11 +127,11 @@ ApplicationWindow {
                     id: extraCol
                     width: parent.width
 
-                    PageHeader { title: "More settings" }
+                    PageHeader { title: loc.moreSettings }
 
                     ComboBox {
-                        label: "Tiles per row"
-                        description: "Grid view only"
+                        label: loc.tilesPerRow
+                        description: loc.gridOnly
                         currentIndex: gridColumns - 2
                         menu: ContextMenu {
                             MenuItem { text: "2"; onClicked: { gridColumns = 2; setPref("grid_columns", "2") } }
@@ -114,8 +143,8 @@ ApplicationWindow {
                     }
 
                     TextSwitch {
-                        text: "Top view switcher"
-                        description: "The list/2/3/4/5/6 buttons above the chats"
+                        text: loc.topSwitcher
+                        description: loc.topSwitcherDesc
                         checked: showViewSwitcher
                         automaticCheck: false
                         onClicked: {
@@ -125,8 +154,8 @@ ApplicationWindow {
                     }
 
                     TextSwitch {
-                        text: "Bottom navigation bar"
-                        description: "Archive, Favorites, Chats and Status at the bottom - the swipe gestures always work"
+                        text: loc.bottomBar
+                        description: loc.bottomBarDesc
                         checked: showNavBar
                         automaticCheck: false
                         onClicked: {
@@ -136,11 +165,8 @@ ApplicationWindow {
                     }
 
                     TextSwitch {
-                        text: "Chat grid view"
-                        description: "Show chats as tiles with the avatar as "
-                                   + "background instead of a list. The long-press "
-                                   + "menu (pin, mute, archive) stays available in "
-                                   + "the list view"
+                        text: loc.chatGrid
+                        description: loc.chatGridDesc
                         checked: chatGridView
                         automaticCheck: false
                         onClicked: {
@@ -189,6 +215,10 @@ ApplicationWindow {
     property bool chatGridView: false
     property int gridColumns: 3
     property bool showViewSwitcher: true
+    property string appLanguage: ""
+    readonly property string langCode: appLanguage !== "" ? appLanguage
+                                       : Qt.locale().name.substring(0, 2)
+    property var loc: TR.catalog(langCode)
     property bool showNavBar: true
 
     // Tippen auf eine Benachrichtigung: lipstick ruft openChat(jid) am
@@ -434,6 +464,7 @@ ApplicationWindow {
                 gridColumns = Math.max(2, Math.min(6, parseInt(p.grid_columns || "3")))
                 showViewSwitcher = p.top_switcher !== "0"
                 showNavBar = p.bottom_bar !== "0"
+                appLanguage = p.app_language || ""
                 prefsLoaded = true
             } else {
                 globalPrefsRetry.start()
@@ -834,21 +865,21 @@ ApplicationWindow {
             Row {
                 anchors.fill: parent
                 Repeater {
-                    model: [ "Archive", "Favorites", "Chats", "Status" ]
+                    model: [ loc.archive, loc.favorites, loc.chats, loc.status ]
                     delegate: BackgroundItem {
                         width: navBar.width / 4
                         height: navBar.height
-                        enabled: modelData !== "Chats"
+                        enabled: index !== 2
                         onClicked: {
-                            if (modelData === "Archive") pageStack.pop(archPageItem)
-                            else if (modelData === "Favorites") pageStack.pop(favPageItem)
-                            else if (modelData === "Status") pageStack.navigateForward(PageStackAction.Animated)
+                            if (index === 0) pageStack.pop(archPageItem)
+                            else if (index === 1) pageStack.pop(favPageItem)
+                            else if (index === 3) pageStack.navigateForward(PageStackAction.Animated)
                         }
                         Label {
                             anchors.centerIn: parent
                             text: modelData
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            color: modelData === "Chats" ? Theme.highlightColor
+                            color: index === 2 ? Theme.highlightColor
                                  : (highlighted ? Theme.highlightColor : Theme.primaryColor)
                         }
                     }
@@ -881,12 +912,12 @@ ApplicationWindow {
 
             PullDownMenu {
                 MenuItem {
-                    text: "Logout"
+                    text: loc.logout
                     visible: connected
                     onClicked: logoutRemorse.execute("Logging out", doLogout, 15000)
                 }
                 MenuItem {
-                    text: "Reload"
+                    text: loc.reload
                     visible: connected
                     onClicked: {
                         var xhr = new XMLHttpRequest()
@@ -901,7 +932,7 @@ ApplicationWindow {
                     }
                 }
                 MenuItem {
-                    text: "Mark all as read"
+                    text: loc.markAllRead
                     visible: {
                         for (var i = 0; i < chats.length; i++)
                             if ((chats[i].unread || 0) > 0) return true
@@ -917,36 +948,36 @@ ApplicationWindow {
                     }
                 }
                 MenuItem {
-                    text: "Settings"
+                    text: loc.settings
                     onClicked: pageStack.push(settingsPage)
                 }
                 MenuItem {
-                    text: "Profile"
+                    text: loc.profile
                     visible: connected
                     onClicked: pageStack.push(profilePage)
                 }
                 MenuItem {
-                    text: "Search"
+                    text: loc.search
                     visible: connected
                     onClicked: pageStack.push(searchPage)
                 }
                 MenuItem {
-                    text: "Channels"
+                    text: loc.channels
                     visible: connected
                     onClicked: pageStack.push(channelsPage)
                 }
                 MenuItem {
-                    text: "Join via link"
+                    text: loc.joinViaLink
                     visible: connected
                     onClicked: pageStack.push(joinLinkPage)
                 }
                 MenuItem {
-                    text: "New group"
+                    text: loc.newGroup
                     visible: connected
                     onClicked: pageStack.push(newGroupPage)
                 }
                 MenuItem {
-                    text: "New chat"
+                    text: loc.newChat
                     visible: connected
                     onClicked: pageStack.push(newChatPage)
                 }
@@ -962,15 +993,15 @@ ApplicationWindow {
                 menu: Component {
                     ContextMenu {
                         MenuItem {
-                            text: (gridRow.menuChat.pinned ? "Remove from favorites" : "Add to favorites")
+                            text: (gridRow.menuChat.pinned ? loc.removeFav : loc.addFav)
                             onClicked: chatSettingFor(gridRow.menuChat.jid, gridRow.menuChat.pinned ? "unpin" : "pin")
                         }
                         MenuItem {
-                            text: (gridRow.menuChat.muted ? "Unmute" : "Mute")
+                            text: (gridRow.menuChat.muted ? loc.unmute : loc.mute)
                             onClicked: chatSettingFor(gridRow.menuChat.jid, gridRow.menuChat.muted ? "unmute" : "mute")
                         }
                         MenuItem {
-                            text: (gridRow.menuChat.archived ? "Unarchive" : "Archive")
+                            text: (gridRow.menuChat.archived ? loc.unarchiveAction : loc.archiveAction)
                             onClicked: chatSettingFor(gridRow.menuChat.jid, gridRow.menuChat.archived ? "unarchive" : "archive")
                         }
                     }
@@ -1060,12 +1091,12 @@ ApplicationWindow {
 
             PullDownMenu {
                 MenuItem {
-                    text: "Logout"
+                    text: loc.logout
                     visible: connected
                     onClicked: logoutRemorse.execute("Logging out", doLogout, 15000)
                 }
                 MenuItem {
-                    text: "Reload"
+                    text: loc.reload
                     visible: connected
                     onClicked: {
                         var xhr = new XMLHttpRequest()
@@ -1080,7 +1111,7 @@ ApplicationWindow {
                     }
                 }
                 MenuItem {
-                    text: "Mark all as read"
+                    text: loc.markAllRead
                     visible: {
                         for (var i = 0; i < chats.length; i++)
                             if ((chats[i].unread || 0) > 0) return true
@@ -1096,36 +1127,36 @@ ApplicationWindow {
                     }
                 }
                 MenuItem {
-                    text: "Settings"
+                    text: loc.settings
                     onClicked: pageStack.push(settingsPage)
                 }
                 MenuItem {
-                    text: "Profile"
+                    text: loc.profile
                     visible: connected
                     onClicked: pageStack.push(profilePage)
                 }
                 MenuItem {
-                    text: "Search"
+                    text: loc.search
                     visible: connected
                     onClicked: pageStack.push(searchPage)
                 }
                 MenuItem {
-                    text: "Channels"
+                    text: loc.channels
                     visible: connected
                     onClicked: pageStack.push(channelsPage)
                 }
                 MenuItem {
-                    text: "Join via link"
+                    text: loc.joinViaLink
                     visible: connected
                     onClicked: pageStack.push(joinLinkPage)
                 }
                 MenuItem {
-                    text: "New group"
+                    text: loc.newGroup
                     visible: connected
                     onClicked: pageStack.push(newGroupPage)
                 }
                 MenuItem {
-                    text: "New chat"
+                    text: loc.newChat
                     visible: connected
                     onClicked: pageStack.push(newChatPage)
                 }
@@ -1147,15 +1178,15 @@ ApplicationWindow {
                     description: {
                         if (connected) return "+" + phone
                         switch (connState) {
-                        case "starting":         return "Starting backend\u2026"
-                        case "connecting":       return "Connecting\u2026"
-                        case "reconnecting":     return "Reconnecting\u2026"
-                        case "waiting_for_pair": return "Not paired \u2013 enter phone number below"
-                        case "logged_out":       return "Logged out \u2013 pair again"
-                        case "relogin_required": return "Action required \u2013 see below"
-                        case "secrets_error":    return "Sailfish Secrets problem \u2013 see below"
-                        case "error":            return lastError !== "" ? lastError : "Connection error"
-                        default:                 return "Not connected"
+                        case "starting":         return loc.stStarting
+                        case "connecting":       return loc.stConnecting
+                        case "reconnecting":     return loc.stReconnecting
+                        case "waiting_for_pair": return loc.stNotPaired
+                        case "logged_out":       return loc.stLoggedOut
+                        case "relogin_required": return loc.stActionRequired
+                        case "secrets_error":    return loc.stSecretsProblem
+                        case "error":            return lastError !== "" ? lastError : loc.stConnectionError
+                        default:                 return loc.stNotConnected
                         }
                     }
                 }
@@ -1169,7 +1200,7 @@ ApplicationWindow {
                 }
 
                 Button {
-                    text: "Retry connection"
+                    text: loc.retryConnection
                     visible: backendFailed
                     anchors.horizontalCenter: parent.horizontalCenter
                     onClicked: retryBackend()
@@ -1192,11 +1223,11 @@ ApplicationWindow {
                     wrapMode: Text.Wrap
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: Theme.secondaryColor
-                    text: "Re-pairing creates a fresh encrypted session. Your messages, contacts and media are stored separately and stay on this device."
+                    text: loc.repairNote
                 }
 
                 Button {
-                    text: "Restart backend"
+                    text: loc.restartBackend
                     visible: connState === "secrets_error"
                     anchors.horizontalCenter: parent.horizontalCenter
                     onClicked: {
@@ -1214,7 +1245,7 @@ ApplicationWindow {
                 }
 
                 Button {
-                    text: "Re-pair (keeps message history)"
+                    text: loc.repairKeepHistory
                     visible: connState === "secrets_error"
                     anchors.horizontalCenter: parent.horizontalCenter
                     onClicked: resetRemorse.execute("Resetting pairing", function() {
@@ -1237,7 +1268,7 @@ ApplicationWindow {
                 }
 
                 Button {
-                    text: "Reset & pair again"
+                    text: loc.resetPairAgain
                     visible: connState === "relogin_required"
                     anchors.horizontalCenter: parent.horizontalCenter
                     onClicked: resetRemorse.execute("Deleting local database", function() {
@@ -1285,7 +1316,7 @@ ApplicationWindow {
                     TextField {
                         id: phoneField
                         width: parent.width
-                        label: "Phone number (with country code)"
+                        label: loc.phoneNumberLabel
                         placeholderText: "43664..."
                         text: ""
                         inputMethodHints: Qt.ImhDigitsOnly
@@ -1311,7 +1342,7 @@ ApplicationWindow {
                     }
 
                     Button {
-                        text: "Start pairing"
+                        text: loc.startPairing
                         anchors.horizontalCenter: parent.horizontalCenter
                         onClicked: {
                             var xhr = new XMLHttpRequest()
@@ -1382,7 +1413,7 @@ ApplicationWindow {
 
                             Label {
                                 width: parent.width
-                                text: "Tap code to copy"
+                                text: loc.tapCodeToCopy
                                 font.pixelSize: Theme.fontSizeExtraSmall
                                 horizontalAlignment: Text.AlignHCenter
                                 color: Theme.secondaryColor
@@ -1397,7 +1428,7 @@ ApplicationWindow {
                         width: parent.width - 2*x
                         wrapMode: Text.Wrap
                         horizontalAlignment: Text.AlignHCenter
-                        text: "Open WhatsApp on your phone:\nSettings → Linked Devices → Link a Device\n→ Link with phone number instead"
+                        text: loc.linkedDevicesHint
                         color: Theme.secondaryColor
                         font.pixelSize: Theme.fontSizeSmall
                     }
@@ -1424,22 +1455,22 @@ ApplicationWindow {
 
                 menu: ContextMenu {
                     MenuItem {
-                        text: "Stop live location"
+                        text: loc.stopLiveLocation
                         visible: liveActive && liveChatJid === modelData.jid
                         onClicked: stopLiveShare()
                     }
                     MenuItem {
-                        text: modelData.pinned ? "Remove from favorites" : "Add to favorites"
+                        text: modelData.pinned ? loc.removeFav : loc.addFav
                         visible: modelData.jid !== "status"
                         onClicked: chatSetting(modelData.pinned ? "unpin" : "pin")
                     }
                     MenuItem {
-                        text: modelData.muted ? "Unmute" : "Mute"
+                        text: modelData.muted ? loc.unmute : loc.mute
                         visible: modelData.jid !== "status"
                         onClicked: chatSetting(modelData.muted ? "unmute" : "mute")
                     }
                     MenuItem {
-                        text: modelData.archived ? "Unarchive" : "Archive"
+                        text: modelData.archived ? loc.unarchiveAction : loc.archiveAction
                         visible: modelData.jid !== "status"
                         onClicked: chatSetting(modelData.archived ? "unarchive" : "archive")
                     }
@@ -1524,8 +1555,8 @@ ApplicationWindow {
 
             ViewPlaceholder {
                 enabled: connected && chats.length === 0
-                text: "No chats"
-                hintText: "Pull down to start a new chat"
+                text: loc.noChats
+                hintText: loc.noChatsHint
             }
         }
     }
@@ -1617,13 +1648,11 @@ ApplicationWindow {
                     width: parent.width
                     spacing: Theme.paddingMedium
 
-                    PageHeader { title: "Settings" }
+                    PageHeader { title: loc.settings }
 
                     TextSwitch {
-                        text: "Address book suggestions"
-                        description: "Show contacts from your Sailfish address book "
-                                   + "on the New chat page and in group creation. "
-                                   + "When disabled, the app never reads the contact database."
+                        text: loc.addressBook
+                        description: loc.addressBookDesc
                         checked: contactsOptIn
                         automaticCheck: false
                         onClicked: {
@@ -1635,22 +1664,33 @@ ApplicationWindow {
                     BackgroundItem {
                         width: parent.width
                         height: Theme.itemSizeSmall
-                        onClicked: pageStack.push(extraSettingsPage)
+                        onClicked: pageStack.push(languagePage)
                         Label {
                             x: Theme.horizontalPageMargin
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "More settings \u203a"
+                            text: loc.language + " \u203a"
                             color: highlighted ? Theme.highlightColor : Theme.primaryColor
                         }
                     }
 
-                    SectionHeader { text: "Chat input" }
+                    BackgroundItem {
+                        width: parent.width
+                        height: Theme.itemSizeSmall
+                        onClicked: pageStack.push(extraSettingsPage)
+                        Label {
+                            x: Theme.horizontalPageMargin
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: loc.moreSettings + " \u203a"
+                            color: highlighted ? Theme.highlightColor : Theme.primaryColor
+                        }
+                    }
+
+                    SectionHeader { text: loc.chatInput }
 
                     TextSwitch {
                         id: sendByEnterSwitch
-                        text: "Send by Enter"
-                        description: "Enter sends the message instead of adding "
-                                   + "a new line (sending by button always works)"
+                        text: loc.sendByEnter
+                        description: loc.sendByEnterDesc
                         checked: false
                         onClicked: {
                             sendByEnter = checked
@@ -1662,7 +1702,7 @@ ApplicationWindow {
                     }
 
                     SectionHeader {
-                        text: "Gallery visibility"
+                        text: loc.galleryVisibility
                         visible: permStatus.mediaGranted
                     }
 
@@ -1673,10 +1713,7 @@ ApplicationWindow {
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
                         visible: permStatus.mediaGranted
-                        text: "Hide WhatsApp media folders from Gallery and Media apps "
-                            + "by placing a .nomedia marker (community suggestion). The "
-                            + "tracker picks the change up on its next indexing run - "
-                            + "existing entries can take a while to disappear."
+                        text: loc.galleryDesc
                     }
 
                     Column {
@@ -1692,11 +1729,11 @@ ApplicationWindow {
 
                         Repeater {
                             model: [
-                                { key: "images",    label: "Hide received images" },
-                                { key: "videos",    label: "Hide received videos" },
-                                { key: "audio",     label: "Hide voice notes and audio" },
-                                { key: "documents", label: "Hide received documents" },
-                                { key: "avatars",   label: "Hide profile pictures" }
+                                { key: "images",    label: loc.hideImages },
+                                { key: "videos",    label: loc.hideVideos },
+                                { key: "audio",     label: loc.hideAudio },
+                                { key: "documents", label: loc.hideDocuments },
+                                { key: "avatars",   label: loc.hideAvatars }
                             ]
                             delegate: TextSwitch {
                                 text: modelData.label
@@ -1711,16 +1748,12 @@ ApplicationWindow {
                         }
                     }
 
-                    SectionHeader { text: "Notifications" }
+                    SectionHeader { text: loc.notifications }
 
                     TextSwitch {
                         id: notifySwitch
-                        text: "Event screen notifications"
-                        description: "Show a notification on the events screen when a "
-                                   + "chat receives new messages while the app is in the "
-                                   + "background (muted chats stay silent). Works while "
-                                   + "the app is running, also minimised as a cover - the "
-                                   + "background daemon below extends this to a closed app."
+                        text: loc.eventNotifs
+                        description: loc.eventNotifsDesc
                         checked: false
                         Component.onCompleted: checked = downloadPrefs["notifications"] === "1"
                         onClicked: {
@@ -1745,8 +1778,8 @@ ApplicationWindow {
 
                     TextSwitch {
                         id: notifSoundSwitch
-                        text: "Notification sound"
-                        description: "Applies to all notifications - with or without the background daemon"
+                        text: loc.notifSound
+                        description: loc.notifSoundDesc
                         checked: true
                         visible: notifySwitch.checked
                         onClicked: {
@@ -1759,7 +1792,7 @@ ApplicationWindow {
 
                     TextSwitch {
                         id: notifVibrateSwitch
-                        text: "Notification vibration"
+                        text: loc.notifVibration
                         checked: true
                         visible: notifySwitch.checked
                         onClicked: {
@@ -1778,7 +1811,7 @@ Label {
                         color: daemonRunning ? Theme.highlightColor : Theme.secondaryColor
                         property bool versionLag: daemonRunning && installedVersion !== ""
                                                   && backendVersion !== "" && backendVersion !== installedVersion
-                        text: "Background daemon: " + (daemonRunning ? "running" : "not running")
+                        text: loc.backgroundDaemon + ": " + (daemonRunning ? loc.daemonRunning : loc.daemonNotRunning)
                               + (versionLag ? ("\u26a0 running version " + backendVersion
                                  + ", installed is " + installedVersion
                                  + " - restart the daemon (command below)") : "")
@@ -1792,14 +1825,7 @@ Label {
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
                         visible: notifySwitch.checked || daemonRunning || downloadPrefs["daemon_autostart"] === "1"
-                        text: "Keeps notifications coming after the app is closed. "
-                            + "systemd cannot be controlled from inside the sandbox - "
-                            + "tap a command below to copy it, then paste in Terminal. "
-                            + "After enabling, restart the app if the status does not "
-                            + "switch to running within a few seconds. Switching "
-                            + "notifications off only stops the running daemon - "
-                            + "removing the autostart completely needs the disable "
-                            + "command below."
+                        text: loc.daemonDesc
                     }
 
                     BackgroundItem {
@@ -1874,12 +1900,12 @@ Label {
                         }
                     }
 
-                    SectionHeader { text: "Automatic downloads" }
+                    SectionHeader { text: loc.autoDownloads }
 
                     Label {
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
-                        text: "Applies to incoming messages. Tapping a placeholder always downloads, regardless of these settings."
+                        text: loc.autoDownloadsNote
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
                         wrapMode: Text.Wrap
@@ -1895,12 +1921,12 @@ Label {
                         // Erst nach dem Prefs-Load instanziieren: die Boxen
                         // starten dann direkt mit den gespeicherten Werten
                         model: !prefsReady ? [] : [
-                            { key: "image",    label: "Images",           def: "always" },
-                            { key: "sticker",  label: "Stickers",         def: "always" },
-                            { key: "video",    label: "Videos",           def: "wifi" },
-                            { key: "audio",    label: "Audio",            def: "wifi" },
-                            { key: "document", label: "Documents",        def: "wifi" },
-                            { key: "avatar",   label: "Profile pictures", def: "always" }
+                            { key: "image",    label: loc.images,           def: "always" },
+                            { key: "sticker",  label: loc.stickers,         def: "always" },
+                            { key: "video",    label: loc.videos,           def: "wifi" },
+                            { key: "audio",    label: loc.audio,            def: "wifi" },
+                            { key: "document", label: loc.documents,        def: "wifi" },
+                            { key: "avatar",   label: loc.profilePictures, def: "always" }
                         ]
                         ComboBox {
                             id: adlBox
@@ -1924,9 +1950,9 @@ Label {
                                 onDownloadPrefsChanged: adlBox.syncFromPrefs()
                             }
                             menu: ContextMenu {
-                                MenuItem { text: "Always" }
-                                MenuItem { text: "Wi-Fi only" }
-                                MenuItem { text: "Never" }
+                                MenuItem { text: loc.always }
+                                MenuItem { text: loc.wifiOnly }
+                                MenuItem { text: loc.never }
                             }
                             onCurrentIndexChanged: {
                                 if (!prefsReady) return // Initialisierung/Sync, kein Nutzer-Input
@@ -1941,23 +1967,23 @@ Label {
                         }
                     }
 
-                    SectionHeader { text: "Storage" }
+                    SectionHeader { text: loc.storage }
 
                     Repeater {
                         id: storageRepeater
                         model: [
-                            { key: "images",    label: "Images & stickers" },
-                            { key: "videos",    label: "Videos" },
-                            { key: "audio",     label: "Audio" },
-                            { key: "documents", label: "Documents" },
-                            { key: "avatars",   label: "Profile pictures" }
+                            { key: "images",    label: loc.imagesStickers },
+                            { key: "videos",    label: loc.videos },
+                            { key: "audio",     label: loc.audio },
+                            { key: "documents", label: loc.documents },
+                            { key: "avatars",   label: loc.profilePictures }
                         ]
                         ListItem {
                             width: setCol.width
                             contentHeight: Theme.itemSizeSmall
                             menu: ContextMenu {
                                 MenuItem {
-                                    text: "Delete all " + modelData.label.toLowerCase()
+                                    text: loc.deleteAll + " " + modelData.label.toLowerCase()
                                     onClicked: remorseAction("Deleting " + modelData.label.toLowerCase(), function() {
                                         var xhr = new XMLHttpRequest()
                                         xhr.open("GET", "http://127.0.0.1:" + backendPort + "/storage/clear?type=" + modelData.key)
@@ -1989,13 +2015,13 @@ Label {
                     Label {
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
-                        text: "Long-press a row to delete. Deleted chat media shows the download placeholder again and can be re-downloaded."
+                        text: loc.storageNote
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
                         wrapMode: Text.Wrap
                     }
 
-                    SectionHeader { text: "Sailjail permissions" }
+                    SectionHeader { text: loc.sailjailHeader }
 
                     Label {
                         id: permStatus
@@ -2007,21 +2033,17 @@ Label {
                         property bool micGranted: false
                         property bool sensorsGranted: false
                         property bool audioGranted: false
-                        property string permIntro: "These optional permissions are added to the app's "
-                            + "desktop file via the Terminal commands below (tap to copy, run with devel-su, "
-                            + "then restart the app). The Sailfish Settings app can only manage permissions "
-                            + "AFTER they have been added here.\n\n"
-                        text: permIntro
-                              + "Contacts permission: " + (granted ? "granted" : "not granted")
-                              + "\nMedia storage permission: " + (mediaGranted ? "granted" : "not granted")
-                              + "\nLocation permission: " + (locationGranted ? "granted" : "not granted")
-                              + "\nMicrophone permission: " + (micGranted ? "granted" : "not granted")
-                              + "\nAudio permission: " + (audioGranted ? "granted"
-                                    : (micGranted ? "included in Microphone" : "not granted"))
-                              + "\nSensors permission: " + (sensorsGranted ? "granted" : "not granted")
-                              + "\nEar-speaker switching: " + ((sensorsGranted && (audioGranted || micGranted)) ? "ready"
-                                  : (!sensorsGranted && !(audioGranted || micGranted)) ? "needs audio+sensors"
-                                  : !sensorsGranted ? "needs sensors" : "needs audio")
+                        text: loc.permIntro + "\n\n"
+                              + loc.contactsPerm + ": " + (granted ? loc.granted : loc.notGranted)
+                              + "\n" + loc.mediaPerm + ": " + (mediaGranted ? loc.granted : loc.notGranted)
+                              + "\n" + loc.locationPerm + ": " + (locationGranted ? loc.granted : loc.notGranted)
+                              + "\n" + loc.micPerm + ": " + (micGranted ? loc.granted : loc.notGranted)
+                              + "\n" + loc.audioPerm + ": " + (audioGranted ? loc.granted
+                                    : (micGranted ? loc.includedInMic : loc.notGranted))
+                              + "\n" + loc.sensorsPerm + ": " + (sensorsGranted ? loc.granted : loc.notGranted)
+                              + "\n" + loc.earSpeaker + ": " + ((sensorsGranted && (audioGranted || micGranted)) ? loc.ready
+                                  : (!sensorsGranted && !(audioGranted || micGranted)) ? loc.needsAudioSensors
+                                  : !sensorsGranted ? loc.needsSensors : loc.needsAudio)
                         color: Theme.highlightColor
                         font.pixelSize: Theme.fontSizeSmall
                         wrapMode: Text.Wrap
@@ -2047,14 +2069,7 @@ Label {
                     Label {
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
-                        text: "Sailfish OS has no runtime permission dialogs, and the app "
-                            + "cannot edit its own desktop file from inside the sandbox. "
-                            + "The app therefore ships with MINIMAL permissions (Internet, "
-                            + "Secrets). Tap a command below to copy it, run it in Terminal, "
-                            + "then restart the app. Updates will not overwrite your choice.\n\n"
-                            + "Without media storage permission, received media is saved "
-                            + "inside the app's private data folder (not visible in Gallery) "
-                            + "and the image/file pickers will appear empty."
+                        text: loc.sailjailDesc
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
                         wrapMode: Text.Wrap
@@ -2073,7 +2088,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "▸ Copy command to GRANT contacts permission"
+                            text: "\u25b8 " + loc.copyGrantContacts
                             color: Theme.highlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -2092,7 +2107,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "▸ Copy command to REVOKE contacts permission"
+                            text: "\u25b8 " + loc.copyRevokeContacts
                             color: Theme.secondaryHighlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -2111,7 +2126,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "▸ Copy command to GRANT media storage permission"
+                            text: "\u25b8 " + loc.copyGrantMedia
                             color: Theme.highlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -2130,7 +2145,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "▸ Copy command to REVOKE media storage permission"
+                            text: "\u25b8 " + loc.copyRevokeMedia
                             color: Theme.secondaryHighlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -2149,7 +2164,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "\u25b8 Copy command to GRANT location permission (for sending your position)"
+                            text: "\u25b8 " + loc.copyGrantLocation
                             color: Theme.highlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -2168,7 +2183,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "\u25b8 Copy command to REVOKE location permission"
+                            text: "\u25b8 " + loc.copyRevokeLocation
                             color: Theme.secondaryHighlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -2187,7 +2202,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "\u25b8 Copy command to GRANT microphone permission (record voice notes; includes the Audio permission)"
+                            text: "\u25b8 " + loc.copyGrantMic
                             color: Theme.highlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -2206,7 +2221,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "\u25b8 Copy command to REVOKE microphone permission"
+                            text: "\u25b8 " + loc.copyRevokeMic
                             color: Theme.secondaryHighlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -2225,12 +2240,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "\u25b8 Copy command to GRANT audio+sensors permissions (listen to voice notes at the ear, "
-                                + "incl. earpiece volume control). Note: the system prompt will say 'Play and record "
-                                + "audio' - that is the OS label of the Audio permission itself (audio streams are not "
-                                + "separable yet). This app never records with only these permissions: recording "
-                                + "happens solely via the mic button, which additionally requires the Microphone "
-                                + "permission and refuses otherwise"
+                            text: "\u25b8 " + loc.copyGrantAudioSensors
                             color: Theme.highlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -2249,7 +2259,7 @@ Label {
                             width: parent.width - 2*x
                             wrapMode: Text.Wrap
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "\u25b8 Copy command to REVOKE audio+sensors permissions"
+                            text: "\u25b8 " + loc.copyRevokeAudioSensors
                             color: Theme.secondaryHighlightColor
                             font.pixelSize: Theme.fontSizeSmall
                         }
@@ -2304,7 +2314,7 @@ Label {
                     width: parent.width
                     spacing: Theme.paddingLarge
 
-                    PageHeader { title: "Profile" }
+                    PageHeader { title: loc.profileTitle }
 
                     Image {
                         visible: avatarPath !== ""
@@ -2324,19 +2334,19 @@ Label {
                     TextField {
                         id: nameField
                         width: parent.width
-                        label: "Name"
-                        placeholderText: "Your name"
+                        label: loc.name
+                        placeholderText: loc.yourName
                     }
 
                     TextField {
                         id: aboutField
                         width: parent.width
-                        label: "About"
-                        placeholderText: "Hey there! I am using WhatsApp."
+                        label: loc.about
+                        placeholderText: loc.aboutPlaceholder
                     }
 
                     Button {
-                        text: "Save"
+                        text: loc.save
                         anchors.horizontalCenter: parent.horizontalCenter
                         enabled: loaded && nameField.text !== ""
                         onClicked: {
@@ -2356,7 +2366,7 @@ Label {
                     }
 
                     Button {
-                        text: "Change profile photo"
+                        text: loc.changeProfilePhoto
                         anchors.horizontalCenter: parent.horizontalCenter
                         onClicked: pageStack.push(profilePhotoPicker)
                     }
@@ -2372,7 +2382,7 @@ Label {
                     Label {
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
-                        text: "Name and photo are visible to your contacts. Changes may take a moment to propagate."
+                        text: loc.profileNote
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
                         wrapMode: Text.Wrap
@@ -2423,21 +2433,21 @@ Label {
                     id: cpCol
                     width: parent.width
 
-                    DialogHeader { title: "Create poll" }
+                    DialogHeader { title: loc.createPoll }
 
                     TextField {
                         id: cpName
                         width: parent.width
-                        label: "Question"
-                        placeholderText: "Ask something…"
+                        label: loc.question
+                        placeholderText: loc.askSomething
                     }
 
                     Repeater {
                         model: cpDialog.optionTexts.length
                         TextField {
                             width: cpCol.width
-                            label: "Option " + (index + 1)
-                            placeholderText: "Option " + (index + 1)
+                            label: loc.option + " " + (index + 1)
+                            placeholderText: loc.option + " " + (index + 1)
                             text: cpDialog.optionTexts[index]
                             onTextChanged: {
                                 var a = cpDialog.optionTexts
@@ -2450,7 +2460,7 @@ Label {
                     }
 
                     Button {
-                        text: "Add option"
+                        text: loc.addOption
                         anchors.horizontalCenter: parent.horizontalCenter
                         enabled: cpDialog.optionTexts.length < 12
                         onClicked: {
@@ -2462,7 +2472,7 @@ Label {
 
                     TextSwitch {
                         id: cpMulti
-                        text: "Allow multiple answers"
+                        text: loc.allowMultiple
                     }
                 }
             }
@@ -2520,11 +2530,11 @@ Label {
             Column {
                 id: apHeader
                 width: parent.width
-                DialogHeader { title: "Add participants" }
+                DialogHeader { title: loc.addParticipants }
                 SearchField {
                     id: apSearchField
                     width: parent.width
-                    placeholderText: "Search contacts"
+                    placeholderText: loc.searchContacts
                     onTextChanged: apDialog.apSearch = text
                 }
                 SectionHeader {
@@ -2654,7 +2664,7 @@ Label {
                             menu: Component {
                                 ContextMenu {
                                     MenuItem {
-                                        text: "Call +" + modelData.number
+                                        text: loc.call + " +" + modelData.number
                                         onClicked: Qt.openUrlExternally("tel:+" + modelData.number)
                                     }
                                     MenuItem {
@@ -2664,7 +2674,7 @@ Label {
                                                    + "&numbers=" + modelData.number)
                                     }
                                     MenuItem {
-                                        text: "Remove from group"
+                                        text: loc.removeFromGroup
                                         onClicked: groupCall("/group/participants?chat=" + giPage.groupJid + "&action=remove&numbers=" + modelData.number)
                                     }
                                 }
@@ -2686,17 +2696,17 @@ Label {
 
                 PullDownMenu {
                     MenuItem {
-                        text: "Leave group"
+                        text: loc.leaveGroup
                         onClicked: leaveRemorse.execute("Leaving group", function() {
                             groupCall("/group/leave?chat=" + groupJid, function() { pageStack.pop(pageStack.previousPage()) })
                         })
                     }
                     MenuItem {
-                        text: "Change group photo"
+                        text: loc.changeGroupPhoto
                         onClicked: pageStack.push(groupPhotoPicker, { groupJid: groupJid })
                     }
                     MenuItem {
-                        text: "Get invite link"
+                        text: loc.getInviteLink
                         onClicked: groupCall("/group/invitelink?chat=" + groupJid, function(xhr) {
                             if (xhr.status === 200) {
                                 inviteLink = JSON.parse(xhr.responseText).link
@@ -2706,11 +2716,11 @@ Label {
                         })
                     }
                     MenuItem {
-                        text: "Join requests"
+                        text: loc.joinRequests
                         onClicked: pageStack.push(joinRequestsPage, { groupJid: groupJid })
                     }
                     MenuItem {
-                        text: "Set description\u2026"
+                        text: loc.setDescription
                         onClicked: {
                             var dlg = pageStack.push(groupDescDialog)
                             dlg.accepted.connect(function() {
@@ -2739,7 +2749,7 @@ Label {
                             id: gnameField
                             text: giPage.groupName
                             width: parent.width - renameBtn.width - Theme.paddingMedium
-                            label: "Group name"
+                            label: loc.groupName
                         }
                         IconButton {
                             id: renameBtn
@@ -2778,7 +2788,7 @@ Label {
                         TextField {
                             id: addField
                             width: parent.width - addBtn.width - Theme.paddingMedium
-                            label: "Add participant"
+                            label: loc.addParticipant
                             placeholderText: "436641234567"
                             inputMethodHints: Qt.ImhDigitsOnly
                         }
@@ -2795,7 +2805,7 @@ Label {
                     }
 
                     Button {
-                        text: "Add from contacts"
+                        text: loc.addFromContacts
                         anchors.horizontalCenter: parent.horizontalCenter
                         onClicked: {
                             var existing = {}
@@ -2812,7 +2822,7 @@ Label {
 
                     SectionHeader {
                         visible: subgroups.length > 0
-                        text: "Community groups (" + subgroups.length + ")"
+                        text: loc.communityGroups + " (" + subgroups.length + ")"
                     }
 
                     Repeater {
@@ -2830,7 +2840,7 @@ Label {
                         }
                     }
 
-                    SectionHeader { text: "Participants (" + participants.length + ")" }
+                    SectionHeader { text: loc.participantsHdr + " (" + participants.length + ")" }
 
                 }
             }
@@ -2845,16 +2855,16 @@ Label {
             canAccept: textArea.text.trim().length > 0
             Column {
                 width: parent.width
-                DialogHeader { title: "Post status" }
+                DialogHeader { title: loc.postStatus }
                 TextArea {
                     id: textArea
                     width: parent.width
-                    placeholderText: "Your status update\u2026"
-                    label: "Visible according to your WhatsApp status privacy"
+                    placeholderText: loc.statusPlaceholder
+                    label: loc.statusPrivacyNote
                 }
                 Label {
                     x: Theme.horizontalPageMargin
-                    text: "Background"
+                    text: loc.background
                     color: Theme.secondaryHighlightColor
                     font.pixelSize: Theme.fontSizeSmall
                 }
@@ -2895,13 +2905,13 @@ Label {
 
         SilicaListView {
             anchors.fill: parent
-            header: PageHeader { title: "Favorites" }
+            header: PageHeader { title: loc.favorites }
             model: chats.filter(function(c) { return c.pinned === true })
 
             ViewPlaceholder {
                 enabled: parent.count === 0
-                text: "No favorites yet"
-                hintText: "Long-press a chat in the list and choose Pin - pinned chats appear here and sync to your other devices"
+                text: loc.noFavorites
+                hintText: loc.noFavoritesHint
             }
 
             delegate: ListItem {
@@ -2909,15 +2919,15 @@ Label {
                 contentHeight: Theme.itemSizeMedium
                 menu: ContextMenu {
                     MenuItem {
-                        text: "Remove from favorites"
+                        text: loc.removeFav
                         onClicked: chatSettingFor(modelData.jid, "unpin")
                     }
                     MenuItem {
-                        text: (modelData.muted ? "Unmute" : "Mute")
+                        text: (modelData.muted ? loc.unmute : loc.mute)
                         onClicked: chatSettingFor(modelData.jid, modelData.muted ? "unmute" : "mute")
                     }
                     MenuItem {
-                        text: "Archive"
+                        text: loc.archiveAction
                         onClicked: chatSettingFor(modelData.jid, "archive")
                     }
                 }
@@ -2999,13 +3009,13 @@ Label {
 
         SilicaListView {
             anchors.fill: parent
-            header: PageHeader { title: "Archive" }
+            header: PageHeader { title: loc.archive }
             model: chats.filter(function(c) { return c.archived === true })
 
             ViewPlaceholder {
                 enabled: parent.count === 0
-                text: "No archived chats"
-                hintText: "Long-press a chat in the list and choose Archive"
+                text: loc.noArchived
+                hintText: loc.noArchivedHint
             }
 
             delegate: ListItem {
@@ -3013,15 +3023,15 @@ Label {
                 contentHeight: Theme.itemSizeMedium
                 menu: ContextMenu {
                     MenuItem {
-                        text: "Unarchive"
+                        text: loc.unarchiveAction
                         onClicked: chatSettingFor(modelData.jid, "unarchive")
                     }
                     MenuItem {
-                        text: (modelData.muted ? "Unmute" : "Mute")
+                        text: (modelData.muted ? loc.unmute : loc.mute)
                         onClicked: chatSettingFor(modelData.jid, modelData.muted ? "unmute" : "mute")
                     }
                     MenuItem {
-                        text: (modelData.pinned ? "Remove from favorites" : "Add to favorites")
+                        text: (modelData.pinned ? loc.removeFav : loc.addFav)
                         onClicked: chatSettingFor(modelData.jid, modelData.pinned ? "unpin" : "pin")
                     }
                 }
@@ -3120,7 +3130,7 @@ Label {
                     Label {
                         visible: ciPage.avatar === ""
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "No profile picture"
+                        text: loc.noProfilePicture
                         color: Theme.secondaryColor
                     }
 
@@ -3155,7 +3165,7 @@ Label {
                         visible: ciPage.group && ciPage.info.participants !== undefined
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
-                        text: (ciPage.info.participants || 0) + " participants"
+                        text: (ciPage.info.participants || 0) + " " + loc.participants
                         color: Theme.secondaryColor
                     }
 
@@ -3219,7 +3229,7 @@ Label {
             Component {
                 id: statusMediaPicker
                 ContentPickerPage {
-                    title: "Select image or video"
+                    title: loc.selectImageVideo
                     onSelectedContentPropertiesChanged: {
                         // Erst Caption abfragen, dann posten - wie bei WhatsApp
                         var dlg = pageStack.push(statusCaptionDialog,
@@ -3240,7 +3250,7 @@ Label {
                     Column {
                         width: parent.width
                         DialogHeader {
-                            title: "Post to status"
+                            title: loc.postToStatus
                             acceptText: "Post"
                         }
                         Image {
@@ -3254,8 +3264,8 @@ Label {
                         TextArea {
                             id: captionArea
                             width: parent.width
-                            placeholderText: "Add a caption\u2026 (optional)"
-                            label: "Caption"
+                            placeholderText: loc.captionPlaceholder
+                            label: loc.caption
                         }
                     }
                 }
@@ -3269,13 +3279,13 @@ Label {
                 model: statuses
 
                 PullDownMenu {
-                    MenuItem { text: "Refresh"; onClicked: loadStatuses() }
+                    MenuItem { text: loc.refresh; onClicked: loadStatuses() }
                     MenuItem {
-                        text: "Post image or video"
+                        text: loc.postImageVideo
                         onClicked: pageStack.push(statusMediaPicker)
                     }
                     MenuItem {
-                        text: "Post status"
+                        text: loc.postStatus
                         onClicked: {
                             var dlg = pageStack.push(statusPostDialog)
                             dlg.accepted.connect(function() {
@@ -3292,7 +3302,7 @@ Label {
                     }
                 }
 
-                header: PageHeader { title: "Status updates" }
+                header: PageHeader { title: loc.statusUpdates }
 
                 delegate: Column {
                     width: parent.width
@@ -3395,8 +3405,8 @@ Label {
 
                 ViewPlaceholder {
                     enabled: statuses.length === 0
-                    text: "No status updates"
-                    hintText: "Status updates from your contacts appear here for 24 hours"
+                    text: loc.noStatus
+                    hintText: loc.noStatusHint
                 }
             }
         }
@@ -3577,14 +3587,14 @@ Label {
 
                 PullDownMenu {
                     MenuItem {
-                        text: "Discover channels\u2026"
+                        text: loc.discoverChannels
                         onClicked: pageStack.push(channelDirectoryPage)
                     }
                 }
 
                 header: Column {
                     width: parent ? parent.width : Screen.width
-                    PageHeader { title: "Channels" }
+                    PageHeader { title: loc.channels }
                     Label {
                         visible: chStatus !== ""
                         x: Theme.horizontalPageMargin
@@ -3611,7 +3621,7 @@ Label {
                     }
                     menu: ContextMenu {
                         MenuItem {
-                            text: "Unfollow"
+                            text: loc.unfollow
                             onClicked: {
                                 var xhr = new XMLHttpRequest()
                                 xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/unfollow?jid=" + modelData.jid)
@@ -3636,8 +3646,8 @@ Label {
 
                 ViewPlaceholder {
                     enabled: channels.length === 0 && chStatus === ""
-                    text: "No channels"
-                    hintText: "Follow a channel via 'Join via link'"
+                    text: loc.noChannels
+                    hintText: loc.noChannelsHint
                 }
             }
         }
@@ -3667,11 +3677,11 @@ Label {
 
             Column {
                 width: parent.width
-                DialogHeader { title: "Join group or channel" }
+                DialogHeader { title: loc.joinGroupChannel }
                 TextField {
                     id: linkField
                     width: parent.width
-                    label: "Invite link"
+                    label: loc.inviteLink
                     placeholderText: "https://chat.whatsapp.com/… or https://whatsapp.com/channel/…"
                     inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
                     Component.onCompleted: {
@@ -3684,7 +3694,7 @@ Label {
                 Label {
                     x: Theme.horizontalPageMargin
                     width: parent.width - 2*x
-                    text: "Paste a group invite link (chat.whatsapp.com/…) or a channel link (whatsapp.com/channel/…). Tip: scan QR codes with a scanner app and copy the link."
+                    text: loc.joinHint
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: Theme.secondaryColor
                     wrapMode: Text.Wrap
@@ -3745,23 +3755,23 @@ Label {
             Column {
                 id: ngHeader
                 width: parent.width
-                DialogHeader { title: "Create group" }
+                DialogHeader { title: loc.createGroup }
                 TextField {
                     id: ngName
                     width: parent.width
-                    label: "Group name"
-                    placeholderText: "Group name (max 25 chars)"
+                    label: loc.groupName
+                    placeholderText: loc.groupNameMax
                     text: ngDialog.ngNameText
                     onTextChanged: ngDialog.ngNameText = text
                 }
                 SearchField {
                     id: ngSearchField
                     width: parent.width
-                    placeholderText: "Search contacts"
+                    placeholderText: loc.searchContacts
                     onTextChanged: ngDialog.ngSearch = text
                 }
                 SectionHeader {
-                    text: "Select participants"
+                    text: loc.selectParticipants
                           + (ngDialog.selectedCount() > 0 ? " (" + ngDialog.selectedCount() + " selected)" : "")
                 }
             }
@@ -3821,12 +3831,12 @@ Label {
                     id: contentCol
                     width: parent.width
 
-                    PageHeader { title: "New Chat" }
+                    PageHeader { title: loc.newChatTitle }
 
                     SearchField {
                         id: searchField
                         width: parent.width
-                        placeholderText: "Enter phone number or search contacts"
+                        placeholderText: loc.newChatSearch
                         inputMethodHints: Qt.ImhNone
                         onTextChanged: searchText = text
                     }
@@ -3835,7 +3845,7 @@ Label {
                         width: parent.width
                         visible: isValidNumber()
                         
-                        SectionHeader { text: "New conversation" }
+                        SectionHeader { text: loc.newConversation }
 
                         BackgroundItem {
                             width: parent.width
@@ -3878,7 +3888,7 @@ Label {
                                         color: Theme.highlightColor
                                     }
                                     Label {
-                                        text: "Start new chat with this number"
+                                        text: loc.startChatWithNumber
                                         font.pixelSize: Theme.fontSizeSmall
                                         color: Theme.secondaryColor
                                     }
@@ -3888,7 +3898,7 @@ Label {
                     }
 
                     SectionHeader { 
-                        text: "Contacts (" + filteredContacts().length + ")"
+                        text: loc.contacts + " (" + filteredContacts().length + ")"
                         visible: filteredContacts().length > 0
                     }
 
@@ -4315,7 +4325,7 @@ Label {
                     // mehr noetig, um eine Aktion zu erreichen
 
                     MenuItem {
-                        text: "Refresh channel"
+                        text: loc.refreshChannel
                         visible: isChannel
                         onClicked: {
                             var xhr = new XMLHttpRequest()
@@ -4327,7 +4337,7 @@ Label {
                         }
                     }
                     MenuItem {
-                        text: "Unfollow channel"
+                        text: loc.unfollowChannel
                         visible: isChannel
                         onClicked: blockRemorse.execute("Unfollowing channel", function() {
                             var xhr = new XMLHttpRequest()
@@ -4336,7 +4346,7 @@ Label {
                         })
                     }
                     MenuItem {
-                        text: "Load history from phone"
+                        text: loc.loadHistory
                         visible: chatJid !== "status" && !isChannel
                         onClicked: {
                             var xhr = new XMLHttpRequest()
@@ -4350,11 +4360,11 @@ Label {
                         }
                     }
                     MenuItem {
-                        text: "Search in chat"
+                        text: loc.searchInChat
                         onClicked: pageStack.push(searchPage, { scopeJid: chatJid, scopeName: chatName })
                     }
                     MenuItem {
-                        text: "Share live location\u2026"
+                        text: loc.shareLiveLocation
                         visible: chatJid !== "status" && !isChannel && !(liveActive && liveChatJid === chatJid)
                         onClicked: {
                             var dlg = pageStack.push(liveDurationDialog)
@@ -4364,12 +4374,12 @@ Label {
                         }
                     }
                     MenuItem {
-                        text: "Stop live location"
+                        text: loc.stopLiveLocation
                         visible: liveActive && liveChatJid === chatJid
                         onClicked: stopLiveShare()
                     }
                     MenuItem {
-                        text: "Send location\u2026"
+                        text: loc.sendLocation
                         visible: chatJid !== "status" && !isChannel
                         onClicked: {
                             var dlg = pageStack.push(locationDialog)
@@ -4386,14 +4396,14 @@ Label {
                         }
                     }
                     MenuItem {
-                        text: "Disappearing messages\u2026"
+                        text: loc.disappearingMessages
                         visible: chatJid !== "status" && !isChannel
                         onClicked: {
                             var dlg = pageStack.push(disappearingDialog, { chatJid: chatJid })
                         }
                     }
                     MenuItem {
-                        text: "Clear chat"
+                        text: loc.clearChat
                         visible: chatJid !== "status"
                         onClicked: blockRemorse.execute("Clearing chat", function() {
                             var xhr = new XMLHttpRequest()
@@ -4405,7 +4415,7 @@ Label {
                         })
                     }
                     MenuItem {
-                        text: "Delete chat"
+                        text: loc.deleteChat
                         visible: chatJid !== "status" && !isChannel
                         onClicked: blockRemorse.execute("Deleting chat", function() {
                             var xhr = new XMLHttpRequest()
@@ -4417,7 +4427,7 @@ Label {
                         })
                     }
                     MenuItem {
-                        text: "Load older messages"
+                        text: loc.loadOlder
                         visible: chatJid !== "status" && !isChannel && !isChannel
                         onClicked: {
                             var xhr = new XMLHttpRequest()
@@ -4433,38 +4443,38 @@ Label {
                         }
                     }
                     MenuItem {
-                        text: "Create poll"
+                        text: loc.createPoll
                         visible: chatJid !== "status" && !isChannel
                         onClicked: pageStack.push(createPollPage, { targetChat: chatJid })
                     }
                     MenuItem {
-                        text: "Group info"
+                        text: loc.groupInfo
                         visible: isGroupChat
                         onClicked: pageStack.push(groupInfoPage, { groupJid: chatJid })
                     }
                     MenuItem {
-                        text: "Block contact"
+                        text: loc.blockContact
                         visible: !isGroupChat && chatJid !== "status" && !isChannel
                         onClicked: blockRemorse.execute("Blocking +" + chatJid, function() { blockAction("block") })
                     }
                     MenuItem {
-                        text: "Unblock contact"
+                        text: loc.unblockContact
                         visible: !isGroupChat && chatJid !== "status" && !isChannel
                         onClicked: blockAction("unblock")
                     }
                     MenuItem {
-                        text: "Call +" + chatJid
+                        text: loc.call + " +" + chatJid
                         visible: !isGroupChat && chatJid !== "status" && !isChannel
                         onClicked: Qt.openUrlExternally("tel:+" + chatJid)
                     }
-                    MenuItem { text: "Send file"; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(filePicker) }
-                    MenuItem { text: "Send image"; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(imagePicker) }
-                    MenuItem { text: "Refresh"; onClicked: load() }
+                    MenuItem { text: loc.sendFile; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(filePicker) }
+                    MenuItem { text: loc.sendImage; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(imagePicker) }
+                    MenuItem { text: loc.refresh; onClicked: load() }
                 }
 
                 PullDownMenu {
                     MenuItem {
-                        text: "Refresh channel"
+                        text: loc.refreshChannel
                         visible: isChannel
                         onClicked: {
                             var xhr = new XMLHttpRequest()
@@ -4476,7 +4486,7 @@ Label {
                         }
                     }
                     MenuItem {
-                        text: "Unfollow channel"
+                        text: loc.unfollowChannel
                         visible: isChannel
                         onClicked: blockRemorse.execute("Unfollowing channel", function() {
                             var xhr = new XMLHttpRequest()
@@ -4485,7 +4495,7 @@ Label {
                         })
                     }
                     MenuItem {
-                        text: "Load history from phone"
+                        text: loc.loadHistory
                         visible: chatJid !== "status" && !isChannel
                         onClicked: {
                             var xhr = new XMLHttpRequest()
@@ -4499,11 +4509,11 @@ Label {
                         }
                     }
                     MenuItem {
-                        text: "Search in chat"
+                        text: loc.searchInChat
                         onClicked: pageStack.push(searchPage, { scopeJid: chatJid, scopeName: chatName })
                     }
                     MenuItem {
-                        text: "Share live location\u2026"
+                        text: loc.shareLiveLocation
                         visible: chatJid !== "status" && !isChannel && !(liveActive && liveChatJid === chatJid)
                         onClicked: {
                             var dlg = pageStack.push(liveDurationDialog)
@@ -4513,12 +4523,12 @@ Label {
                         }
                     }
                     MenuItem {
-                        text: "Stop live location"
+                        text: loc.stopLiveLocation
                         visible: liveActive && liveChatJid === chatJid
                         onClicked: stopLiveShare()
                     }
                     MenuItem {
-                        text: "Send location\u2026"
+                        text: loc.sendLocation
                         visible: chatJid !== "status" && !isChannel
                         onClicked: {
                             var dlg = pageStack.push(locationDialog)
@@ -4535,14 +4545,14 @@ Label {
                         }
                     }
                     MenuItem {
-                        text: "Disappearing messages\u2026"
+                        text: loc.disappearingMessages
                         visible: chatJid !== "status" && !isChannel
                         onClicked: {
                             var dlg = pageStack.push(disappearingDialog, { chatJid: chatJid })
                         }
                     }
                     MenuItem {
-                        text: "Clear chat"
+                        text: loc.clearChat
                         visible: chatJid !== "status"
                         onClicked: blockRemorse.execute("Clearing chat", function() {
                             var xhr = new XMLHttpRequest()
@@ -4554,7 +4564,7 @@ Label {
                         })
                     }
                     MenuItem {
-                        text: "Delete chat"
+                        text: loc.deleteChat
                         visible: chatJid !== "status" && !isChannel
                         onClicked: blockRemorse.execute("Deleting chat", function() {
                             var xhr = new XMLHttpRequest()
@@ -4566,7 +4576,7 @@ Label {
                         })
                     }
                     MenuItem {
-                        text: "Load older messages"
+                        text: loc.loadOlder
                         visible: chatJid !== "status" && !isChannel && !isChannel
                         onClicked: {
                             var xhr = new XMLHttpRequest()
@@ -4582,33 +4592,33 @@ Label {
                         }
                     }
                     MenuItem {
-                        text: "Create poll"
+                        text: loc.createPoll
                         visible: chatJid !== "status" && !isChannel
                         onClicked: pageStack.push(createPollPage, { targetChat: chatJid })
                     }
                     MenuItem {
-                        text: "Group info"
+                        text: loc.groupInfo
                         visible: isGroupChat
                         onClicked: pageStack.push(groupInfoPage, { groupJid: chatJid })
                     }
                     MenuItem {
-                        text: "Block contact"
+                        text: loc.blockContact
                         visible: !isGroupChat && chatJid !== "status" && !isChannel
                         onClicked: blockRemorse.execute("Blocking +" + chatJid, function() { blockAction("block") })
                     }
                     MenuItem {
-                        text: "Unblock contact"
+                        text: loc.unblockContact
                         visible: !isGroupChat && chatJid !== "status" && !isChannel
                         onClicked: blockAction("unblock")
                     }
                     MenuItem {
-                        text: "Call +" + chatJid
+                        text: loc.call + " +" + chatJid
                         visible: !isGroupChat && chatJid !== "status" && !isChannel
                         onClicked: Qt.openUrlExternally("tel:+" + chatJid)
                     }
-                    MenuItem { text: "Send file"; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(filePicker) }
-                    MenuItem { text: "Send image"; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(imagePicker) }
-                    MenuItem { text: "Refresh"; onClicked: load() }
+                    MenuItem { text: loc.sendFile; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(filePicker) }
+                    MenuItem { text: loc.sendImage; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(imagePicker) }
+                    MenuItem { text: loc.refresh; onClicked: load() }
                 }
 
                 RemorsePopup { id: blockRemorse }
@@ -4672,7 +4682,7 @@ Label {
                     
                     menu: ContextMenu {
                         MenuItem {
-                            text: "Reply"
+                            text: loc.reply
                             visible: !modelData.revoked
                             onClicked: {
                                 replyToId = modelData.id
@@ -4703,7 +4713,7 @@ Label {
                             }
                         }
                         MenuItem {
-                            text: "Edit"
+                            text: loc.edit
                             visible: modelData.fromMe && !modelData.revoked && !modelData.mediaType && modelData.text !== ""
                             onClicked: {
                                 editingId = modelData.id
@@ -4712,17 +4722,17 @@ Label {
                             }
                         }
                         MenuItem {
-                            text: "Delete for everyone"
+                            text: loc.deleteForEveryone
                             visible: modelData.fromMe && !modelData.revoked
                             onClicked: revokeMessage(modelData.id)
                         }
                         MenuItem {
-                            text: "Call back +" + modelData.sender
+                            text: loc.callBack + " +" + modelData.sender
                             visible: modelData.text && modelData.text.indexOf("\ud83d\udcde") === 0 && !modelData.fromMe
                             onClicked: Qt.openUrlExternally("tel:+" + modelData.sender)
                         }
                         MenuItem {
-                            text: "Open"
+                            text: loc.open
                             visible: !!modelData.localPath
                             onClicked: modelData.mediaType === "image"
                                        ? pageStack.push(statusFullscreen, { imagePath: modelData.localPath, caption: modelData.text || "" })
@@ -4733,12 +4743,12 @@ Label {
                                            : Qt.openUrlExternally("file://" + modelData.localPath)
                         }
                         MenuItem {
-                            text: "Copy text"
+                            text: loc.copyText
                             visible: modelData.text && modelData.text !== ""
                             onClicked: Clipboard.text = modelData.text
                         }
                         MenuItem {
-                            text: "Forward\u2026"
+                            text: loc.forward
                             visible: !modelData.revoked && !modelData.pollName
                             onClicked: pageStack.push(forwardPage, { forwardId: modelData.id })
                         }
@@ -4759,7 +4769,7 @@ Label {
                             }
                         }
                         MenuItem {
-                            text: "Join group"
+                            text: loc.joinGroup
                             visible: modelData.inviteCode !== undefined && modelData.inviteCode !== "" && !modelData.fromMe
                             onClicked: {
                                 var xhr = new XMLHttpRequest()
@@ -4852,9 +4862,9 @@ Label {
                                 Label { text: "📍"; font.pixelSize: Theme.fontSizeExtraLarge }
                                 Column {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    Label { text: "Location"; font.pixelSize: Theme.fontSizeSmall }
+                                    Label { text: loc.location; font.pixelSize: Theme.fontSizeSmall }
                                     Label {
-                                        text: "Tap to open in maps"
+                                        text: loc.tapToOpenMaps
                                         font.pixelSize: Theme.fontSizeExtraSmall
                                         color: Theme.secondaryColor
                                     }
@@ -4976,7 +4986,7 @@ Label {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                 }
                                 Label {
-                                    text: "Tap to download" + (modelData.fileSize ? " (" + formatSize(modelData.fileSize) + ")" : "")
+                                    text: loc.tapToDownload + (modelData.fileSize ? " (" + formatSize(modelData.fileSize) + ")" : "")
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     color: Theme.secondaryColor
                                     anchors.horizontalCenter: parent.horizontalCenter
@@ -5013,7 +5023,7 @@ Label {
                                 Column {
                                     anchors.verticalCenter: parent.verticalCenter
                                     Label { text: modelData.fileName || "Video"; font.pixelSize: Theme.fontSizeSmall }
-                                    Label { text: formatSize(modelData.fileSize) + (modelData.localPath ? "" : " · tap to download"); font.pixelSize: Theme.fontSizeExtraSmall; color: Theme.secondaryColor }
+                                    Label { text: formatSize(modelData.fileSize) + (modelData.localPath ? "" : " · " + loc.tapToDownloadLower); font.pixelSize: Theme.fontSizeExtraSmall; color: Theme.secondaryColor }
                                 }
                             }
 
@@ -5052,7 +5062,7 @@ Label {
                                 anchors.centerIn: parent
                                 spacing: Theme.paddingMedium
                                 Label { text: "🎵"; font.pixelSize: Theme.fontSizeLarge }
-                                Label { text: "Audio · " + formatSize(modelData.fileSize) + (modelData.localPath ? "" : " · tap to download"); font.pixelSize: Theme.fontSizeSmall; color: Theme.secondaryColor }
+                                Label { text: "Audio · " + formatSize(modelData.fileSize) + (modelData.localPath ? "" : " · " + loc.tapToDownloadLower); font.pixelSize: Theme.fontSizeSmall; color: Theme.secondaryColor }
                             }
 
                             BusyIndicator {
@@ -5092,7 +5102,7 @@ Label {
                                 Label { text: "📄"; font.pixelSize: Theme.fontSizeLarge }
                                 Column {
                                     Label { text: modelData.fileName || "Document"; font.pixelSize: Theme.fontSizeSmall }
-                                    Label { text: formatSize(modelData.fileSize) + (modelData.localPath ? "" : " · tap to download"); font.pixelSize: Theme.fontSizeExtraSmall; color: Theme.secondaryColor }
+                                    Label { text: formatSize(modelData.fileSize) + (modelData.localPath ? "" : " · " + loc.tapToDownloadLower); font.pixelSize: Theme.fontSizeExtraSmall; color: Theme.secondaryColor }
                                 }
                             }
 
@@ -5182,8 +5192,8 @@ Label {
 
                 ViewPlaceholder {
                     enabled: msgs.length === 0
-                    text: "No messages yet"
-                    hintText: "Send a message to start the conversation"
+                    text: loc.noMessages
+                    hintText: loc.noMessagesHint
                 }
             }
 
@@ -5439,7 +5449,7 @@ Label {
             property string forwardId: ""
             SilicaListView {
                 anchors.fill: parent
-                header: PageHeader { title: "Forward to\u2026" }
+                header: PageHeader { title: loc.forwardTo }
                 model: chats.filter(function(c) { return c.jid !== "status" && !c.isChannel })
                 delegate: ListItem {
                     Label {
@@ -5473,12 +5483,12 @@ Label {
             Column {
                 width: parent.width
                 spacing: Theme.paddingMedium
-                DialogHeader { title: "Disappearing messages" }
+                DialogHeader { title: loc.disappearingTitle }
                 ComboBox {
                     id: ephemeralCombo
-                    label: "Timer"
+                    label: loc.timer
                     menu: ContextMenu {
-                        MenuItem { text: "Off" }
+                        MenuItem { text: loc.off }
                         MenuItem { text: "24 hours" }
                         MenuItem { text: "7 days" }
                         MenuItem { text: "90 days" }
@@ -5490,7 +5500,7 @@ Label {
                     wrapMode: Text.Wrap
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: Theme.secondaryColor
-                    text: "New messages in this chat will disappear after the selected time, for everyone."
+                    text: loc.disappearingNote
                 }
             }
             onDone: {
@@ -5510,11 +5520,11 @@ Label {
             property string descText: descArea.text
             Column {
                 width: parent.width
-                DialogHeader { title: "Group description" }
+                DialogHeader { title: loc.groupDescription }
                 TextArea {
                     id: descArea
                     width: parent.width
-                    placeholderText: "Description"
+                    placeholderText: loc.description
                 }
             }
         }
@@ -5557,7 +5567,7 @@ Label {
                 anchors.fill: parent
                 header: Column {
                     width: parent.width
-                    PageHeader { title: "Join requests" }
+                    PageHeader { title: loc.joinRequests }
                     Label {
                         visible: reqStatus !== ""
                         x: Theme.horizontalPageMargin
@@ -5582,8 +5592,8 @@ Label {
                         }
                     }
                     menu: ContextMenu {
-                        MenuItem { text: "Approve"; onClicked: decide(modelData.number, "approve") }
-                        MenuItem { text: "Reject";  onClicked: decide(modelData.number, "reject") }
+                        MenuItem { text: loc.approve; onClicked: decide(modelData.number, "approve") }
+                        MenuItem { text: loc.reject;  onClicked: decide(modelData.number, "reject") }
                     }
                 }
                 VerticalScrollDecorator {}
@@ -5617,7 +5627,7 @@ Label {
             Column {
                 width: parent.width
                 spacing: Theme.paddingMedium
-                DialogHeader { title: "Send location" }
+                DialogHeader { title: loc.sendLocationTitle }
                 Label {
                     id: gpsHint
                     x: Theme.horizontalPageMargin
@@ -5631,21 +5641,21 @@ Label {
                 TextField {
                     id: latField
                     width: parent.width
-                    label: "Latitude"
+                    label: loc.latitude
                     placeholderText: "48.2082"
                     inputMethodHints: Qt.ImhFormattedNumbersOnly
                 }
                 TextField {
                     id: lonField
                     width: parent.width
-                    label: "Longitude"
+                    label: loc.longitude
                     placeholderText: "16.3738"
                     inputMethodHints: Qt.ImhFormattedNumbersOnly
                 }
                 TextField {
                     id: nameField
                     width: parent.width
-                    label: "Label (optional)"
+                    label: loc.labelOptional
                     placeholderText: "e.g. Meeting point"
                 }
             }
@@ -5659,10 +5669,10 @@ Label {
             Column {
                 width: parent.width
                 spacing: Theme.paddingMedium
-                DialogHeader { title: "Share live location" }
+                DialogHeader { title: loc.shareLiveTitle }
                 ComboBox {
                     id: durCombo
-                    label: "Duration"
+                    label: loc.duration
                     menu: ContextMenu {
                         MenuItem { text: "15 minutes" }
                         MenuItem { text: "1 hour" }
@@ -5675,7 +5685,7 @@ Label {
                     wrapMode: Text.Wrap
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: Theme.secondaryColor
-                    text: "Your position is sent every ~20 s while the app keeps running (background/cover is fine, like Pure Maps). Closing the app ends the share. Requires the Location permission (see Settings)."
+                    text: loc.liveLocationNote
                 }
             }
         }
@@ -5745,11 +5755,11 @@ Label {
                 model: results
                 header: Column {
                     width: parent ? parent.width : Screen.width
-                    PageHeader { title: "Discover channels" }
+                    PageHeader { title: loc.discoverChannelsTitle }
                     SearchField {
                         id: dirSearch
                         width: parent.width
-                        placeholderText: "Search channels"
+                        placeholderText: loc.searchChannels
                         EnterKey.iconSource: "image://theme/icon-m-search"
                         EnterKey.onClicked: { focus = false; chDirPage.curLimit = 30; chDirPage.exhausted = false; chDirPage.search(text) }
                     }
@@ -5774,7 +5784,7 @@ Label {
                     menu: Component {
                         ContextMenu {
                             MenuItem {
-                                text: "Follow"
+                                text: loc.follow
                                 onClicked: {
                                     var xhr = new XMLHttpRequest()
                                     xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/follow?jid=" + encodeURIComponent(modelData.jid))
@@ -5832,7 +5842,7 @@ Label {
                     Button {
                         anchors.centerIn: parent
                         visible: parent.height > 0 && !chDirPage.searching
-                        text: "Load more"
+                        text: loc.loadMore
                         onClicked: chDirPage.loadMore()
                     }
                     BusyIndicator {
