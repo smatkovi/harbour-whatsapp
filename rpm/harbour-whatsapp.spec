@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.114
+Version:    0.9.115
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -79,7 +79,13 @@ D=/usr/share/applications/harbour-whatsapp.desktop
 # D-Bus-Ruf um und macht die App vom Launcher aus unstartbar (0.9.90-
 # Lehrstueck) - die Zeile gehoert nur ins Daemon-Desktop-File
 sed -i '/^X-Maemo-Service=/d' $D
-grep -q '^ExecDBus=' $D || printf 'ExecDBus=/usr/bin/sailjail -p harbour-whatsapp.desktop -- /usr/bin/sailfish-qml harbour-whatsapp\n' >> $D
+# ExecDBus OHNE sailjail-Wrapper: sailjaild wickelt die Zeile in
+# invoker, und der Silica-Booster laedt sein Ziel per dlopen -
+# sailjail ist nicht boostbar ("cannot dynamically load executable",
+# der Grund, warum der Kaltstart-Tap nie funktionierte). Sandboxing
+# kommt ueber die Launcher-Integration, wie beim Icon-Start
+sed -i '/^ExecDBus=/d' $D
+printf 'ExecDBus=/usr/bin/sailfish-qml harbour-whatsapp\n' >> $D
 
 # gst-launch am exec-erlaubten Ort verfuegbar machen (Voice-Aufnahme):
 # /usr/bin kann im Sailjail auf eine Positivliste reduziert sein
@@ -92,6 +98,17 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.115-1
+- Tap-to-open from a closed app works for the first time (OpenRepos
+  report + local reproduction): sailjaild wraps the ExecDBus line in
+  invoker, and the silica booster dlopens its target - sailjail is a
+  plain executable and not boostable ("cannot dynamically load
+  executable", exit 1 on every activation since 0.9.87). ExecDBus is
+  now the bare boostable command (sailfish-qml harbour-whatsapp);
+  sandboxing still applies through the launcher integration, same as
+  an icon start. %post migrates existing desktop files by replacing
+  any old ExecDBus line
+
 * Mon Jul 20 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.114-1
 - Archive page has its long-press menu too: Unarchive, Mute/Unmute
   and the favorites toggle, with native displacement - completing

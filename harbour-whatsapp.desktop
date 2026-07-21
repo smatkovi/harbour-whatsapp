@@ -9,4 +9,4 @@ X-Nemo-Application-Type=silica-qt5
 Permissions=Internet;Secrets;
 OrganizationName=harbour
 ApplicationName=harbour-whatsapp
-ExecDBus=/usr/bin/sailjail -p harbour-whatsapp.desktop -- /usr/bin/sailfish-qml harbour-whatsapp
+ExecDBus=/usr/bin/sailfish-qml harbour-whatsapp
