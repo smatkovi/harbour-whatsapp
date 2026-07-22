@@ -853,6 +853,22 @@ ApplicationWindow {
     // onStatusChanged-Handler der Zwischenseiten (navJumpTarget).
     property int navJumpTarget: -1
 
+    // URLs in Nachrichtentext klickbar machen (tom_i-Wunsch):
+    // erst HTML-escapen, dann Links in <a> verpacken - StyledText
+    // interpretiert sonst spitze Klammern aus dem Nachrichtentext
+    function linkify(t) {
+        if (!t) return ""
+        t = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        t = t.replace(/(https?:\/\/[^\s]+|www\.[^\s]+)/g, function(u) {
+            var tail = ""
+            var m = u.match(/[.,;:!?)\]]+$/)
+            if (m) { tail = m[0]; u = u.substring(0, u.length - tail.length) }
+            var href = (u.indexOf("http") === 0) ? u : ("http://" + u)
+            return "<a href=\"" + href + "\">" + u + "</a>" + tail
+        })
+        return t.replace(/\n/g, "<br>")
+    }
+
     function navGo(from, to) {
         if (to === from) return
         if (to < from) {
@@ -2705,7 +2721,7 @@ Label {
                                         onClicked: Qt.openUrlExternally("tel:+" + modelData.number)
                                     }
                                     MenuItem {
-                                        text: modelData.isAdmin ? "Remove admin rights" : "Make admin"
+                                        text: modelData.isAdmin ? loc.removeAdmin : loc.makeAdmin
                                         onClicked: groupCall("/group/participants?chat=" + giPage.groupJid
                                                    + "&action=" + (modelData.isAdmin ? "demote" : "promote")
                                                    + "&numbers=" + modelData.number)
@@ -2748,7 +2764,7 @@ Label {
                             if (xhr.status === 200) {
                                 inviteLink = JSON.parse(xhr.responseText).link
                                 Clipboard.text = inviteLink
-                                giStatus = "Invite link copied to clipboard"
+                                giStatus = loc.linkCopied
                             }
                         })
                     }
@@ -3147,6 +3163,22 @@ Label {
     // grosses Profilbild (der Avatar-Cache haelt bereits das Vollbild),
     // Nummer/About bei Kontakten, Topic/Mitgliederzahl bei Gruppen
     Component {
+        id: avatarViewerPage
+        Page {
+            property string imgSource: ""
+            allowedOrientations: Orientation.All
+            Rectangle { anchors.fill: parent; color: "black" }
+            Image {
+                anchors.fill: parent
+                fillMode: Image.PreserveAspectFit
+                source: imgSource
+                asynchronous: true
+            }
+            MouseArea { anchors.fill: parent; onClicked: pageStack.pop() }
+        }
+    }
+
+    Component {
         id: contactInfoPage
         Page {
             id: ciPage
@@ -3157,6 +3189,63 @@ Label {
             property bool channel: false
             property var info: ({})
             property bool infoLoaded: false
+            property var mediaMsgs: []
+            property var linkMsgs: []
+            property var docMsgs: []
+            property var groupMembers: []
+
+            // "Medien, Links, Doks" wie in WhatsApp (tom_i-Wunsch):
+            // volle Historie holen und client-seitig sortieren
+            function loadMedia() {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/messages?jid=" + jid)
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState !== 4 || xhr.status !== 200) return
+                    var list = []
+                    try { list = JSON.parse(xhr.responseText) || [] } catch (e) {}
+                    var med = [], docs = [], links = []
+                    for (var i = list.length - 1; i >= 0; i--) {  // neueste zuerst
+                        var m = list[i]
+                        if (m.revoked) continue
+                        if (m.mediaType === "image" || m.mediaType === "video") med.push(m)
+                        else if (m.mediaType === "document" || m.mediaType === "audio") docs.push(m)
+                        else if (m.text && m.text.match(/https?:\/\/|www\./)) links.push(m)
+                    }
+                    ciPage.mediaMsgs = med
+                    ciPage.docMsgs = docs
+                    ciPage.linkMsgs = links
+                }
+                xhr.send()
+            }
+
+            function loadParticipants() {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + "/group/info?chat=" + jid)
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState !== 4 || xhr.status !== 200) return
+                    try {
+                        var d = JSON.parse(xhr.responseText)
+                        ciPage.groupMembers = (d.participants || []).slice(0, 100)
+                    } catch (e) {}
+                }
+                xhr.send()
+            }
+
+            property string inviteLink: ""
+
+            // Gleiche Endpoints wie die Gruppeninfo-Seite - Verwaltung
+            // direkt auf der Info-Seite (Langdruck auf Teilnehmer)
+            function groupCall(params, cb) {
+                var xhr = new XMLHttpRequest()
+                xhr.open("GET", "http://127.0.0.1:" + backendPort + params)
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (cb) cb(xhr)
+                        loadParticipants()
+                    }
+                }
+                xhr.send()
+            }
 
             Component.onCompleted: {
                 var xhr = new XMLHttpRequest()
@@ -3169,11 +3258,37 @@ Label {
                     ciPage.infoLoaded = true
                 }
                 xhr.send()
+                loadMedia()
+                if (group) loadParticipants()
             }
 
             SilicaFlickable {
                 anchors.fill: parent
                 contentHeight: ciCol.height
+
+                PullDownMenu {
+                    visible: ciPage.group
+
+                    MenuItem {
+                        text: loc.groupInfo
+                        onClicked: pageStack.push(groupInfoPage, { groupJid: ciPage.jid })
+                    }
+                    MenuItem {
+                        text: loc.getInviteLink
+                        onClicked: ciPage.groupCall("/group/invitelink?chat=" + ciPage.jid, function(xhr) {
+                            if (xhr.status === 200) {
+                                try { ciPage.inviteLink = JSON.parse(xhr.responseText).link } catch (e) {}
+                                Clipboard.text = ciPage.inviteLink
+                            }
+                        })
+                    }
+                    MenuItem {
+                        text: loc.leaveGroup
+                        onClicked: ciPage.groupCall("/group/leave?chat=" + ciPage.jid, function() {
+                            pageStack.pop(mainPage)
+                        })
+                    }
+                }
 
                 Column {
                     id: ciCol
@@ -3190,6 +3305,12 @@ Label {
                         source: ciPage.avatar
                         fillMode: Image.PreserveAspectFit
                         asynchronous: true
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: pageStack.push(avatarViewerPage,
+                                                      { imgSource: ciPage.avatar })
+                        }
                     }
 
                     Label {
@@ -3232,6 +3353,186 @@ Label {
                         width: parent.width - 2*x
                         text: (ciPage.info.participants || 0) + " " + loc.participants
                         color: Theme.secondaryColor
+                    }
+
+                    Label {
+                        visible: ciPage.inviteLink !== ""
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: ciPage.inviteLink
+                        wrapMode: Text.WrapAnywhere
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.highlightColor
+                    }
+
+                    SectionHeader {
+                        visible: ciPage.group && ciPage.groupMembers.length > 0
+                        text: loc.participantsHdr
+                    }
+
+                    Column {
+                        visible: ciPage.group && ciPage.groupMembers.length > 0
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        Repeater {
+                            model: ciPage.groupMembers
+                            delegate: ListItem {
+                                width: parent.width
+                                contentHeight: Theme.itemSizeExtraSmall
+                                menu: Component {
+                                    ContextMenu {
+                                        MenuItem {
+                                            text: loc.call + " +" + modelData.number
+                                            onClicked: Qt.openUrlExternally("tel:+" + modelData.number)
+                                        }
+                                        MenuItem {
+                                            text: modelData.isAdmin ? loc.removeAdmin : loc.makeAdmin
+                                            onClicked: ciPage.groupCall("/group/participants?chat=" + ciPage.jid
+                                                       + "&action=" + (modelData.isAdmin ? "demote" : "promote")
+                                                       + "&numbers=" + modelData.number)
+                                        }
+                                        MenuItem {
+                                            text: loc.removeFromGroup
+                                            onClicked: ciPage.groupCall("/group/participants?chat=" + ciPage.jid
+                                                       + "&action=remove&numbers=" + modelData.number)
+                                        }
+                                    }
+                                }
+                                Label {
+                                    width: parent.width
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: getDisplayName(modelData.number, modelData.name)
+                                          + (modelData.isAdmin ? " \u2605" : "")
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    truncationMode: TruncationMode.Fade
+                                    color: Theme.primaryColor
+                                }
+                            }
+                        }
+                    }
+
+                    SectionHeader {
+                        visible: ciPage.mediaMsgs.length > 0
+                        text: loc.media
+                    }
+
+                    Grid {
+                        visible: ciPage.mediaMsgs.length > 0
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        columns: 3
+                        spacing: Theme.paddingSmall
+
+                        Repeater {
+                            model: ciPage.mediaMsgs
+                            delegate: Rectangle {
+                                width: (parent.width - 2*Theme.paddingSmall) / 3
+                                height: width
+                                color: Theme.rgba(Theme.primaryColor, 0.15)
+                                radius: Theme.paddingSmall
+
+                                Image {
+                                    anchors.fill: parent
+                                    anchors.margins: 1
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                    sourceSize.width: 256
+                                    source: (modelData.mediaType === "image" && modelData.localPath)
+                                            ? "file://" + modelData.localPath : ""
+                                }
+
+                                Label {
+                                    anchors.centerIn: parent
+                                    visible: modelData.mediaType === "video" || !modelData.localPath
+                                    text: !modelData.localPath ? "\u2b07"
+                                        : "\u25b6"
+                                    font.pixelSize: Theme.fontSizeExtraLarge
+                                    color: Theme.primaryColor
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        if (modelData.localPath) {
+                                            Qt.openUrlExternally("file://" + modelData.localPath)
+                                        } else {
+                                            var xhr = new XMLHttpRequest()
+                                            xhr.open("GET", "http://127.0.0.1:" + backendPort
+                                                     + "/download?id=" + encodeURIComponent(modelData.id))
+                                            xhr.onreadystatechange = function() {
+                                                if (xhr.readyState === 4) ciPage.loadMedia()
+                                            }
+                                            xhr.send()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    SectionHeader {
+                        visible: ciPage.linkMsgs.length > 0
+                        text: loc.links
+                    }
+
+                    Column {
+                        visible: ciPage.linkMsgs.length > 0
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        spacing: Theme.paddingMedium
+                        Repeater {
+                            model: ciPage.linkMsgs
+                            delegate: Label {
+                                width: parent.width
+                                text: linkify(modelData.text)
+                                textFormat: Text.StyledText
+                                linkColor: Theme.highlightColor
+                                onLinkActivated: Qt.openUrlExternally(link)
+                                wrapMode: Text.Wrap
+                                font.pixelSize: Theme.fontSizeSmall
+                                color: Theme.primaryColor
+                            }
+                        }
+                    }
+
+                    SectionHeader {
+                        visible: ciPage.docMsgs.length > 0
+                        text: loc.documents
+                    }
+
+                    Column {
+                        visible: ciPage.docMsgs.length > 0
+                        width: parent.width
+                        Repeater {
+                            model: ciPage.docMsgs
+                            delegate: BackgroundItem {
+                                width: parent.width
+                                height: Theme.itemSizeSmall
+                                onClicked: {
+                                    if (modelData.localPath) {
+                                        Qt.openUrlExternally("file://" + modelData.localPath)
+                                    } else {
+                                        var xhr = new XMLHttpRequest()
+                                        xhr.open("GET", "http://127.0.0.1:" + backendPort
+                                                 + "/download?id=" + encodeURIComponent(modelData.id))
+                                        xhr.onreadystatechange = function() {
+                                            if (xhr.readyState === 4) ciPage.loadMedia()
+                                        }
+                                        xhr.send()
+                                    }
+                                }
+                                Label {
+                                    x: Theme.horizontalPageMargin
+                                    width: parent.width - 2*x
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: (modelData.mediaType === "audio" ? "\ud83c\udfb5 " : "\ud83d\udcc4 ")
+                                          + (modelData.text || modelData.mediaType)
+                                          + (modelData.localPath ? "" : "  \u2b07")
+                                    truncationMode: TruncationMode.Fade
+                                    font.pixelSize: Theme.fontSizeSmall
+                                }
+                            }
+                        }
                     }
 
                     BusyIndicator {
@@ -5234,7 +5535,10 @@ Label {
                                 id: msgTxt
                                 anchors.centerIn: parent
                                 width: parent.width - Theme.paddingLarge * 2
-                                text: mentionsToNames(locMsg(modelData.text))
+                                text: linkify(mentionsToNames(locMsg(modelData.text)))
+                                textFormat: Text.StyledText
+                                linkColor: Theme.highlightColor
+                                onLinkActivated: Qt.openUrlExternally(link)
                                 wrapMode: Text.Wrap
                             }
                         }

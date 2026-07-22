@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.134
+Version:    0.9.137
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,26 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Wed Jul 22 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.137-1
+- Translation polish: "Make admin" / "Remove admin rights" (previously
+  hardcoded English) and "Invite link copied" are now proper catalog keys,
+  and media/links section headers are translated in all 22 languages
+
+* Wed Jul 22 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.136-1
+- Group management works right on the info page now: long-press a
+  participant to call, promote/demote or remove; pull down for invite
+  link (copied to clipboard), leaving the group, or the full group
+  info page (add participants, rename, description, join requests)
+
+* Wed Jul 22 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.135-1
+- Media, links and documents overview per chat (requested by tom_i):
+  the contact/group info page (swipe left in a chat) now shows a photo/video
+  grid, all shared links and all documents from the whole chat history -
+  tap a placeholder to download, tap media to open
+- Group participants are listed right on the info page (first 100)
+- Tap the profile picture on the info page to view it fullscreen
+- URL links in messages are now clickable (requested by tom_i)
+
 * Wed Jul 22 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.134-1
 - Bottom navigation bar now shows on all four pages - Archive, Favorites,
   Chats and Status - with the active page highlighted (requested by rdomschk)
