@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.137
+Version:    0.9.138
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,12 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Wed Jul 22 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.138-1
+- Notification tap: back arrow now returns to Chats, not to Favorites -
+  the chat is popped to the Chats page instead of the stack root, which
+  could be another page after a bottom-bar jump
+- Search page is now translated (title and placeholders) in all 22 languages
+
 * Wed Jul 22 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.137-1
 - Translation polish: "Make admin" / "Remove admin rights" (previously
   hardcoded English) and "Invite link copied" are now proper catalog keys,

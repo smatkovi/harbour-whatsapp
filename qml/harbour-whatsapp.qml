@@ -339,7 +339,10 @@ ApplicationWindow {
                 break
             }
         }
-        pageStack.pop(null, PageStackAction.Immediate)
+        // Bis zur Chatliste poppen (nicht null) - sonst landet der
+        // Zurueck-Pfeil auf der untersten Stackseite, die nach einem
+        // Bodenleisten-Sprung Favoriten/Archiv sein kann statt Chats
+        pageStack.pop(mainPage, PageStackAction.Immediate)
         pageStack.push(chatPage, {
             chatJid: jid,
             chatName: name,
@@ -3863,11 +3866,11 @@ Label {
             Column {
                 id: spHeader
                 width: parent.width
-                PageHeader { title: scopeName !== "" ? "Search in " + scopeName : "Search" }
+                PageHeader { title: scopeName !== "" ? loc.searchInScope.arg(scopeName) : loc.searchTitle }
                 SearchField {
                     id: spField
                     width: parent.width
-                    placeholderText: scopeName !== "" ? "Search in this chat" : "Search chats and messages"
+                    placeholderText: scopeName !== "" ? loc.searchInChat : loc.searchChatsMessages
                     focus: true
                     onTextChanged: searchDebounce.restart()
                 }
