@@ -310,6 +310,14 @@ ApplicationWindow {
         }
     }
 
+    // Backend-Sentinels bei der Anzeige uebersetzen (das Backend kennt
+    // die UI-Sprache nicht; der gespeicherte Text bleibt englisch)
+    function locMsg(t) {
+        if (t === "\ud83d\udeab This message was deleted")
+            return "\ud83d\udeab " + loc.messageDeleted
+        return t
+    }
+
     function chatSettingFor(jid, action) {
         var xhr = new XMLHttpRequest()
         xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chatsetting?chat=" + jid + "&action=" + action)
@@ -1514,7 +1522,7 @@ ApplicationWindow {
                             // keep this strictly single-line: multi-line last
                             // messages used to overflow the fixed-height list
                             // item and paint over the next chat entry
-                            text: modelData.lastMessage ? ((modelData.fromMe ? "You: " : "") + modelData.lastMessage.replace(/\n/g, " ")) : ""
+                            text: modelData.lastMessage ? ((modelData.fromMe ? loc.you + " " : "") + locMsg(modelData.lastMessage).replace(/\n/g, " ")) : ""
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.secondaryColor
                             truncationMode: TruncationMode.Fade
@@ -2964,7 +2972,7 @@ Label {
                     }
                     Label {
                         width: parent.width
-                        text: modelData.lastMessage || ""
+                        text: locMsg(modelData.lastMessage) || ""
                         truncationMode: TruncationMode.Fade
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
@@ -3068,7 +3076,7 @@ Label {
                     }
                     Label {
                         width: parent.width
-                        text: modelData.lastMessage || ""
+                        text: locMsg(modelData.lastMessage) || ""
                         truncationMode: TruncationMode.Fade
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
@@ -4800,7 +4808,7 @@ Label {
 
 
                             Label {
-                                text: "📊 " + (modelData.pollName || "Poll")
+                                text: "📊 " + (modelData.pollName || loc.poll)
                                 font.bold: true
                                 wrapMode: Text.Wrap
                                 width: parent.width
@@ -4913,7 +4921,7 @@ Label {
                                 }
                                 Label {
                                     width: parent.width
-                                    text: modelData.quotedText || ""
+                                    text: locMsg(modelData.quotedText) || ""
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     color: Theme.secondaryColor
                                     wrapMode: Text.Wrap
@@ -4933,10 +4941,10 @@ Label {
                             visible: modelData.forwarded === true || modelData.pinnedInChat === true
                                      || modelData.live === true || mentionsMe
                                      || (modelData.ephemeral !== undefined && modelData.ephemeral > 0)
-                            text: (modelData.forwarded ? "\u21aa Forwarded  " : "")
-                                  + (modelData.pinnedInChat ? "\ud83d\udccc Pinned  " : "")
+                            text: (modelData.forwarded ? "\u21aa " + loc.forwarded + "  " : "")
+                                  + (modelData.pinnedInChat ? "\ud83d\udccc " + loc.pinnedBadge + "  " : "")
                                   + (modelData.live ? "\ud83d\udd34 Live  " : "")
-                                  + (mentionsMe ? "\ud83d\udd14 Mentioned you  " : "")
+                                  + (mentionsMe ? "\ud83d\udd14 " + loc.mentionedYou + "  " : "")
                                   + ((modelData.ephemeral !== undefined && modelData.ephemeral > 0) ? "\u23f3" : "")
                             font.pixelSize: Theme.fontSizeTiny
                             color: Theme.secondaryHighlightColor
@@ -5101,7 +5109,7 @@ Label {
                                 spacing: Theme.paddingMedium
                                 Label { text: "📄"; font.pixelSize: Theme.fontSizeLarge }
                                 Column {
-                                    Label { text: modelData.fileName || "Document"; font.pixelSize: Theme.fontSizeSmall }
+                                    Label { text: modelData.fileName || loc.document; font.pixelSize: Theme.fontSizeSmall }
                                     Label { text: formatSize(modelData.fileSize) + (modelData.localPath ? "" : " · " + loc.tapToDownloadLower); font.pixelSize: Theme.fontSizeExtraSmall; color: Theme.secondaryColor }
                                 }
                             }
@@ -5160,7 +5168,7 @@ Label {
                                 id: msgTxt
                                 anchors.centerIn: parent
                                 width: parent.width - Theme.paddingLarge * 2
-                                text: mentionsToNames(modelData.text)
+                                text: mentionsToNames(locMsg(modelData.text))
                                 wrapMode: Text.Wrap
                             }
                         }
@@ -5173,7 +5181,7 @@ Label {
                         }
 
                         Label {
-                            text: formatTime(modelData.timestamp) + (modelData.edited ? " · edited" : "")
+                            text: formatTime(modelData.timestamp) + (modelData.edited ? " · " + loc.edited : "")
                             font.pixelSize: Theme.fontSizeExtraSmall
                             color: Theme.secondaryColor
                             anchors.right: modelData.fromMe ? parent.right : undefined

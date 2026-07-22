@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.130
+Version:    0.9.133
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,37 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.133-1
+- Every language Sailfish OS ships is now on the Language page - 15 new:
+  Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Danish, Norwegian,
+  Czech, Greek, Estonian, Latvian, Lithuanian, Slovenian, Chinese
+- 223 short-UI keys per new language; the dozen long technical paragraphs
+  deliberately fall back to English until native speakers contribute -
+  corrections are one-line edits in qml/translations.js
+- 22 languages total, all parity-checked against the English base
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.132-1
+- Five more languages join, each with the complete 235-key catalog:
+  Svenska, Magyar, Russkij (Russian), Francais - and, honoris
+  causa, Latina. The Language page now offers eight choices with
+  instant switching; every dictionary passed an automatic key-
+  parity check against the English base, so nothing can fall
+  through except to the English fallback by design. Native-speaker
+  corrections are one-line edits in qml/translations.js and very
+  welcome
+
+* Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.131-1
+- "This message was deleted" is translated at display time (the
+  backend writes the English sentinel into stored text and does not
+  know the UI language; a display-level mapper handles the bubble,
+  the chat list preview, favorites/archive rows and reply quotes) -
+  along with the remaining in-bubble bits: "You:" in previews, the
+  "edited" marker, the Forwarded/Pinned/Mentioned-you badges, poll
+  and document fallback labels
+- Finnish (Suomi) joins as the third language: the complete catalog
+  - all ~250 keys - translated, selectable on the Language page,
+  switching instantly like the others
+
 * Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.130-1
 - Translation completed - the final surfaces: both chat pull-down
   menus (history, search, locations, disappearing messages,
