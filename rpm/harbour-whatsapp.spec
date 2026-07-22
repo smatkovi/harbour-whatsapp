@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.133
+Version:    0.9.134
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,12 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Wed Jul 22 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.134-1
+- Bottom navigation bar now shows on all four pages - Archive, Favorites,
+  Chats and Status - with the active page highlighted (requested by rdomschk)
+- Multi-level jumps (e.g. Archive straight to Status) chain through the
+  page stack automatically
+
 * Tue Jul 21 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.133-1
 - Every language Sailfish OS ships is now on the Language page - 15 new:
   Spanish, Italian, Portuguese, Dutch, Polish, Turkish, Danish, Norwegian,

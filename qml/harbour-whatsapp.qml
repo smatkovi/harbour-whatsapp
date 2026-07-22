@@ -847,6 +847,51 @@ ApplicationWindow {
         }
     }
 
+    // Bodenleiste auf allen Seiten (rdomschk-Wunsch): ein Component,
+    // vier Loader, aktive Seite hervorgehoben. Spruenge ueber mehrere
+    // Ebenen (z.B. Archiv -> Status) laufen als Kette ueber die
+    // onStatusChanged-Handler der Zwischenseiten (navJumpTarget).
+    property int navJumpTarget: -1
+
+    function navGo(from, to) {
+        if (to === from) return
+        if (to < from) {
+            navJumpTarget = -1
+            if (to === 0) pageStack.pop(archPageItem)
+            else if (to === 1) pageStack.pop(favPageItem)
+            else pageStack.pop(mainPage)
+        } else {
+            navJumpTarget = (to - from > 1) ? to : -1
+            pageStack.navigateForward(to - from > 1 ? PageStackAction.Immediate
+                                                    : PageStackAction.Animated)
+        }
+    }
+
+    Component {
+        id: navBarComp
+        Row {
+            id: bar
+            property int activeIndex: 2
+            anchors.fill: parent
+            Repeater {
+                model: [ loc.archive, loc.favorites, loc.chats, loc.status ]
+                delegate: BackgroundItem {
+                    width: bar.width / 4
+                    height: bar.height
+                    enabled: index !== bar.activeIndex
+                    onClicked: navGo(bar.activeIndex, index)
+                    Label {
+                        anchors.centerIn: parent
+                        text: modelData
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: index === bar.activeIndex ? Theme.highlightColor
+                             : (highlighted ? Theme.highlightColor : Theme.primaryColor)
+                    }
+                }
+            }
+        }
+    }
+
     Page {
         id: mainPage
 
@@ -857,6 +902,13 @@ ApplicationWindow {
         function updateAttachedStatus() {
             if (status === PageStatus.Active && connected) {
                 pageStack.pushAttached(statusPage)
+                // Kettenende: Sprung aus Archiv/Favoriten bis zum Status
+                if (navJumpTarget === 3) {
+                    navJumpTarget = -1
+                    pageStack.navigateForward(PageStackAction.Animated)
+                } else {
+                    navJumpTarget = -1
+                }
             }
         }
         onStatusChanged: updateAttachedStatus()
@@ -864,35 +916,12 @@ ApplicationWindow {
         // Bodenleiste (OpenRepos-Idee): Ein-Tipp-Navigation zu Archive,
         // Favorites und Status - die Wischgesten bleiben unveraendert.
         // Textknoepfe statt Icon-Roulette; "Chats" markiert den Standort
-        Item {
+        Loader {
             id: navBar
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
             height: (connected && showNavBar) ? Theme.itemSizeExtraSmall : 0
             visible: connected && showNavBar
-
-            Row {
-                anchors.fill: parent
-                Repeater {
-                    model: [ loc.archive, loc.favorites, loc.chats, loc.status ]
-                    delegate: BackgroundItem {
-                        width: navBar.width / 4
-                        height: navBar.height
-                        enabled: index !== 2
-                        onClicked: {
-                            if (index === 0) pageStack.pop(archPageItem)
-                            else if (index === 1) pageStack.pop(favPageItem)
-                            else if (index === 3) pageStack.navigateForward(PageStackAction.Animated)
-                        }
-                        Label {
-                            anchors.centerIn: parent
-                            text: modelData
-                            font.pixelSize: Theme.fontSizeExtraSmall
-                            color: index === 2 ? Theme.highlightColor
-                                 : (highlighted ? Theme.highlightColor : Theme.primaryColor)
-                        }
-                    }
-                }
-            }
+            sourceComponent: navBarComp   // activeIndex 2 = Chats ist Standard
         }
 
         // Kachel-Ansicht als ListView aus Reihen: nur so verdraengt das
@@ -2909,10 +2938,29 @@ Label {
     // Component-Seiten zerstoeren wuerde. Links bleibt der Status.
     Page {
         id: favPageItem
-        onStatusChanged: if (status === PageStatus.Active) pageStack.pushAttached(mainPage)
+        onStatusChanged: {
+            if (status !== PageStatus.Active) return
+            pageStack.pushAttached(mainPage)
+            // Kettenglied fuer Spruenge aus dem Archiv Richtung Chats/Status
+            if (navJumpTarget >= 2) {
+                var last = (navJumpTarget === 2)
+                if (last) navJumpTarget = -1
+                pageStack.navigateForward(last ? PageStackAction.Animated
+                                               : PageStackAction.Immediate)
+            }
+        }
+
+        Loader {
+            id: favNav
+            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+            height: (connected && showNavBar) ? Theme.itemSizeExtraSmall : 0
+            visible: connected && showNavBar
+            sourceComponent: navBarComp
+            onLoaded: item.activeIndex = 1
+        }
 
         SilicaListView {
-            anchors.fill: parent
+            anchors { left: parent.left; right: parent.right; top: parent.top; bottom: favNav.top }
             header: PageHeader { title: loc.favorites }
             model: chats.filter(function(c) { return c.pinned === true })
 
@@ -3015,8 +3063,17 @@ Label {
             }
         }
 
+        Loader {
+            id: archNav
+            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+            height: (connected && showNavBar) ? Theme.itemSizeExtraSmall : 0
+            visible: connected && showNavBar
+            sourceComponent: navBarComp
+            onLoaded: item.activeIndex = 0
+        }
+
         SilicaListView {
-            anchors.fill: parent
+            anchors { left: parent.left; right: parent.right; top: parent.top; bottom: archNav.top }
             header: PageHeader { title: loc.archive }
             model: chats.filter(function(c) { return c.archived === true })
 
@@ -3282,8 +3339,17 @@ Label {
             onStatusChanged: if (status === PageStatus.Active) loadStatuses()
             Component.onCompleted: loadStatuses()
 
+            Loader {
+                id: stNav
+                anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+                height: (connected && showNavBar) ? Theme.itemSizeExtraSmall : 0
+                visible: connected && showNavBar
+                sourceComponent: navBarComp
+                onLoaded: item.activeIndex = 3
+            }
+
             SilicaListView {
-                anchors.fill: parent
+                anchors { left: parent.left; right: parent.right; top: parent.top; bottom: stNav.top }
                 model: statuses
 
                 PullDownMenu {
