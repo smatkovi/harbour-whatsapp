@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.140
+Version:    0.9.141
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,14 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Thu Jul 23 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.141-1
+- The Reply button inside notifications is translated now (reported by
+  rdomschk): the UI stores the translated label in prefs and the backend
+  uses it, so qml/translations.js stays the single source of truth
+- Sending a picture scrolls the chat to the bottom again (reported by
+  rdomschk) - it looked as if nothing had been sent because the view
+  stayed where it was after returning from the gallery picker
+
 * Thu Jul 23 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.140-1
 - Tile spacing slider now goes up to 30 (was 5) for a lot more ambience
   between the tiles. The cap is relaxed to a third of the cell width, so

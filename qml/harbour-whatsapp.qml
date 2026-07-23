@@ -102,6 +102,10 @@ ApplicationWindow {
                     onClicked: {
                         appLanguage = modelData.code
                         setPref("app_language", modelData.code)
+                        // Der Antworten-Knopf der Benachrichtigung wird im
+                        // Go-Backend beschriftet - dorthin gibt es nur diesen
+                        // Weg; der Katalog bleibt einzige Wahrheitsquelle
+                        setPref("notif_reply_label", TR.catalog(modelData.code).reply)
                     }
                     Label {
                         x: Theme.horizontalPageMargin
@@ -494,6 +498,9 @@ ApplicationWindow {
                 showNavBar = p.bottom_bar !== "0"
                 appLanguage = p.app_language || ""
                 prefsLoaded = true
+                // Auch fuer Bestandsinstallationen und Systemsprache setzen
+                if (p.notif_reply_label !== loc.reply)
+                    setPref("notif_reply_label", loc.reply)
             } else {
                 globalPrefsRetry.start()
             }
@@ -4596,16 +4603,22 @@ Label {
                         if (xhr.responseText === lastMsgsJson) return
                         lastMsgsJson = xhr.responseText
                         markOpened() // Chat ist offen: Neues gilt als gelesen
-                        stickToEnd = msgList.atYEnd
+                        stickToEnd = forceEnd || msgList.atYEnd
                         var keepY = msgList.contentY
                         msgs = JSON.parse(xhr.responseText) || []
                         if (!stickToEnd) restoreY = keepY
+                        else restoreY = -1
+                        forceEnd = false
                     }
                 }
                 xhr.send()
             }
             property bool stickToEnd: true
             property real restoreY: -1
+            // Nach eigenem Senden ans Ende springen, egal wo die Liste stand.
+            // Ueberlebt die Polls, bis die gesendete Nachricht wirklich da ist
+            // (load() kehrt bei unveraendertem JSON frueh zurueck)
+            property bool forceEnd: false
 
             function send() {
                 if (input.text === "") return
@@ -4638,6 +4651,7 @@ Label {
                         input.text = ""
                         editingId = ""
                         replyToId = ""; replyToText = ""; replyToSender = ""
+                        forceEnd = true
                         load()
                         loadChats()
                     }
@@ -4646,10 +4660,12 @@ Label {
             }
 
             function sendFile(path) {
+                forceEnd = true   // Upload dauert: schon die Zwischen-Polls sollen ans Ende
                 var xhr = new XMLHttpRequest()
                 xhr.open("POST", "http://127.0.0.1:" + backendPort + "/sendmedia?to=" + chatJid + "&file=" + encodeURIComponent(path) + "&caption=")
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState === 4) {
+                        forceEnd = true
                         load()
                         loadChats()
                     }

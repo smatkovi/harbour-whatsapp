@@ -229,7 +229,13 @@ func notifyIncoming(chatJid, title, preview string) {
     prefsMutex.RLock()
     sound := prefs["notif_sound"] != "0"
     vibrate := prefs["notif_vibrate"] != "0"
+    // Beschriftung des Antworten-Knopfes: die Oberflaeche legt den
+    // uebersetzten Text hier ab, damit der Katalog einzige Quelle bleibt
+    replyLabel := prefs["notif_reply_label"]
     prefsMutex.RUnlock()
+    if replyLabel == "" {
+        replyLabel = "Reply"
+    }
     var fb []string
     if sound {
         fb = append(fb, "chat")
@@ -256,7 +262,7 @@ func notifyIncoming(chatJid, title, preview string) {
     var id uint32
     call := obj.Call("org.freedesktop.Notifications.Notify", 0,
         "WhatsApp", replaces, "harbour-whatsapp", title, body,
-        []string{"default", "", "reply", "Reply"}, hints, int32(-1))
+        []string{"default", "", "reply", replyLabel}, hints, int32(-1))
     if call.Err != nil {
         fmt.Printf("🔔 notification failed: %v\n", call.Err)
         return
