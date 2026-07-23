@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.138
+Version:    0.9.140
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,24 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Thu Jul 23 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.140-1
+- Tile spacing slider now goes up to 30 (was 5) for a lot more ambience
+  between the tiles. The cap is relaxed to a third of the cell width, so
+  a tile never shrinks past the point where avatar and name stay readable.
+  Higher column counts reach that cap earlier by design
+
+* Thu Jul 23 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.140-1
+- Tile spacing goes further now: slider maximum raised from 5 to 10 and
+  the cap relaxed to a quarter of the cell width, so tiles can shrink to
+  half their cell and let a lot more ambience through. Default unchanged
+
+* Thu Jul 23 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.139-1
+- Tile spacing is now adjustable in More settings (requested by kempertom):
+  wider gaps let more of the blurred ambience show through between tiles.
+  Default is unchanged, so the grid looks exactly as before until you
+  move the slider; 0 gives a gapless mosaic. Spacing is capped relative
+  to tile width so 5-6 columns stay readable
+
 * Wed Jul 22 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.138-1
 - Notification tap: back arrow now returns to Chats, not to Favorites -
   the chat is popped to the Chats page instead of the stack root, which

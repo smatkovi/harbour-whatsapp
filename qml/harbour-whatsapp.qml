@@ -142,6 +142,20 @@ ApplicationWindow {
                         }
                     }
 
+                    Slider {
+                        width: parent.width
+                        label: loc.tileSpacing
+                        minimumValue: 0
+                        maximumValue: 30
+                        stepSize: 1
+                        value: tileGap
+                        valueText: value
+                        onSliderValueChanged: {
+                            tileGap = value
+                            setPref("tile_gap", String(value))
+                        }
+                    }
+
                     TextSwitch {
                         text: loc.topSwitcher
                         description: loc.topSwitcherDesc
@@ -214,6 +228,8 @@ ApplicationWindow {
     property bool sendByEnter: false
     property bool chatGridView: false
     property int gridColumns: 3
+    // Kachelabstand in Halb-paddingSmall-Schritten; 1 = bisheriges Aussehen
+    property int tileGap: 1
     property bool showViewSwitcher: true
     property string appLanguage: ""
     readonly property string langCode: appLanguage !== "" ? appLanguage
@@ -473,6 +489,7 @@ ApplicationWindow {
                 sendByEnter = p.send_by_enter === "1"
                 chatGridView = p.chat_grid === "1"
                 gridColumns = Math.max(2, Math.min(6, parseInt(p.grid_columns || "3")))
+                tileGap = Math.max(0, Math.min(30, parseInt(p.tile_gap || "1")))
                 showViewSwitcher = p.top_switcher !== "0"
                 showNavBar = p.bottom_bar !== "0"
                 appLanguage = p.app_language || ""
@@ -1085,7 +1102,10 @@ ApplicationWindow {
 
                             Rectangle {
                                 anchors.fill: parent
-                                anchors.margins: Theme.paddingSmall / 2
+                                // Deckel bei einem Drittel der Zellbreite: darunter
+                                // waeren Avatar und Namensbalken nicht mehr lesbar
+                                anchors.margins: Math.min(tileGap * Theme.paddingSmall / 2,
+                                                          gridTile.width / 3)
                                 color: Theme.rgba(Theme.highlightBackgroundColor, 0.15)
 
                                 Image {
