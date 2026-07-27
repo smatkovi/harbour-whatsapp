@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.141
+Version:    0.9.147
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,46 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Mon Jul 27 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.147-1
+- No more slight shift after viewing a picture: if the message model did
+  not change while the viewer was open, the exact pixel position is kept
+  (or silently restored); the coarse center-on-message restore only kicks
+  in after a real model refresh reset the list
+
+* Mon Jul 27 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.146-1
+- Channel jump-to-bottom finally fixed, confirmed by journal diagnostics:
+  a stale forceEnd flag ("keep me at the bottom"), armed whenever the
+  page re-activated at the end, fired at the next JSON refresh - which
+  in channels happens all the time because of view counters. The flag
+  is now disarmed the moment the user starts scrolling. Diagnostic WAPOS
+  probes stay in for one release to confirm on-device
+
+* Mon Jul 27 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.145-1
+- Diagnostic build for the channel scroll-to-bottom issue: WAPOS log
+  probes around every code path that positions the message list, so the
+  culprit shows up in the journal instead of being guessed at
+
+* Mon Jul 27 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.144-1
+- Channel position fix, the real one this time: channel messages carry
+  view counters, so the poll refreshed the model without the count
+  changing - and repositioning only ran on count changes, so the view
+  reset shortly after every restore. The list now repositions after
+  every model refresh, and the position probe has a fallback when it
+  lands in a gap between messages
+
+* Mon Jul 27 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.143-1
+- Position restore now also works when you were scrolled up mid-chat -
+  most noticeable in channels (reported by rdomschk): the message index
+  is remembered both when an internal player/viewer opens and when media
+  opens externally, and you return to exactly that spot; bottom stays
+  bottom as before
+
+* Sun Jul 26 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.142-1
+- Coming back from an externally opened photo/video/audio no longer lands
+  you in the middle of the chat (reported by rdomschk): the position is
+  remembered as a message index when the app deactivates and restored on
+  return - if you were at the bottom, you come back to the bottom
+
 * Thu Jul 23 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.141-1
 - The Reply button inside notifications is translated now (reported by
   rdomschk): the UI stores the translated label in prefs and the backend

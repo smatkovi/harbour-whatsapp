@@ -4603,18 +4603,100 @@ Label {
                         if (xhr.responseText === lastMsgsJson) return
                         lastMsgsJson = xhr.responseText
                         markOpened() // Chat ist offen: Neues gilt als gelesen
+                        console.log("WAPOS load: JSON changed, atYEnd=" + msgList.atYEnd
+                                    + " forceEnd=" + forceEnd
+                                    + " contentY=" + Math.round(msgList.contentY)
+                                    + " pageStatus=" + status)
                         stickToEnd = forceEnd || msgList.atYEnd
                         var keepY = msgList.contentY
                         msgs = JSON.parse(xhr.responseText) || []
                         if (!stickToEnd) restoreY = keepY
                         else restoreY = -1
                         forceEnd = false
+                        if (status !== PageStatus.Active) awayModelChanged = true
+                        // Immer starten: die Neuzuweisung setzt die ListView
+                        // zurueck, auch wenn die Anzahl gleich bleibt - in
+                        // Kanaelen der Normalfall (Viewzaehler aendern sich)
+                        positionTimer.start()
                     }
                 }
                 xhr.send()
             }
             property bool stickToEnd: true
             property real restoreY: -1
+            // Position merken/wiederherstellen - als Nachrichten-Index, weil
+            // Pixel-Offsets nach dem Delegate-Neuaufbau der ListView nichts
+            // taugen. Greift bei internen Playern (Seitenstatus) UND bei
+            // extern geoeffneten Medien (App-Status). Wer unten war, kommt
+            // unten zurueck; wer mitten im Verlauf las (Kanaele!), genau dort.
+            property int resumeIndex: -1
+
+            property real capturedY: -1
+            property bool awayModelChanged: false
+
+            function captureListPos() {
+                wasAtEnd = msgList.atYEnd
+                capturedY = msgList.contentY
+                awayModelChanged = false
+                console.log("WAPOS capture: atYEnd=" + msgList.atYEnd
+                            + " contentY=" + Math.round(msgList.contentY)
+                            + " contentH=" + Math.round(msgList.contentHeight)
+                            + " viewH=" + Math.round(msgList.height)
+                            + " count=" + msgList.count)
+                resumeIndex = wasAtEnd ? -1 : msgList.indexAt(
+                    msgList.width / 2, msgList.contentY + msgList.height / 2)
+                // In einer Luecke zwischen Delegates liefert indexAt -1:
+                // dann etwas hoeher noch einmal probieren
+                if (!wasAtEnd && resumeIndex < 0)
+                    resumeIndex = msgList.indexAt(
+                        msgList.width / 2, msgList.contentY + msgList.height / 3)
+            }
+
+            function restoreListPos() {
+                console.log("WAPOS restore: wasAtEnd=" + wasAtEnd + " resumeIndex=" + resumeIndex
+                            + " awayModelChanged=" + awayModelChanged
+                            + " dY=" + Math.round(msgList.contentY - capturedY))
+                if (!awayModelChanged) {
+                    // Modell unveraendert: die alte Pixelposition gilt exakt -
+                    // nichts zentrieren, nichts springen, hoechstens still
+                    // zuruecksetzen, falls die View minimal verrutscht ist
+                    if (capturedY >= 0 && Math.abs(msgList.contentY - capturedY) > 1)
+                        msgList.contentY = capturedY
+                    return
+                }
+                if (wasAtEnd) {
+                    stickToEnd = true
+                    forceEnd = true
+                    restoreY = -1
+                    positionTimer.start()
+                } else if (resumeIndex >= 0) {
+                    restoreY = -1
+                    resumeTimer.start()
+                }
+            }
+
+            Connections {
+                target: Qt.application
+                onActiveChanged: {
+                    if (!Qt.application.active) {
+                        chatPageItem.captureListPos()
+                    } else if (chatPageItem.status === PageStatus.Active) {
+                        chatPageItem.restoreListPos()
+                    }
+                }
+            }
+
+            Timer {
+                id: resumeTimer
+                interval: 250
+                repeat: false
+                onTriggered: {
+                    console.log("WAPOS resumeTimer: index=" + chatPageItem.resumeIndex)
+                    if (chatPageItem.resumeIndex >= 0)
+                        msgList.positionViewAtIndex(chatPageItem.resumeIndex, ListView.Center)
+                    chatPageItem.resumeIndex = -1
+                }
+            }
             // Nach eigenem Senden ans Ende springen, egal wo die Liste stand.
             // Ueberlebt die Polls, bis die gesendete Nachricht wirklich da ist
             // (load() kehrt bei unveraendertem JSON frueh zurueck)
@@ -4680,12 +4762,24 @@ Label {
             }
             Timer { interval: 2000; running: true; repeat: true; onTriggered: load() }
             Component.onCompleted: { load(); markOpened() }
-            onStatusChanged: if (status === PageStatus.Active)
-                                 pageStack.pushAttached(contactInfoPage, {
-                                     jid: chatJid, name: chatName,
-                                     avatar: chatAvatar,
-                                     group: isGroupChat, channel: isChannel
-                                 })
+            // Beim Verlassen (Medium oeffnen) merken, ob die Liste am Ende
+            // stand; beim Zurueckkommen genau dorthin. Ohne das landet man
+            // nach dem Schliessen eines Bildes/Videos/Audios in der Chatmitte,
+            // weil der Poll-Timer stickToEnd auf die Zwischenposition setzt.
+            property bool wasAtEnd: true
+            onStatusChanged: {
+                console.log("WAPOS pageStatus -> " + status)
+                if (status === PageStatus.Deactivating) {
+                    captureListPos()
+                } else if (status === PageStatus.Active) {
+                    pageStack.pushAttached(contactInfoPage, {
+                        jid: chatJid, name: chatName,
+                        avatar: chatAvatar,
+                        group: isGroupChat, channel: isChannel
+                    })
+                    restoreListPos()
+                }
+            }
 
             Component {
                 id: imagePicker
@@ -4707,6 +4801,10 @@ Label {
 
             SilicaListView {
                 id: msgList
+                // Ein scharfes forceEnd ("halte mich unten") verfaellt, sobald
+                // der Nutzer selbst scrollt - sonst feuert es beim naechsten
+                // JSON-Wechsel (Kanal-Viewzaehler!) und springt ans Ende
+                onMovementStarted: forceEnd = false
                 anchors.fill: parent
                 anchors.topMargin: pinnedBar.visible ? pageHead.height + pinnedBar.height : 0
                 anchors.bottomMargin: inputCol.height
@@ -4721,6 +4819,8 @@ Label {
                     interval: 200
                     repeat: false
                     onTriggered: {
+                        console.log("WAPOS positionTimer: stickToEnd=" + stickToEnd
+                                    + " restoreY=" + Math.round(restoreY))
                         if (stickToEnd) {
                             msgList.positionViewAtIndex(msgList.count - 1, ListView.End)
                         } else if (restoreY >= 0) {
