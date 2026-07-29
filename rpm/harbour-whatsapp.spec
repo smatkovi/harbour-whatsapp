@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.147
+Version:    0.9.162
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,120 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.162-1
+- The chat position saga is over, confirmed on-device: every model
+  refresh used to teleport the view synchronously, and all restoring
+  happened 200 ms later - now the view is re-anchored to the topmost
+  visible message by id, with its pixel offset, in the same JS turn as
+  the refresh. No frame with a wrong position is ever rendered, origin
+  shifts of the list are absorbed by design, and viewer returns, mid-chat
+  downloads and scroll-during-refresh all hold steady. Diagnostic logging
+  removed for release
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.161-1
+- Mid-chat position now survives refreshes exactly: pixel coordinates
+  are not a stable identity across a model reassignment (the list can
+  shift its origin, logs showed a 222 px error), so the synchronous
+  holdback now re-anchors by message id plus offset in the same JS turn,
+  with the pixel value only as a fallback when the anchor message is gone
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.160-1
+- The actual fix, proven by WAPOS logs: every model refresh teleported
+  the view position synchronously (pre keepY=10073 -> post y=25106) and
+  everything so far compensated 200 ms later, leaving a window for wrong
+  jumps to be cemented. The teleport is now undone in the same JS turn -
+  no frame with a wrong position is ever rendered. The restore timers
+  remain only as safety nets against late layout drift
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.159-1
+- Root cause from WAPOS logs, two shots: the activity flicker when the
+  external viewer starts triggered a second capture that overwrote the
+  good position snapshot with a transient zombie state (atYEnd=true at
+  contentY~-40, no anchor), and the first refresh after resume sampled
+  that same zombie as "at the end". Captures are now one-shot until a
+  restore consumes them, and while a capture is unconsumed, refreshes
+  trust the captured wasAtEnd/position instead of the live view state
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.158-1
+- Shields the restore target against back-to-back model refreshes: when
+  a restore is still pending, the transiently wrong view position is no
+  longer sampled as "at the end" and the previous restore target is
+  carried over - a second refresh arriving within the 200 ms window
+  could otherwise cement the wrong jump. More WAPOS detail in load()
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.157-1
+- The downloaded image no longer scrolls out of the viewport: WAPOS
+  diagnostics showed a stale keep-me-at-bottom flag (set by an earlier
+  at-the-end restore) firing on the download refresh and jumping the
+  view to the chat end. The flag is now cleared on every programmatic
+  reposition - entering the viewer, mid-chat restores and anchor
+  settling - where the touch-scroll clearing never triggers
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.156-1
+- Downloaded media shows up immediately again: since long-polling, every
+  message mutation must announce itself, but the download path (and a few
+  others: pinning, clearing chats, storage cleanup, logout) still wrote
+  silently - the UI only noticed via the 30-second safety net. All direct
+  message mutations now trigger the event bump. WAPOS diagnostics still in
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.155-1
+- Fixes the chat jumping to the top after the viewer: a stale anchor id
+  made the regular restore timer yield forever, so after the next model
+  refresh nobody restored the position at all. The anchor is now cleared
+  in every restore branch and the right-of-way rule only applies while
+  settling actually runs. WAPOS diagnostics still included
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.154-1
+- Diagnostic build for the remaining position issue after the media
+  viewer: compact WAPOS log lines cover capture, restore branch, anchor
+  settling and the fallback path. Not meant for OpenRepos
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.153-1
+- The two position restorers no longer race each other: while the anchor
+  is settling, the regular restore timer yields; a model refresh during
+  settling restarts the settling on the fresh delegates; and the anchor
+  index is re-resolved by message id if it shifted. This removes the
+  remaining back-and-forth and the occasional wrong final position after
+  the media viewer
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.152-1
+- No more visible back-and-forth while the position settles after the
+  media viewer: coarse positioning and pixel offset are now applied in
+  the same JS turn (nothing is rendered in between), repeated a few
+  times idempotently to absorb late delegate layout, and the settling
+  stops immediately if you start scrolling yourself
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.151-1
+- Position restore after the media viewer is pixel-exact again: the
+  anchor message no longer sticks to the top of the screen. The pixel
+  offset is now applied in a second step after positionViewAtIndex has
+  settled - applying it immediately was overrolled by the still-running
+  delegate layout
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.150-1
+- Long-polling replaces the blind 2-second refresh: the UI now hangs on
+  a new /events endpoint and the backend answers the moment something
+  happens. New messages, edits, reactions and deletions appear instantly,
+  and when nothing happens, nothing is transferred - better battery life
+  despite the snappier feel. The old timers remain only as slow safety
+  nets (30 s in the chat, 60 s for the chat list)
+
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.149-1
+- Fixes the white screen on startup in 0.9.148: two orphaned debug-log
+  fragments (leftovers of the removed WAPOS diagnostics) broke QML
+  parsing of the whole file. qmllint is now part of the release checks
+  so a parse error can never ship again. If you installed 0.9.148,
+  just update - nothing else to do
+
+* Tue Jul 28 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.148-1
+- Chat position after viewing media, the release version (reported by
+  rdomschk, debugged on-device): no shift at all when nothing changed
+  while the viewer was open; when messages arrived meanwhile, the list
+  re-anchors to the message that was at the top of the screen at the
+  same pixel offset, with center-on-message only as a last resort; a
+  stale keep-me-at-bottom flag no longer fires on channel view-counter
+  refreshes. WAPOS diagnostic probes from the test builds removed
+
 * Mon Jul 27 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.147-1
 - No more slight shift after viewing a picture: if the message model did
   not change while the viewer was open, the exact pixel position is kept

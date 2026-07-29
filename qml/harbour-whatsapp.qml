@@ -24,7 +24,53 @@ ApplicationWindow {
     property bool paired: false
     property bool backendFailed: false
 
-    onConnectedChanged: if (mainPage) mainPage.updateAttachedStatus()
+    onConnectedChanged: {
+        if (mainPage) mainPage.updateAttachedStatus()
+        if (connected) pollEvents()
+    }
+
+    // Long-Polling statt 2-Sekunden-Blindpoll: /events haengt im Backend,
+    // bis etwas passiert. Nachrichten kommen sofort, bei Stille fliesst
+    // nichts - weniger Akkulast trotz schnellerer Anzeige.
+    property int evSeq: 0
+    property int evBackoff: 1000
+    property bool evPolling: false
+    signal eventTick()
+
+    function pollEvents() {
+        if (evPolling || !connected) return
+        evPolling = true
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/events?since=" + evSeq)
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== 4) return
+            evPolling = false
+            if (xhr.status === 200) {
+                evBackoff = 1000
+                try {
+                    var s = JSON.parse(xhr.responseText).seq
+                    if (s !== evSeq) {
+                        evSeq = s
+                        loadChats()
+                        eventTick()
+                    }
+                } catch (e) {}
+                pollEvents()
+            } else {
+                // Backend weg oder Neustart: mit Backoff wiederkommen
+                evRetry.interval = evBackoff
+                evBackoff = Math.min(evBackoff * 2, 15000)
+                evRetry.start()
+            }
+        }
+        xhr.send()
+    }
+
+    Timer {
+        id: evRetry
+        repeat: false
+        onTriggered: pollEvents()
+    }
 
     function retryBackend() {
         backendFailed = false
@@ -812,7 +858,8 @@ ApplicationWindow {
     }
 
     Timer {
-        interval: 5000
+        // Sicherheitsnetz - der Normalweg ist der /events-Long-Poll
+        interval: 60000
         running: connected
         repeat: true
         onTriggered: loadChats()
@@ -4603,17 +4650,64 @@ Label {
                         if (xhr.responseText === lastMsgsJson) return
                         lastMsgsJson = xhr.responseText
                         markOpened() // Chat ist offen: Neues gilt als gelesen
-                        console.log("WAPOS load: JSON changed, atYEnd=" + msgList.atYEnd
-                                    + " forceEnd=" + forceEnd
-                                    + " contentY=" + Math.round(msgList.contentY)
-                                    + " pageStatus=" + status)
-                        stickToEnd = forceEnd || msgList.atYEnd
-                        var keepY = msgList.contentY
+                        // Reassign-Doppelschlag abschirmen: steht noch eine
+                        // Wiederherstellung aus (positionTimer/Anker), liegt
+                        // die View gerade transient falsch - atYEnd dann NICHT
+                        // sampeln und das alte Restore-Ziel weiterreichen,
+                        // sonst schreibt der zweite Schlag den Fehlsprung fest
+                        var pendingRestore = (positionTimer.running && restoreY >= 0)
+                                             || anchorSettle.running
+                        var liveEnd = posCaptured ? wasAtEnd : msgList.atYEnd
+                        stickToEnd = forceEnd
+                                     || (pendingRestore ? false : liveEnd)
+                        var keepY = (positionTimer.running && restoreY >= 0)
+                                    ? restoreY
+                                    : (posCaptured ? capturedY : msgList.contentY)
+                        // Anker VOR der Zuweisung nehmen: Pixelkoordinaten
+                        // sind ueber eine Neuzuweisung hinweg keine stabile
+                        // Identitaet (originY-Verschiebung, Log: holdback
+                        // y=4339 keepY=4117) - die Nachricht-ID ist es
+                        var hbId = "", hbOff = 0
+                        if (!stickToEnd) {
+                            var pY = keepY + 8
+                            var hbIt = msgList.itemAt(msgList.width / 2, pY)
+                            var hbIx = msgList.indexAt(msgList.width / 2, pY)
+                            if (!hbIt || hbIx < 0) {
+                                pY = keepY + msgList.height / 3
+                                hbIt = msgList.itemAt(msgList.width / 2, pY)
+                                hbIx = msgList.indexAt(msgList.width / 2, pY)
+                            }
+                            if (hbIt && hbIx >= 0 && hbIx < msgs.length && msgs[hbIx]) {
+                                hbId = msgs[hbIx].id || ""
+                                hbOff = keepY - hbIt.y
+                            }
+                        }
                         msgs = JSON.parse(xhr.responseText) || []
-                        if (!stickToEnd) restoreY = keepY
+                        // Synchron im selben JS-Zug wiederherstellen - es wird
+                        // nie ein Frame mit falscher Position gerendert.
+                        // Anker-basiert; Pixel nur als Notnagel, wenn die
+                        // Ankernachricht verschwunden ist
+                        if (!stickToEnd) {
+                            var hbDone = false
+                            if (hbId !== "") {
+                                for (var hi = 0; hi < msgs.length; hi++) {
+                                    if (msgs[hi].id === hbId) {
+                                        msgList.positionViewAtIndex(hi, ListView.Beginning)
+                                        msgList.contentY += hbOff
+                                        hbDone = true
+                                        break
+                                    }
+                                }
+                            }
+                            if (!hbDone) msgList.contentY = keepY
+                            restoreY = msgList.contentY
+                        }
                         else restoreY = -1
                         forceEnd = false
                         if (status !== PageStatus.Active) awayModelChanged = true
+                        // Frische Delegates unter laufendem Einpendeln:
+                        // von vorn ansetzen statt auf alten Layouts zu stehen
+                        if (anchorSettle.running) anchorSettle.tries = 0
                         // Immer starten: die Neuzuweisung setzt die ListView
                         // zurueck, auch wenn die Anzahl gleich bleibt - in
                         // Kanaelen der Normalfall (Viewzaehler aendern sich)
@@ -4634,15 +4728,46 @@ Label {
             property real capturedY: -1
             property bool awayModelChanged: false
 
+            property string anchorId: ""
+            property real anchorOffset: 0
+
+            property bool posCaptured: false
+
             function captureListPos() {
+                // Einmalige Aufnahme bis zum Verbrauch: das Aktiv-Flackern
+                // beim Viewer-Start loeste eine zweite Capture aus, die den
+                // transienten Zombie-Zustand (atYEnd=true bei contentY~-40,
+                // kein Anker) ueber die gute Aufnahme schrieb - der Restore
+                // restaurierte dann pflichtbewusst den Muell
+                if (posCaptured) {
+                    return
+                }
+                posCaptured = true
                 wasAtEnd = msgList.atYEnd
                 capturedY = msgList.contentY
                 awayModelChanged = false
-                console.log("WAPOS capture: atYEnd=" + msgList.atYEnd
-                            + " contentY=" + Math.round(msgList.contentY)
-                            + " contentH=" + Math.round(msgList.contentHeight)
-                            + " viewH=" + Math.round(msgList.height)
-                            + " count=" + msgList.count)
+                // Haengendes forceEnd entschaerfen: es stammt ggf. von einem
+                // frueheren Unten-Restore und wuerde sonst beim naechsten
+                // Reassign (z.B. Download!) faelschlich ans Ende springen -
+                // onMovementStarted greift bei programmatischen Bewegungen nie
+                forceEnd = false
+                // Anker: oberste sichtbare Nachricht + Pixel-Offset darin.
+                // Damit gelingt die exakte Wiederherstellung auch dann, wenn
+                // das Modell waehrend der Abwesenheit neu zugewiesen wurde
+                anchorId = ""
+                anchorOffset = 0
+                var probeY = msgList.contentY + 8
+                var it = msgList.itemAt(msgList.width / 2, probeY)
+                var idx = msgList.indexAt(msgList.width / 2, probeY)
+                if (!it || idx < 0) {
+                    probeY = msgList.contentY + msgList.height / 3
+                    it = msgList.itemAt(msgList.width / 2, probeY)
+                    idx = msgList.indexAt(msgList.width / 2, probeY)
+                }
+                if (it && idx >= 0 && idx < msgs.length && msgs[idx]) {
+                    anchorId = msgs[idx].id || ""
+                    anchorOffset = msgList.contentY - it.y
+                }
                 resumeIndex = wasAtEnd ? -1 : msgList.indexAt(
                     msgList.width / 2, msgList.contentY + msgList.height / 2)
                 // In einer Luecke zwischen Delegates liefert indexAt -1:
@@ -4653,25 +4778,36 @@ Label {
             }
 
             function restoreListPos() {
-                console.log("WAPOS restore: wasAtEnd=" + wasAtEnd + " resumeIndex=" + resumeIndex
-                            + " awayModelChanged=" + awayModelChanged
-                            + " dY=" + Math.round(msgList.contentY - capturedY))
+                posCaptured = false
                 if (!awayModelChanged) {
                     // Modell unveraendert: die alte Pixelposition gilt exakt -
                     // nichts zentrieren, nichts springen, hoechstens still
                     // zuruecksetzen, falls die View minimal verrutscht ist
                     if (capturedY >= 0 && Math.abs(msgList.contentY - capturedY) > 1)
                         msgList.contentY = capturedY
+                    // Anker aufraeumen! Ein verwaister anchorId liess den
+                    // positionTimer dauerhaft passen - nach der naechsten
+                    // Neuzuweisung restaurierte niemand mehr (Chat oben)
+                    anchorId = ""
+                    anchorOffset = 0
+                    resumeIndex = -1
+                    forceEnd = false
                     return
                 }
                 if (wasAtEnd) {
+                    anchorId = ""
+                    anchorOffset = 0
                     stickToEnd = true
                     forceEnd = true
                     restoreY = -1
                     positionTimer.start()
                 } else if (resumeIndex >= 0) {
                     restoreY = -1
+                    forceEnd = false
                     resumeTimer.start()
+                } else {
+                    anchorId = ""
+                    anchorOffset = 0
                 }
             }
 
@@ -4688,13 +4824,78 @@ Label {
 
             Timer {
                 id: resumeTimer
-                interval: 250
+                interval: 80
                 repeat: false
                 onTriggered: {
-                    console.log("WAPOS resumeTimer: index=" + chatPageItem.resumeIndex)
-                    if (chatPageItem.resumeIndex >= 0)
+                    var done = false
+                    if (chatPageItem.anchorId !== "") {
+                        for (var i = 0; i < msgs.length; i++) {
+                            if (msgs[i].id === chatPageItem.anchorId) {
+                                anchorSettle.idx = i
+                                anchorSettle.tries = 0
+                                anchorSettle.apply()
+                                anchorSettle.start()
+                                done = true
+                                break
+                            }
+                        }
+                    }
+                    if (!done && chatPageItem.resumeIndex >= 0) {
                         msgList.positionViewAtIndex(chatPageItem.resumeIndex, ListView.Center)
+                    }
                     chatPageItem.resumeIndex = -1
+                    if (!done) {
+                        chatPageItem.anchorId = ""
+                        chatPageItem.anchorOffset = 0
+                    }
+                }
+            }
+
+            Timer {
+                id: anchorSettle
+                interval: 120
+                repeat: true
+                property int idx: -1
+                property int tries: 0
+
+                // Idempotente Verankerung: Grobposition UND Offset im selben
+                // JS-Zug - gerendert wird erst danach, es gibt also nie einen
+                // "Anker buendig oben"-Zwischenframe. Die Wiederholungen
+                // fangen nur noch Layout-Drift ab; jede landet exakt auf
+                // Anker+Offset unter dem dann aktuellen Layout, deshalb gibt
+                // es kein Hin und Her mehr
+                function apply() {
+                    if (idx < 0 || idx >= msgs.length
+                            || !msgs[idx] || msgs[idx].id !== chatPageItem.anchorId) {
+                        idx = -1
+                        for (var i = 0; i < msgs.length; i++) {
+                            if (msgs[i].id === chatPageItem.anchorId) { idx = i; break }
+                        }
+                        if (idx < 0) { finish(); return }
+                    }
+                    var yBefore = msgList.contentY
+                    msgList.positionViewAtIndex(idx, ListView.Beginning)
+                    var yBase = msgList.contentY
+                    msgList.contentY = msgList.contentY + chatPageItem.anchorOffset
+                }
+
+                function finish() {
+                    stop()
+                    chatPageItem.anchorId = ""
+                    chatPageItem.anchorOffset = 0
+                    chatPageItem.forceEnd = false
+                    idx = -1
+                }
+
+                onTriggered: {
+                    // Nutzer scrollt selbst: sofort aufhoeren, nicht kaempfen
+                    if (msgList.moving || msgList.dragging) {
+                        finish()
+                        return
+                    }
+                    apply()
+                    tries++
+                    if (tries >= 3) finish()
                 }
             }
             // Nach eigenem Senden ans Ende springen, egal wo die Liste stand.
@@ -4760,7 +4961,11 @@ Label {
                 xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chat/opened?chat=" + chatJid)
                 xhr.send()
             }
-            Timer { interval: 2000; running: true; repeat: true; onTriggered: load() }
+            Connections { target: app; onEventTick: load() }
+            Timer {
+                // Sicherheitsnetz - der Normalweg ist der /events-Long-Poll
+                interval: 30000; running: true; repeat: true; onTriggered: load()
+            }
             Component.onCompleted: { load(); markOpened() }
             // Beim Verlassen (Medium oeffnen) merken, ob die Liste am Ende
             // stand; beim Zurueckkommen genau dorthin. Ohne das landet man
@@ -4768,7 +4973,6 @@ Label {
             // weil der Poll-Timer stickToEnd auf die Zwischenposition setzt.
             property bool wasAtEnd: true
             onStatusChanged: {
-                console.log("WAPOS pageStatus -> " + status)
                 if (status === PageStatus.Deactivating) {
                     captureListPos()
                 } else if (status === PageStatus.Active) {
@@ -4819,8 +5023,13 @@ Label {
                     interval: 200
                     repeat: false
                     onTriggered: {
-                        console.log("WAPOS positionTimer: stickToEnd=" + stickToEnd
-                                    + " restoreY=" + Math.round(restoreY))
+                        // Anker-Einpendeln hat Vorfahrt: solange es laeuft,
+                        // haelt sich der normale Restaurator zurueck - sonst
+                        // schieben zwei Timer abwechselnd (sichtbares Hin
+                        // und Her, Endposition zufaellig)
+                        if (anchorSettle.running) {
+                            return
+                        }
                         if (stickToEnd) {
                             msgList.positionViewAtIndex(msgList.count - 1, ListView.End)
                         } else if (restoreY >= 0) {

@@ -1052,6 +1052,23 @@ func downloadMedia(msgID string, msg whatsmeow.DownloadableMessage, mimeType str
     return path, nil
 }
 
+// Long-Polling: monotone Ereignisnummer + Broadcast-Kanal. /events haengt,
+// bis sich evSeq bewegt - die Oberflaeche pollt nicht mehr blind alle 2 s,
+// sondern bekommt Aenderungen sofort und schlaeft bei Stille.
+var (
+    evMu  sync.Mutex
+    evSeq int64 = 1
+    evCh        = make(chan struct{})
+)
+
+func bumpEvent() {
+    evMu.Lock()
+    evSeq++
+    close(evCh)
+    evCh = make(chan struct{})
+    evMu.Unlock()
+}
+
 func addMessage(m Message) {
     msgMutex.Lock()
     for _, existing := range messages {
@@ -1063,6 +1080,7 @@ func addMessage(m Message) {
     messages = append(messages, m)
     msgMutex.Unlock()
     go saveMessages()
+    bumpEvent()
 }
 
 // setMessagePinned markiert eine Nachricht als (nicht mehr) angepinnt.
@@ -1075,6 +1093,7 @@ func setMessagePinned(chatJid, msgID string, pinned bool) {
         }
     }
     msgMutex.Unlock()
+    bumpEvent()
     go saveMessages()
 }
 
@@ -1168,6 +1187,7 @@ func cleanupEphemeral() {
     changed := len(kept) != len(messages)
     messages = kept
     msgMutex.Unlock()
+    bumpEvent()
     for _, f := range removedFiles {
         os.Remove(f)
     }
@@ -1478,6 +1498,7 @@ func updateMessage(chatJid, msgID string, fn func(*Message)) bool {
         if messages[i].ID == msgID && (chatJid == "" || messages[i].ChatJID == chatJid) {
             fn(&messages[i])
             go saveMessages()
+            bumpEvent()
             return true
         }
     }
@@ -2694,6 +2715,7 @@ func main() {
         msgMutex.Lock()
         messages = []Message{}
         msgMutex.Unlock()
+        bumpEvent()
         
         contactsMutex.Lock()
         contacts = make(map[string]string)
@@ -2814,6 +2836,32 @@ func main() {
             http.ServeFile(w, r, path)
         } else {
             http.Error(w, "not found", 404)
+        }
+    })
+
+    http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
+        since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
+        deadline := time.NewTimer(25 * time.Second)
+        defer deadline.Stop()
+        for {
+            evMu.Lock()
+            cur := evSeq
+            ch := evCh
+            evMu.Unlock()
+            if cur != since {
+                w.Header().Set("Content-Type", "application/json")
+                fmt.Fprintf(w, `{"seq":%d}`, cur)
+                return
+            }
+            select {
+            case <-ch:
+            case <-deadline.C:
+                w.Header().Set("Content-Type", "application/json")
+                fmt.Fprintf(w, `{"seq":%d}`, cur)
+                return
+            case <-r.Context().Done():
+                return
+            }
         }
     })
 
@@ -3349,6 +3397,7 @@ func main() {
         }
         messages = kept
         msgMutex.Unlock()
+        bumpEvent()
         for _, f := range removed {
             os.Remove(f)
         }
@@ -3377,6 +3426,7 @@ func main() {
         }
         messages = kept
         msgMutex.Unlock()
+        bumpEvent()
         for _, f := range removed {
             os.Remove(f)
         }
@@ -3569,6 +3619,7 @@ func main() {
                 }
             }
             msgMutex.Unlock()
+            bumpEvent()
         }
         rawMediaMutex.RLock()
         b64, ok := rawMedia[msgID]
@@ -3622,6 +3673,9 @@ func main() {
         }
         msgMutex.Unlock()
         go saveMessages()
+        // Ohne bump erfaehrt die Long-Polling-UI nie vom fertigen
+        // Download - die Blase blieb beim Platzhalter haengen
+        bumpEvent()
         // Medien-Schluessel bewusst behalten: erlaubt erneuten Download,
         // falls die Datei spaeter unzugaenglich wird
         json.NewEncoder(w).Encode(map[string]string{"path": path})
@@ -4727,6 +4781,7 @@ func main() {
                 }
             }
             msgMutex.Unlock()
+            bumpEvent()
             go saveMessages()
         }
         json.NewEncoder(w).Encode(map[string]int{"removed": removed})
