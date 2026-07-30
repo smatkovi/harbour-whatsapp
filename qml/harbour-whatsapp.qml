@@ -21,6 +21,9 @@ ApplicationWindow {
     property string pairErrorMsg: ""
     property string connState: ""
     property string lastError: ""
+    // Spendenziele - leer lassen blendet den jeweiligen Knopf aus
+    property string donatePaypalUrl: "https://www.paypal.me/smatkovi"
+    property string donateLiberapayUrl: "https://liberapay.com/smatkovi"
     property bool paired: false
     property bool backendFailed: false
 
@@ -165,6 +168,114 @@ ApplicationWindow {
                                : (highlighted ? Theme.highlightColor : Theme.primaryColor)
                     }
                 }
+            }
+        }
+    }
+
+    Component {
+        id: aboutAppPage
+        Page {
+            SilicaFlickable {
+                anchors.fill: parent
+                contentHeight: aboutCol.height + Theme.paddingLarge * 2
+
+                Column {
+                    id: aboutCol
+                    width: parent.width
+                    spacing: Theme.paddingMedium
+
+                    PageHeader { title: loc.aboutApp }
+
+                    Image {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        source: "/usr/share/icons/hicolor/128x128/apps/harbour-whatsapp.png"
+                        width: Theme.iconSizeLauncher
+                        height: Theme.iconSizeLauncher
+                        smooth: true
+                    }
+
+                    Label {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "WhatsApp " + (backendVersion !== "" ? backendVersion : "")
+                        font.pixelSize: Theme.fontSizeLarge
+                        color: Theme.highlightColor
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2 * Theme.horizontalPageMargin
+                        text: loc.aboutSubtitle
+                        wrapMode: Text.Wrap
+                        horizontalAlignment: Text.AlignHCenter
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.secondaryColor
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2 * Theme.horizontalPageMargin
+                        text: loc.aboutDeveloper
+                        wrapMode: Text.Wrap
+                        horizontalAlignment: Text.AlignHCenter
+                        font.pixelSize: Theme.fontSizeSmall
+                    }
+
+                    Item { width: 1; height: Theme.paddingMedium }
+
+                    Button {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: loc.aboutSource
+                        onClicked: Qt.openUrlExternally("https://github.com/smatkovi/harbour-whatsapp")
+                    }
+
+                    Button {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: loc.aboutIssues
+                        onClicked: Qt.openUrlExternally("https://github.com/smatkovi/harbour-whatsapp/issues")
+                    }
+
+                    SectionHeader {
+                        text: loc.aboutDonate
+                        visible: donatePaypalUrl !== "" || donateLiberapayUrl !== ""
+                    }
+
+                    Button {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        visible: donatePaypalUrl !== ""
+                        text: loc.aboutDonatePaypal
+                        onClicked: Qt.openUrlExternally(donatePaypalUrl)
+                    }
+
+                    Button {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        visible: donateLiberapayUrl !== ""
+                        text: loc.aboutDonateLiberapay
+                        onClicked: Qt.openUrlExternally(donateLiberapayUrl)
+                    }
+
+                    Item { width: 1; height: Theme.paddingMedium }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2 * Theme.horizontalPageMargin
+                        text: loc.aboutThanks
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2 * Theme.horizontalPageMargin
+                        text: loc.aboutPowered
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                    }
+
+                    Item { width: 1; height: Theme.paddingLarge }
+                }
+                VerticalScrollDecorator {}
             }
         }
     }
@@ -1839,6 +1950,18 @@ ApplicationWindow {
                             x: Theme.horizontalPageMargin
                             anchors.verticalCenter: parent.verticalCenter
                             text: loc.moreSettings + " \u203a"
+                            color: highlighted ? Theme.highlightColor : Theme.primaryColor
+                        }
+                    }
+
+                    BackgroundItem {
+                        width: parent.width
+                        height: Theme.itemSizeSmall
+                        onClicked: pageStack.push(aboutAppPage)
+                        Label {
+                            x: Theme.horizontalPageMargin
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: loc.aboutApp + " \u203a"
                             color: highlighted ? Theme.highlightColor : Theme.primaryColor
                         }
                     }

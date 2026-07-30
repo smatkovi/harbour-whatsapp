@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.168
+Version:    0.9.173
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -109,6 +109,26 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Thu Jul 30 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.173-1
+- The Liberapay donate button is live: liberapay.com/smatkovi for
+  recurring support, alongside the existing PayPal button
+
+* Thu Jul 30 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.172-1
+- The About page speaks all 22 languages now, including the thanks
+  paragraph and the not-affiliated disclaimer - and Vienna appears as
+  Vindobona where a daemon would expect it to
+
+* Thu Jul 30 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.171-1
+- Donate button now uses paypal.me/smatkovi: the classic donations flow
+  turned out to be reserved for registered organisations, PayPal.me is
+  the proper route for individual developers
+
+* Thu Jul 30 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.170-1
+- About page in Settings: version, developer, GitHub and issue links,
+  community thanks, whatsmeow credit and the usual not-affiliated-with-
+  Meta disclaimer. Donate button for PayPal included; a Liberapay button
+  is wired up and appears once the account exists
+
 * Thu Jul 30 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.168-1
 - Sending a file now says so: the chat shows "Sending <name>... 12s" while
   the upload runs and clears it when the message appears. Large files take
