@@ -2804,6 +2804,10 @@ func main() {
         chatSettingsMutex.Unlock()
         saveChatSettings()
         clearNotification(chat)
+        // Ohne bump erfaehrt die Long-Polling-UI nicht, dass der
+        // Ungelesen-Zaehler geloescht wurde - er blieb stehen, bis
+        // zufaellig ein anderes Ereignis kam (oder das 60-s-Netz)
+        bumpEvent()
         w.Write([]byte("ok"))
     })
 

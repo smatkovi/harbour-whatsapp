@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.162
+Version:    0.9.163
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -98,6 +98,17 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.163-1
+- Chat position now holds for videos and audio too (reported by rdomschk):
+  those open an internal player page, so the chat page becomes invisible
+  and its delegates are gone - the position anchor is now taken from the
+  snapshot captured while the page was still visible instead of probing
+  the empty view
+- Unread counter clears immediately when you open a chat and go straight
+  back (reported by rdomschk): opening a chat did not announce itself to
+  the long-poll, so the chat list kept the stale count until some other
+  event arrived; the read state is now also written on leaving the chat
+
 * Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.162-1
 - The chat position saga is over, confirmed on-device: every model
   refresh used to teleport the view synchronously, and all restoring

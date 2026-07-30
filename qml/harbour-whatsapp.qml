@@ -4668,7 +4668,14 @@ Label {
                         // Identitaet (originY-Verschiebung, Log: holdback
                         // y=4339 keepY=4117) - die Nachricht-ID ist es
                         var hbId = "", hbOff = 0
-                        if (!stickToEnd) {
+                        if (!stickToEnd && posCaptured && anchorId !== "") {
+                            // Video/Audio oeffnen eine INTERNE Seite: die
+                            // Chatseite wird unsichtbar, ihre Delegates sind
+                            // weg, itemAt() liefert nichts - also den bei der
+                            // Capture (noch sichtbar!) genommenen Anker nutzen
+                            hbId = anchorId
+                            hbOff = anchorOffset
+                        } else if (!stickToEnd) {
                             var pY = keepY + 8
                             var hbIt = msgList.itemAt(msgList.width / 2, pY)
                             var hbIx = msgList.indexAt(msgList.width / 2, pY)
@@ -4974,6 +4981,7 @@ Label {
             property bool wasAtEnd: true
             onStatusChanged: {
                 if (status === PageStatus.Deactivating) {
+                    markOpened()   // Gelesen-Stand sofort festschreiben
                     captureListPos()
                 } else if (status === PageStatus.Active) {
                     pageStack.pushAttached(contactInfoPage, {
