@@ -81,6 +81,9 @@ ApplicationWindow {
     }
     property var waContactsMap: ({})
     property int backendPort: 8085
+    // Zaehler laufender Medien-Uploads: solange > 0, gilt ein langsames
+    // Backend als beschaeftigt, nicht als verloren
+    property int uploadInFlight: 0
     property string phone: ""
     property var chats: []
     property var waContacts: []
@@ -725,6 +728,9 @@ ApplicationWindow {
         // Totalverlust (z.B. Daemon per Terminal disabled, waehrend die App
         // offen war - frueher blieb sie backendlos bis zum Neustart): nach
         // drei erfolglosen Zyklen selbst ein Kind-Backend nachstarten
+        // Waehrend eines laufenden Uploads ist das Geraet beschaeftigt und
+        // /status antwortet langsam - das ist KEIN Backend-Verlust
+        if (uploadInFlight > 0) return
         backendLossCount++
         if (backendLossCount === 3) {
             console.log("Backend lost entirely - respawning child backend")
@@ -1026,14 +1032,25 @@ ApplicationWindow {
             header: Column {
                 width: parent.width
                 Loader { width: parent.width; active: showViewSwitcher; sourceComponent: viewSwitcherComp }
-                Label {
+                BackgroundItem {
+                    // Antippen kopiert - Fehlertexte sind zum Weitermelden da
                     visible: globalNotice !== ""
-                    x: Theme.horizontalPageMargin
-                    width: parent.width - 2*x
-                    text: globalNotice
-                    wrapMode: Text.Wrap
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.highlightColor
+                    width: parent.width
+                    height: visible ? noticeLbl1.height + 2*Theme.paddingSmall : 0
+                    onClicked: {
+                        Clipboard.text = globalNotice
+                        globalNotice = "Copied to clipboard"
+                    }
+                    Label {
+                        id: noticeLbl1
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: globalNotice
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.highlightColor
+                    }
                 }
             }
 
@@ -1425,14 +1442,25 @@ ApplicationWindow {
                     onTriggered: retryBackend()
                 }
 
-                Label {
+                BackgroundItem {
                     visible: globalNotice !== ""
-                    x: Theme.horizontalPageMargin
-                    width: parent.width - 2*x
-                    text: globalNotice
-                    wrapMode: Text.Wrap
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: globalNotice.indexOf("failed") >= 0 ? Theme.errorColor : Theme.highlightColor
+                    width: parent.width
+                    height: visible ? noticeLbl2.height + 2*Theme.paddingSmall : 0
+                    onClicked: {
+                        Clipboard.text = globalNotice
+                        globalNotice = "Copied to clipboard"
+                    }
+                    Label {
+                        id: noticeLbl2
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: globalNotice + (globalNotice.indexOf("failed") >= 0
+                                              ? "\n(tap to copy)" : "")
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: globalNotice.indexOf("failed") >= 0 ? Theme.errorColor : Theme.highlightColor
+                    }
                 }
 
                 Column {
@@ -2209,7 +2237,7 @@ Label {
                         width: parent.width
                         height: grantLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Contacts;/!s/$/Contacts;/; /Privileged;/!s/$/Privileged;/}' /usr/share/applications/harbour-whatsapp.desktop"
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Contacts;/!s/$/Contacts;/; /Privileged;/!s/$/Privileged;/}' /usr/share/applications/harbour-whatsapp.desktop /usr/share/applications/harbour-whatsapp-daemon.desktop"
                             copiedHint.text = "Grant command copied - paste in Terminal"
                         }
                         Label {
@@ -2228,7 +2256,7 @@ Label {
                         width: parent.width
                         height: revokeLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Contacts;//g; s/Privileged;//g}' /usr/share/applications/harbour-whatsapp.desktop"
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Contacts;//g; s/Privileged;//g}' /usr/share/applications/harbour-whatsapp.desktop /usr/share/applications/harbour-whatsapp-daemon.desktop"
                             copiedHint.text = "Revoke command copied - paste in Terminal"
                         }
                         Label {
@@ -2247,7 +2275,7 @@ Label {
                         width: parent.width
                         height: grantMediaLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /UserDirs;/!s/$/UserDirs;/; /MediaIndexing;/!s/$/MediaIndexing;/; /RemovableMedia;/!s/$/RemovableMedia;/}' /usr/share/applications/harbour-whatsapp.desktop"
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /UserDirs;/!s/$/UserDirs;/; /MediaIndexing;/!s/$/MediaIndexing;/; /RemovableMedia;/!s/$/RemovableMedia;/}' /usr/share/applications/harbour-whatsapp.desktop /usr/share/applications/harbour-whatsapp-daemon.desktop"
                             copiedHint.text = "Media grant command copied - paste in Terminal"
                         }
                         Label {
@@ -2266,7 +2294,7 @@ Label {
                         width: parent.width
                         height: revokeMediaLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/UserDirs;//g; s/MediaIndexing;//g; s/RemovableMedia;//g}' /usr/share/applications/harbour-whatsapp.desktop"
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/UserDirs;//g; s/MediaIndexing;//g; s/RemovableMedia;//g}' /usr/share/applications/harbour-whatsapp.desktop /usr/share/applications/harbour-whatsapp-daemon.desktop"
                             copiedHint.text = "Media revoke command copied - paste in Terminal"
                         }
                         Label {
@@ -2285,7 +2313,7 @@ Label {
                         width: parent.width
                         height: grantLocLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Location;/!s/$/Location;/}' /usr/share/applications/harbour-whatsapp.desktop"
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Location;/!s/$/Location;/}' /usr/share/applications/harbour-whatsapp.desktop /usr/share/applications/harbour-whatsapp-daemon.desktop"
                             copiedHint.text = "Location grant command copied - paste in Terminal, then restart the app"
                         }
                         Label {
@@ -2304,7 +2332,7 @@ Label {
                         width: parent.width
                         height: revokeLocLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Location;//g}' /usr/share/applications/harbour-whatsapp.desktop"
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Location;//g}' /usr/share/applications/harbour-whatsapp.desktop /usr/share/applications/harbour-whatsapp-daemon.desktop"
                             copiedHint.text = "Location revoke command copied - paste in Terminal"
                         }
                         Label {
@@ -2323,7 +2351,7 @@ Label {
                         width: parent.width
                         height: grantMicLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Microphone;/!s/$/Microphone;/}' /usr/share/applications/harbour-whatsapp.desktop"
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Microphone;/!s/$/Microphone;/}' /usr/share/applications/harbour-whatsapp.desktop /usr/share/applications/harbour-whatsapp-daemon.desktop"
                             copiedHint.text = "Microphone grant command copied - paste in Terminal, then restart the app"
                         }
                         Label {
@@ -2342,7 +2370,7 @@ Label {
                         width: parent.width
                         height: revokeMicLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Microphone;//g}' /usr/share/applications/harbour-whatsapp.desktop"
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Microphone;//g}' /usr/share/applications/harbour-whatsapp.desktop /usr/share/applications/harbour-whatsapp-daemon.desktop"
                             copiedHint.text = "Microphone revoke command copied - paste in Terminal"
                         }
                         Label {
@@ -2361,7 +2389,7 @@ Label {
                         width: parent.width
                         height: grantSensLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Audio;/!s/$/Audio;/; /Sensors;/!s/$/Sensors;/}' /usr/share/applications/harbour-whatsapp.desktop"
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/;*$/;/; /Audio;/!s/$/Audio;/; /Sensors;/!s/$/Sensors;/}' /usr/share/applications/harbour-whatsapp.desktop /usr/share/applications/harbour-whatsapp-daemon.desktop"
                             copiedHint.text = "Audio+Sensors grant command copied - paste in Terminal, then restart the app"
                         }
                         Label {
@@ -2380,7 +2408,7 @@ Label {
                         width: parent.width
                         height: revokeSensLabel.height + 2*Theme.paddingMedium
                         onClicked: {
-                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Audio;//g; s/Sensors;//g}' /usr/share/applications/harbour-whatsapp.desktop"
+                            Clipboard.text = "devel-su sed -i '/^Permissions=/{s/Audio;//g; s/Sensors;//g}' /usr/share/applications/harbour-whatsapp.desktop /usr/share/applications/harbour-whatsapp-daemon.desktop"
                             copiedHint.text = "Audio+Sensors revoke command copied - paste in Terminal"
                         }
                         Label {
@@ -4949,12 +4977,55 @@ Label {
                 xhr.send()
             }
 
+            property string uploadName: ""
+            property int uploadSecs: 0
+
+            Timer {
+                // Upload dauert je nach Groesse und Netz zweistellige Sekunden -
+                // ohne Rueckmeldung wirkt das wie "nichts passiert"
+                id: uploadTicker
+                interval: 1000
+                repeat: true
+                onTriggered: {
+                    chatPageItem.uploadSecs++
+                    globalNotice = "Sending " + chatPageItem.uploadName
+                                   + "\u2026 " + chatPageItem.uploadSecs + "s"
+                }
+            }
+
             function sendFile(path) {
+                console.log("WASEND sendFile path=" + path + " chat=" + chatJid
+                            + " port=" + backendPort)
+                if (!path || path === "") {
+                    globalNotice = "Send failed: the picker returned no file path"
+                    return
+                }
                 forceEnd = true   // Upload dauert: schon die Zwischen-Polls sollen ans Ende
+                uploadInFlight++
+                uploadName = path.substring(path.lastIndexOf("/") + 1)
+                uploadSecs = 0
+                globalNotice = "Sending " + uploadName + "\u2026"
+                uploadTicker.restart()
                 var xhr = new XMLHttpRequest()
                 xhr.open("POST", "http://127.0.0.1:" + backendPort + "/sendmedia?to=" + chatJid + "&file=" + encodeURIComponent(path) + "&caption=")
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState === 4) {
+                        uploadInFlight = Math.max(0, uploadInFlight - 1)
+                        uploadTicker.stop()
+                        console.log("WASEND sendFile reply status=" + xhr.status
+                                    + " body=" + (xhr.responseText || "").substring(0, 120))
+                        // Fehler NICHT verschlucken: bisher lief load() auch bei
+                        // Status 500, der Grund des Backends ging verloren und
+                        // es sah aus, als passiere schlicht nichts
+                        if (xhr.status !== 200) {
+                            var why = (xhr.responseText || "").replace(/\s+$/, "")
+                            if (why.length > 200) why = why.substring(0, 200) + "\u2026"
+                            globalNotice = "Send failed (" + xhr.status + "): "
+                                           + (why !== "" ? why : "no response from backend")
+                                           + " [" + path + "]"
+                            return
+                        }
+                        if (globalNotice.indexOf("Sending ") === 0) globalNotice = ""
                         forceEnd = true
                         load()
                         loadChats()
@@ -4997,8 +5068,13 @@ Label {
                 id: imagePicker
                 ImagePickerPage {
                     onSelectedContentPropertiesChanged: {
-                        chatPageItem.sendFile(selectedContentProperties.filePath)
+                        console.log("WASEND imagePicker fired path="
+                                    + (selectedContentProperties
+                                       ? selectedContentProperties.filePath : "(keine Props)"))
+                        chatPageItem.sendFile(selectedContentProperties
+                                              ? selectedContentProperties.filePath : "")
                     }
+                    onSelectedContentChanged: console.log("WASEND imagePicker selectedContent=" + selectedContent)
                 }
             }
 
@@ -5006,8 +5082,13 @@ Label {
                 id: filePicker
                 FilePickerPage {
                     onSelectedContentPropertiesChanged: {
-                        chatPageItem.sendFile(selectedContentProperties.filePath)
+                        console.log("WASEND filePicker fired path="
+                                    + (selectedContentProperties
+                                       ? selectedContentProperties.filePath : "(keine Props)"))
+                        chatPageItem.sendFile(selectedContentProperties
+                                              ? selectedContentProperties.filePath : "")
                     }
+                    onSelectedContentChanged: console.log("WASEND filePicker selectedContent=" + selectedContent)
                 }
             }
 
@@ -5936,6 +6017,30 @@ Label {
                 width: parent.width
                 anchors.bottom: parent.bottom
                 visible: chatJid !== "status" && !isChannel
+
+                // Meldungen (z.B. fehlgeschlagenes Senden) hier zeigen: die
+                // Anzeigen in Chatliste und Hauptseite sieht man beim Senden
+                // nicht, der Fehler blieb deshalb unsichtbar
+                BackgroundItem {
+                    visible: globalNotice !== ""
+                    width: parent.width
+                    height: visible ? chatNoticeLbl.height + 2*Theme.paddingSmall : 0
+                    onClicked: {
+                        Clipboard.text = globalNotice
+                        globalNotice = "Copied to clipboard"
+                    }
+                    Label {
+                        id: chatNoticeLbl
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: globalNotice + (globalNotice.indexOf("failed") >= 0
+                                              ? "\n(tap to copy)" : "")
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: globalNotice.indexOf("failed") >= 0 ? Theme.errorColor : Theme.highlightColor
+                    }
+                }
 
                 // Banner: Antworten auf / Bearbeiten von
                 Rectangle {

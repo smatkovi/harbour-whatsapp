@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.163
+Version:    0.9.168
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -87,6 +87,17 @@ sed -i '/^X-Maemo-Service=/d' $D
 sed -i '/^ExecDBus=/d' $D
 printf 'ExecDBus=/usr/bin/sailfish-qml harbour-whatsapp\n' >> $D
 
+# Nutzer-Grants auf das Daemon-Profil spiegeln: das Haupt-Desktop-File ist
+# %config(noreplace) und traegt die per Einstellungs-Befehl erteilten Rechte,
+# das Daemon-File wird bei jedem Update ersetzt. Ohne Spiegelung darf die App
+# Dateien auswaehlen, das Backend im Daemon-Jail sie aber nicht lesen -
+# Senden von Bildern/Videos passiert dann stillschweigend nie
+DD=/usr/share/applications/harbour-whatsapp-daemon.desktop
+P=$(sed -n 's/^Permissions=//p' $D | head -1)
+if [ -n "$P" ] && [ -f $DD ]; then
+  sed -i "s|^Permissions=.*|Permissions=$P|" $DD
+fi
+
 # gst-launch am exec-erlaubten Ort verfuegbar machen (Voice-Aufnahme):
 # /usr/bin kann im Sailjail auf eine Positivliste reduziert sein
 ln -f /usr/bin/gst-launch-1.0 /usr/share/harbour-whatsapp/gst-launch-1.0 2>/dev/null ||   cp /usr/bin/gst-launch-1.0 /usr/share/harbour-whatsapp/gst-launch-1.0 2>/dev/null || true
@@ -98,6 +109,46 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Thu Jul 30 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.168-1
+- Sending a file now says so: the chat shows "Sending <name>... 12s" while
+  the upload runs and clears it when the message appears. Large files take
+  double-digit seconds, and silence looked exactly like failure
+
+* Thu Jul 30 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.167-1
+- Sending pictures, videos and files works again (reported by kempertom,
+  traced on-device): during an upload the phone is busy, so the status
+  check ran into its one-second timeout - and a missing answer counted as
+  a version mismatch, which made the app shut down its own backend in the
+  middle of the transfer. No response, nothing sent, no error. Now only a
+  genuinely different version replaces the backend, the status timeouts
+  are generous, and while an upload is in flight a slow backend counts as
+  busy rather than lost
+
+* Thu Jul 30 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.166-1
+- Notices are now shown on the chat page as well: they only existed on
+  the chat list and the main page, so a failed send reported nothing
+  where you actually are. Plus WASEND diagnostics on the picker and send
+  path to find why sending does nothing at all
+
+* Thu Jul 30 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.165-1
+- Notices can be tapped to copy, like the pairing error already could -
+  error texts are meant to be forwarded, and the new send-failure notice
+  carries the status code, the backend reason and the file path
+
+* Thu Jul 30 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.164-1
+- Sending pictures, videos and files works for background-daemon users
+  (reported by kempertom): the daemon runs under its own sailjail profile,
+  but the permission commands in Settings only patched the app profile -
+  so the picker could select a file the backend was not allowed to read,
+  and sending silently did nothing. The grant/revoke commands now cover
+  both profiles, and %post mirrors already-granted permissions onto the
+  daemon profile, so existing installs are fixed by the update alone.
+  Permissions stay opt-in as before - nothing is granted by default
+- Failed sends no longer fail silently: the send path ignored the HTTP
+  status entirely, so a backend error (unreadable file, upload refused)
+  looked exactly like nothing happening. The reason and the file path
+  are now shown in a notice, which is what the next report needs
+
 * Wed Jul 29 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.163-1
 - Chat position now holds for videos and audio too (reported by rdomschk):
   those open an internal player page, so the chat page becomes invisible

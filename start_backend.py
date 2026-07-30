@@ -255,9 +255,13 @@ def installed_version():
         return None
 
 def backend_version(port):
+    """Version des laufenden Backends - None heisst NICHT 'veraltet',
+    sondern 'gerade keine Antwort' (z.B. waehrend eines Uploads ist das
+    Geraet beschaeftigt). Der Aufrufer darf daraus keinen Versionskonflikt
+    machen, sonst killt er ein gesundes Backend mitten im Senden."""
     try:
         import json
-        with urllib.request.urlopen("http://127.0.0.1:%d/status" % port, timeout=1) as r:
+        with urllib.request.urlopen("http://127.0.0.1:%d/status" % port, timeout=8) as r:
             return json.loads(r.read().decode()).get("version")
     except Exception:
         return None
@@ -290,7 +294,7 @@ def find_backend_port():
     candidates += [p for p in range(8085, 8090) if p not in candidates]
     for p in candidates:
         try:
-            urllib.request.urlopen("http://127.0.0.1:%d/status" % p, timeout=1)
+            urllib.request.urlopen("http://127.0.0.1:%d/status" % p, timeout=5)
             return p
         except Exception:
             continue
@@ -327,7 +331,11 @@ def start():
     if port:
         want = installed_version()
         have = backend_version(port)
-        if want is not None and have != want:
+        # NUR bei tatsaechlich abweichender Version ersetzen. Frueher galt
+        # auch ein Timeout (have=None) als Konflikt - genau das schoss das
+        # Backend waehrend eines laufenden Medien-Uploads ab: Anfrage ohne
+        # Antwort, nichts gesendet, keine Fehlermeldung
+        if want is not None and have is not None and have != want:
             # veraltetes Backend von vor dem Update -> ersetzen
             stop_stale_backend(port)
             port = None
