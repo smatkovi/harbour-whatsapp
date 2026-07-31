@@ -473,6 +473,31 @@ func rememberCollectionName(name string) {
     os.WriteFile(collectionNameFile, []byte(name), 0600)
 }
 
+// exportKeyForHandover legt den Key zusaetzlich in eine identitaetsoffene
+// Collection (AccessControl None), aus der jede unserer Identitaeten laden
+// kann. Die eigene Collection bleibt unangetastet.
+func exportKeyForHandover(ownCollection string, key []byte) (string, error) {
+    prev := secrets.collectionName
+    defer func() {
+        secrets.collectionName = prev
+        secrets.collectionVerified = false
+    }()
+    for _, target := range append([]string{"harbourwhatsapp2", "harbourwhatsapp3"}, fmt.Sprintf("hwapp%d", time.Now().Unix())) {
+        if target == ownCollection {
+            continue
+        }
+        secrets.collectionName = target
+        secrets.collectionVerified = false
+        if serr := secrets.StoreSecret(SECRET_KEY_NAME, key); serr == nil {
+            fmt.Printf("🔐 Encryption key handed over via Secrets into collection %s\n", target)
+            return target, nil
+        } else {
+            fmt.Printf("🔐 handover store into %s failed: %v\n", target, serr)
+        }
+    }
+    return "", fmt.Errorf("no writable target collection")
+}
+
 func GetOrCreateKey() ([]byte, error) {
     if secrets == nil || !secrets.available {
         return nil, fmt.Errorf("Sailfish Secrets not available")
@@ -492,33 +517,31 @@ func GetOrCreateKey() ([]byte, error) {
                 // verlaesst Secrets dabei NIE: wir speichern ihn in eine
                 // NoAccessControl-Collection (identitaetsoffen, aber durch
                 // Sandbox-Permission und Device-Lock geschuetzt), aus der
-                // die App-Identitaet ihn regulaer laedt.
-                ownCollection := name
-                exported := false
-                for _, target := range append([]string{"harbourwhatsapp2", "harbourwhatsapp3"}, fmt.Sprintf("hwapp%d", time.Now().Unix())) {
-                    if target == ownCollection {
-                        continue
-                    }
-                    secrets.collectionName = target
-                    secrets.collectionVerified = false
-                    if serr := secrets.StoreSecret(SECRET_KEY_NAME, key); serr == nil {
-                        fmt.Printf("🔐 Encryption key handed over via Secrets into collection %s\n", target)
-                        exported = true
-                        break
-                    } else {
-                        fmt.Printf("🔐 handover store into %s failed: %v\n", target, serr)
-                    }
+                // jede Identitaet ihn regulaer laedt. Die Besitzerseite
+                // laeuft danach normal weiter - kein Anhalten, kein
+                // Neustart-Ritual; die bittende Seite holt ihn sich per
+                // Retry-Schleife von selbst.
+                if target, eerr := exportKeyForHandover(name, key); eerr == nil {
+                    os.Remove(keyHandoverMarker)
+                    rememberCollectionName(target)
+                    fmt.Println("🔐 continuing normally after handover export")
+                } else {
+                    fmt.Printf("🔐 key handover failed: %v\n", eerr)
                 }
-                secrets.collectionName = ownCollection
-                secrets.collectionVerified = false
-                if !exported {
-                    return nil, fmt.Errorf("key handover failed: no writable target collection")
-                }
-                os.Remove(keyHandoverMarker)
-                return nil, ErrKeyExported
             }
             fmt.Printf("🔐 Encryption key loaded from Sailfish Secrets (collection %s)\n", name)
             rememberCollectionName(name)
+            if name == "harbourwhatsapp" {
+                // Alt-Collection aus der Zeit vor AccessControl-None: sie ist
+                // an UNSERE Identitaet gebunden, der Daemon (oder eine andere
+                // Identitaet) kaeme nie heran. Einmalig in die offene
+                // Collection migrieren - ab dann laedt jeder Boot-Daemon den
+                // Key selbst, ohne dass die App je geoeffnet werden muss.
+                if target, eerr := exportKeyForHandover(name, key); eerr == nil {
+                    rememberCollectionName(target)
+                    fmt.Printf("🔐 Legacy collection migrated to %s - daemon-from-boot works from now on\n", target)
+                }
+            }
             // Uebergabe-Reste entfernen: .key-handover enthaelt den Key im
             // KLARTEXT und darf einen regulaeren Start nicht ueberleben;
             // ein alter Marker wuerde beim naechsten Start faelschlich

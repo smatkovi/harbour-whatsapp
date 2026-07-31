@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.173
+Version:    0.9.183
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -50,6 +50,11 @@ mkdir -p %{buildroot}/usr/share/applications
 install -m 644 %{_sourcedir}/harbour-whatsapp.desktop %{buildroot}/usr/share/applications/
 echo %{version} > %{buildroot}/usr/share/harbour-whatsapp/VERSION
 install -m 644 %{_sourcedir}/harbour-whatsapp-daemon.desktop %{buildroot}/usr/share/applications/
+# Versionsstempel fuer den Daemon-Selbst-Update-Poller: /usr/share/
+# harbour-whatsapp ist im Daemon-Jail UNSICHTBAR (sailjail leitet die
+# Whitelist vom Desktop-DATEINAMEN ab -> nur *-daemon-Pfade), aber das
+# Daemon-Desktop-File selbst steht woertlich in der Whitelist
+sed -i "/^NoDisplay=true/a X-Whatsapp-Version=%{version}" %{buildroot}/usr/share/applications/harbour-whatsapp-daemon.desktop
 # Daemon-Binary: sailjail verlangt ein ELF (kein Skript) in /usr/bin -
 # Hardlink auf das Backend, cpio dedupliziert (kein Groessenzuwachs)
 mkdir -p %{buildroot}/usr/bin
@@ -109,6 +114,95 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.183-1
+- No functional changes: version bump to field-verify the app-free
+  daemon self-update chain end to end (install RPM, touch nothing, the
+  running 0.9.182 daemon reads the stamped desktop file and swaps
+  itself within five minutes)
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.182-1
+- The self-update poller was blind: sailjail derives the daemon jail
+  whitelist from the desktop FILE NAME, so /usr/share/harbour-whatsapp
+  (and its VERSION file) is invisible to the daemon - and the read
+  failure was swallowed silently, a double fault. The spec now stamps
+  X-Whatsapp-Version into the daemon desktop file, which is verbatim in
+  the jail whitelist; the poller falls back to it and logs once if no
+  version source is readable instead of hiding
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.181-1
+- Fixed two competing update mechanisms racing each other: the legacy
+  app-start path replaced ANY version-lagging backend via /quit - which
+  is a clean exit, so systemd deliberately does not restart it. Applied
+  to the daemon this meant: app open -> daemon permanently stopped ->
+  app closed -> nothing running at all. The app now recognises a daemon
+  (status daemon:true), attaches instead of quitting it, and leaves the
+  upgrade to the exit-1 path (QML trigger or the daemon's own VERSION
+  poller). /quit remains reserved for the app's own child backend
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.180-1
+- The daemon updates itself without the app now: it polls the installed
+  VERSION file every five minutes and exits deliberately on a mismatch
+  so systemd starts the fresh binary - pure daemon users who never open
+  the app after updates are covered. The app-side trigger from 0.9.177
+  remains as the faster path. The tappable disable command in Settings
+  got a red warning label, since it sits right below restart and a
+  mis-tap silently ends notifications at the next reboot
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.179-1
+- whatsmeow updated to 2026-07-30 (662ad1dc): four protocol bumps up to
+  v1044142122, DMs now always sent via LID matching current official
+  client behaviour, pairing improvements (client props, passkey
+  support), LID group fixes, receipts acked only after handling, and an
+  updated IsOnWhatsApp query. go-util bumped alongside. Good timing:
+  re-pairing after the restriction happens on a fresh protocol level
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.178-1
+- Single-connection guard and reconnect damper: before ANY connect, the
+  backend checks whether another local instance (app or daemon) already
+  holds the WhatsApp session and stands by instead of competing; between
+  connection attempts a minimum interval and exponential backoff apply.
+  whatsmeow's instant auto-reconnect is disabled in favour of this
+  guarded path. Lesson from the two-instance session tug-of-war that got
+  the device logged out by the server - that class of storm is now
+  structurally impossible
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.177-1
+- The daemon updates itself: after an RPM update the old process kept
+  running (and old builds sat in a silent halt, which is why the new
+  self-healing never announced itself). The app now detects the version
+  lag and asks the daemon to restart via a new endpoint that exits
+  non-zero on purpose, so systemd brings up the freshly installed binary
+  - no Terminal, no manual restart, the app reattaches automatically
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.176-1
+- The daemon is infinitely patient with Sailfish Secrets now: instead of
+  giving up ~8 seconds after boot (while the device is still locked, so
+  Secrets cannot answer yet), every secrets failure enters a quiet
+  10-second retry loop - unlocking the device heals it automatically.
+  If only an app start can help (one-time key handover), the daemon uses
+  its core competence and sends a notification asking for exactly that
+  after a few minutes. Verified on-device that app and daemon share the
+  same sailjail identity and data directory, so this plus the proactive
+  migration closes the daemon-from-boot story
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.175-1
+- The one-time migration is proactive now: when the app loads the key
+  from the legacy owner-bound collection, it immediately re-publishes it
+  into the identity-open one - so after the first app start following
+  this update, the boot daemon serves notifications forever without the
+  app ever being opened again. Fresh installs are identity-open from the
+  start and never need any of this
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.174-1
+- Key handover between identities is fully automatic now: an instance
+  without the key (typically the background daemon) no longer halts but
+  retries every 10 seconds, and the owning instance exports the key
+  inside Sailfish Secrets and keeps running - opening the app once from
+  the app grid heals everything, no Terminal, no restarts. The old error
+  text confidently blamed Terminal starts, which was misleading (thanks
+  for calling it out); it now states only what the error code actually
+  says, with app-versus-daemon named as the common case
+
 * Thu Jul 30 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.173-1
 - The Liberapay donate button is live: liberapay.com/smatkovi for
   recurring support, alongside the existing PayPal button

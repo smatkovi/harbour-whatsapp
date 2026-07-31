@@ -336,7 +336,23 @@ def start():
         # Backend waehrend eines laufenden Medien-Uploads ab: Anfrage ohne
         # Antwort, nichts gesendet, keine Fehlermeldung
         if want is not None and have is not None and have != want:
-            # veraltetes Backend von vor dem Update -> ersetzen
+            # Veraltetes Backend von vor dem Update. ABER: ist es der
+            # DAEMON, gehoert er systemd und darf NIE per /quit ersetzt
+            # werden - /quit ist Exit 0, Restart=on-failure zieht nicht
+            # neu hoch, und nach dem Schliessen der App laeuft dann GAR
+            # NICHTS mehr (Lehrstueck vom 31.07., 17:16). Der Daemon wird
+            # ueber den Exit-1-Weg getauscht: QML-Trigger beim Anheften
+            # bzw. sein eigener VERSION-Poller binnen 5 Minuten.
+            is_daemon = False
+            try:
+                r = urllib.request.urlopen("http://127.0.0.1:%d/status" % port, timeout=3)
+                is_daemon = bool(json.loads(r.read().decode()).get("daemon"))
+            except Exception:
+                pass
+            if is_daemon:
+                pyotherside.send('backendReady', True, port)
+                return True
+            # eigenes Kind von vor dem Update -> ersetzen wie gehabt
             stop_stale_backend(port)
             port = None
         else:

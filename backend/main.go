@@ -135,6 +135,96 @@ var notifIDs = map[string]uint32{}   // chatJid -> Notification-ID (Dedupe)
 var notifCounts = map[string]int{}   // chatJid -> ungemeldete Nachrichten
 var notifMutex sync.Mutex
 
+// ---- Ein-Verbindungs-Wache + Reconnect-Daempfer (Lehre vom 31.07.) ----
+// Zwei Instanzen (App-Backend + Daemon) haben sich die WhatsApp-Session im
+// Sekundentakt gegenseitig weggerissen; der Server wertete das als Missbrauch
+// und meldete das Geraet ab. Ab jetzt gilt: vor JEDEM Connect pruefen, ob
+// eine andere lokale Instanz verbunden ist (dann zuruecktreten statt
+// konkurrieren), Mindestabstand zwischen Verbindungsaufbauten und
+// exponentielles Backoff bei Fehlschlaegen.
+
+var connectMu sync.Mutex
+var connectPending bool
+var lastConnectAttempt time.Time
+var consecReconnects int
+var lastConnectedAt time.Time
+
+const minConnectInterval = 10 * time.Second
+
+// anotherInstanceConnected: haelt eine ANDERE lokale Instanz die Session?
+func anotherInstanceConnected() bool {
+    cl := &http.Client{Timeout: 1500 * time.Millisecond}
+    for p := 8085; p <= 8089; p++ {
+        if p == boundPort {
+            continue
+        }
+        resp, err := cl.Get(fmt.Sprintf("http://127.0.0.1:%d/status", p))
+        if err != nil {
+            continue
+        }
+        var st struct {
+            Connected bool `json:"connected"`
+        }
+        json.NewDecoder(resp.Body).Decode(&st)
+        resp.Body.Close()
+        if st.Connected {
+            return true
+        }
+    }
+    return false
+}
+
+func reconnectDelay() time.Duration {
+    if consecReconnects <= 0 {
+        return 0
+    }
+    d := time.Duration(5*(1<<uint(consecReconnects-1))) * time.Second
+    if d > 5*time.Minute {
+        d = 5 * time.Minute
+    }
+    return d
+}
+
+// connectWithGuard: einziger erlaubter Weg zu client.Connect()
+func connectWithGuard(reason string) {
+    connectMu.Lock()
+    if connectPending {
+        connectMu.Unlock()
+        return
+    }
+    connectPending = true
+    connectMu.Unlock()
+    go func() {
+        defer func() {
+            connectMu.Lock()
+            connectPending = false
+            connectMu.Unlock()
+        }()
+        if d := reconnectDelay(); d > 0 {
+            fmt.Printf("⏳ reconnect backoff %s (attempt %d, %s)\n", d, consecReconnects, reason)
+            time.Sleep(d)
+        }
+        if since := time.Since(lastConnectAttempt); since < minConnectInterval && !lastConnectAttempt.IsZero() {
+            time.Sleep(minConnectInterval - since)
+        }
+        for anotherInstanceConnected() {
+            connState = "standby"
+            lastError = "Another local instance (app or daemon) holds the connection - standing by instead of competing."
+            fmt.Println("⏸ standby: another instance is connected, not competing for the session")
+            time.Sleep(30 * time.Second)
+        }
+        if connState == "logged_out" || connState == "relogin_required" {
+            fmt.Println("⏸ not reconnecting: state " + connState)
+            return
+        }
+        lastConnectAttempt = time.Now()
+        fmt.Printf("🔌 connecting (%s)\n", reason)
+        if cerr := client.Connect(); cerr != nil {
+            fmt.Printf("❌ connect error (%s): %v\n", reason, cerr)
+        }
+    }()
+}
+
 // daemonTakeover: laeuft bereits ein (Kind-)Backend, wird es hoeflich per
 // /quit beendet, bevor der Daemon den Port uebernimmt - sonst kaempfen zwei
 // Backends mit denselben Credentials um die WhatsApp-Session, und der Daemon
@@ -344,6 +434,33 @@ func startReplyService() {
 // clearAllNotifications schliesst alle offenen Eintraege in der
 // Ereignisansicht - aufgerufen, wenn die App in den Vordergrund kommt
 // (wer die App oeffnet, hat die Benachrichtigungen gesehen)
+var setupHintSent bool
+var versionPollErrLogged bool
+
+// notifySetupHint: einmalige Selbsthilfe-Benachrichtigung des Daemons,
+// wenn nur ein App-Start weiterhelfen kann (Schluessel-Uebergabe).
+// Benachrichtigen ist das Kerngeschaeft des Daemons - dann darf er auch
+// in eigener Sache anklopfen.
+func notifySetupHint(body string) {
+    if setupHintSent || os.Getenv("WA_DAEMON") != "1" {
+        return
+    }
+    setupHintSent = true
+    conn, err := dbus.SessionBus()
+    if err != nil {
+        return
+    }
+    obj := conn.Object("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
+    hints := map[string]dbus.Variant{
+        "x-nemo-preview-summary": dbus.MakeVariant("WhatsApp"),
+        "x-nemo-preview-body":    dbus.MakeVariant(body),
+        "category":               dbus.MakeVariant("x-nemo.messaging.im"),
+    }
+    obj.Call("org.freedesktop.Notifications.Notify", 0,
+        "WhatsApp", uint32(0), "harbour-whatsapp", "WhatsApp", body,
+        []string{}, hints, int32(-1))
+}
+
 func clearAllNotifications() {
     notifMutex.Lock()
     ids := make([]uint32, 0, len(notifIDs))
@@ -706,6 +823,10 @@ func initClient() error {
     }
     clientLog := waLog.Stdout("Client", "WARN", true)
     client = whatsmeow.NewClient(device, clientLog)
+    // Reconnects laufen ueber unsere Ein-Verbindungs-Wache mit Backoff -
+    // whatsmeows Sofort-Reconnect hat beim Zwei-Instanzen-Gerangel den
+    // Session-Sturm befeuert, der in einer Server-Abmeldung endete
+    client.EnableAutoReconnect = false
     client.AddEventHandler(eventHandler)
     return nil
 }
@@ -2005,6 +2126,8 @@ func eventHandler(evt interface{}) {
         }()
 
     case *events.Connected:
+        lastConnectedAt = time.Now()
+        consecReconnects = 0
         // Available-Presence senden: ohne sie stellt WhatsApp keine
         // Status-Broadcasts (Stories) an dieses Geraet zu. Nebenwirkung wie
         // bei WhatsApp Web: solange verbunden, gilt das Geraet als online.
@@ -2139,14 +2262,32 @@ func eventHandler(evt interface{}) {
 
     case *events.Disconnected:
         isConnected = false
+        if connState == "logged_out" || connState == "relogin_required" {
+            break
+        }
         connState = "reconnecting"
-        fmt.Println("🔌 Disconnected, reconnecting...")
+        // Kurzlebige Verbindungen deuten auf Gerangel/Instabilitaet:
+        // Backoff waechst. Nach >2 min stabiler Verbindung zaehlt es
+        // als Einzelfall und der Zaehler faellt zurueck.
+        if time.Since(lastConnectedAt) > 2*time.Minute {
+            consecReconnects = 1
+        } else {
+            consecReconnects++
+        }
+        fmt.Println("🔌 Disconnected - scheduling guarded reconnect")
+        connectWithGuard("auto-reconnect")
 
     case *events.ConnectFailure:
         isConnected = false
         connState = "error"
         lastError = fmt.Sprintf("Connect failure: %s", v.Reason.String())
         fmt.Printf("❌ %s\n", lastError)
+        rs := strings.ToLower(v.Reason.String())
+        if !strings.Contains(rs, "logged") && !strings.Contains(rs, "ban") &&
+            !strings.Contains(rs, "outdated") && !strings.Contains(rs, "unauthorized") {
+            consecReconnects++
+            connectWithGuard("connect-failure")
+        }
 
     case *events.ClientOutdated:
         isConnected = false
@@ -2473,6 +2614,29 @@ func main() {
     fmt.Printf("🚀 Backend listening on http://127.0.0.1:%d (initializing…)\n", port)
     go http.Serve(listener, nil)
 
+    http.HandleFunc("/daemon/restart", func(w http.ResponseWriter, r *http.Request) {
+        // Selbst-Update des Daemons: nach einem RPM-Update laeuft noch der
+        // alte Prozess. Ein sauberes /quit wird absichtlich NICHT neu
+        // gestartet - deshalb hier Exit-Code 1, damit Restart=on-failure
+        // greift und systemd den frisch installierten Binary startet.
+        if os.Getenv("WA_DAEMON") != "1" {
+            http.Error(w, "not a daemon", 400)
+            return
+        }
+        fmt.Println("🔄 Daemon restart requested (version upgrade) - exiting 1 for systemd")
+        saveMessages()
+        saveContacts()
+        saveRawMedia()
+        json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+        go func() {
+            time.Sleep(300 * time.Millisecond)
+            if client != nil {
+                client.Disconnect()
+            }
+            os.Exit(1)
+        }()
+    })
+
     http.HandleFunc("/quit", func(w http.ResponseWriter, r *http.Request) {
         fmt.Println("👋 Quit requested (update?), saving and exiting...")
         saveMessages()
@@ -2580,45 +2744,118 @@ func main() {
                 "database (your chats stay on your phone and will re-sync) and creates "+
                 "a new, encrypted one.")
     }
-    if err == ErrKeyHandoverRequested {
-        haltWithState("secrets_error",
-            "The encryption key belongs to a different application identity - this "+
-                "happens if the app was once started from a Terminal or a script. "+
-                "Nothing is lost. To hand the key over automatically, start the app "+
-                "ONCE the way it was started when it last worked (for a Terminal "+
-                "that was: export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/100000/"+
-                "dbus/user_bus_socket; sailfish-qml harbour-whatsapp). That instance "+
-                "hands the key over inside Sailfish Secrets (it is never written to "+
-                "disk) and tells you. Afterwards start the app normally from the app "+
-                "grid - same messages, no re-pairing.")
-    }
-    if err == ErrKeyExported {
-        haltWithState("secrets_error",
-            "Encryption key handed over via Sailfish Secrets. Close this instance "+
-                "completely and start the app from the app grid - it will load the "+
-                "key normally. Same messages, no re-pairing.")
-    }
-    if err != nil && IsOwnershipError(err) {
-        haltWithState("secrets_error",
-            "The Secrets collections are owned by a different application identity "+
-                "and no handover file was found. Close the app completely and start "+
-                "it from the app grid; if this persists, start it once the way it "+
-                "last worked so it can hand over the key.")
-    }
     if err != nil {
-        if _, serr := os.Stat("wa.db"); serr == nil {
-            haltWithState("secrets_error",
-                "Sailfish Secrets is not responding ("+err.Error()+"), so the encrypted "+
-                    "database cannot be unlocked. Your data is intact. A device restart "+
-                    "usually brings the secrets service back.")
+        // Kein Anhalten mehr - der Zustand ist selbstheilend. Zwei Faelle:
+        // (a) Schluessel gehoert einer anderen Identitaet: nur ein App-Start
+        //     kann uebergeben; nach ein paar Minuten erfolgloser Versuche
+        //     klopft der Daemon per Benachrichtigung an.
+        // (b) Secrets (noch) nicht verfuegbar - der Normalfall beim Boot,
+        //     solange das Geraet gesperrt ist: stilles Warten, das
+        //     Entsperren heilt von selbst.
+        // Wichtig: KEINE Ursachen-Fiktion im Text - der Fehlercode sagt nur,
+        // was er sagt.
+        isOwn := err == ErrKeyHandoverRequested || err == ErrKeyExported || IsOwnershipError(err)
+        connState = "secrets_error"
+        if isOwn {
+            lastError = "The encryption key is currently owned by a different " +
+            "application identity - for example an earlier install or start " +
+            "method. Nothing is lost and there is nothing to type: open the " +
+            "app once from the app grid. It hands the key over inside " +
+            "Sailfish Secrets automatically (the key never touches the " +
+            "disk), and this instance picks it up by itself within a few " +
+            "seconds - same messages, no re-pairing."
+        } else {
+            lastError = "Waiting for Sailfish Secrets (" + err.Error() + ") - " +
+                "this resolves automatically once the service is available, " +
+                "typically right after unlocking the device."
         }
-        haltWithState("secrets_error",
-            "Sailfish Secrets is not responding ("+err.Error()+"). This app stores its "+
-                "encryption key only in Sailfish Secrets and cannot pair without it. "+
-                "If a confirmation prompt was dismissed, tap 'Restart backend' and "+
-                "accept it. Otherwise a device restart usually helps.")
+        fmt.Printf("🛑 secrets_error: waiting (ownership=%v), retrying every 10 s\n", isOwn)
+        tries := 0
+        for {
+            time.Sleep(10 * time.Second)
+            if encryptionKey, err = GetOrCreateKey(); err == nil {
+                connState = ""
+                lastError = ""
+                fmt.Println("🔐 Key acquired - continuing startup")
+                break
+            }
+            tries++
+            if err == ErrKeyHandoverRequested || IsOwnershipError(err) {
+                lastError = "The encryption key is currently owned by a different " +
+            "application identity - for example an earlier install or start " +
+            "method. Nothing is lost and there is nothing to type: open the " +
+            "app once from the app grid. It hands the key over inside " +
+            "Sailfish Secrets automatically (the key never touches the " +
+            "disk), and this instance picks it up by itself within a few " +
+            "seconds - same messages, no re-pairing."
+                if tries >= 18 { // ~3 Minuten: das loest sich nicht von allein
+                    notifySetupHint("Background service needs a one-time key handover: please open the WhatsApp app once. Everything continues automatically afterwards.")
+                }
+            } else {
+                lastError = "Waiting for Sailfish Secrets (" + err.Error() + ") - " +
+                    "this resolves automatically once the service is available, " +
+                    "typically right after unlocking the device."
+            }
+        }
     }
+
     
+    // Daemon-Selbst-Update OHNE App: die installierte Version steht in
+    // /usr/share/harbour-whatsapp/VERSION (im Jail lesbar). Weicht sie von
+    // der eigenen ab, geordnet mit Exit 1 aussteigen - Restart=on-failure
+    // zieht den frisch installierten Binary hoch. Der QML-Trigger aus
+    // 0.9.177 bleibt als schnellerer Weg bestehen; dieser Pfad deckt
+    // reine Daemon-Nutzer ab, die die App nach Updates nie oeffnen.
+    if isDaemon {
+        go func() {
+            for {
+                time.Sleep(5 * time.Minute)
+                iv := ""
+                if b, rerr := os.ReadFile("/usr/share/harbour-whatsapp/VERSION"); rerr == nil {
+                    iv = strings.TrimSpace(string(b))
+                } else if b, derr := os.ReadFile("/usr/share/applications/harbour-whatsapp-daemon.desktop"); derr == nil {
+                    // VERSION liegt ausserhalb des Daemon-Jails - das eigene
+                    // Desktop-File ist dagegen whitelisted und traegt seit
+                    // 0.9.182 einen X-Whatsapp-Version-Stempel aus der Spec
+                    for _, ln := range strings.Split(string(b), "\n") {
+                        if strings.HasPrefix(ln, "X-Whatsapp-Version=") {
+                            iv = strings.TrimSpace(strings.TrimPrefix(ln, "X-Whatsapp-Version="))
+                            break
+                        }
+                    }
+                } else if !versionPollErrLogged {
+                    versionPollErrLogged = true
+                    fmt.Printf("⚠ self-update poller: no readable version source (%v / %v)\n", rerr, derr)
+                }
+                if iv != "" && iv != version {
+                    fmt.Printf("🔄 installed version %s != running %s - self-updating via exit 1\n", iv, version)
+                    saveMessages()
+                    saveContacts()
+                    saveRawMedia()
+                    os.Exit(1)
+                }
+            }
+        }()
+    }
+
+    // Laufzeit-Waechter der Besitzerseite: trifft die Uebergabe-Bitte erst
+    // ein, waehrend wir schon laufen, exportieren wir sie im Betrieb -
+    // die bittende Seite (Retry-Schleife) bedient sich dann von selbst
+    go func() {
+        for {
+            time.Sleep(15 * time.Second)
+            if len(encryptionKey) != 32 {
+                continue
+            }
+            if _, merr := os.Stat(".want-key-handover"); merr == nil {
+                if _, eerr := exportKeyForHandover(secrets.collectionName, encryptionKey); eerr == nil {
+                    os.Remove(".want-key-handover")
+                    fmt.Println("🔐 Key handed over to requesting identity (runtime)")
+                }
+            }
+        }
+    }()
+
     // Initialize encrypted database
     if err := initDatabase(); err != nil {
         fmt.Printf("❌ Database error: %v\n", err)
@@ -2669,7 +2906,7 @@ func main() {
         fmt.Println("📱 Device ID found, connecting...")
         connState = "connecting"
     }
-    go client.Connect()
+    connectWithGuard("startup")
 
 
     http.HandleFunc("/pair", func(w http.ResponseWriter, r *http.Request) {
@@ -2755,7 +2992,7 @@ func main() {
                 return
             }
             
-            client.Connect()
+            connectWithGuard("re-pair")
             fmt.Println("📱 Ready for new pairing")
         }()
     })

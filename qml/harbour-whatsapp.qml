@@ -546,6 +546,7 @@ ApplicationWindow {
     property bool   daemonRunning: false
     property string backendVersion: ""
     property string installedVersion: ""
+    property bool daemonUpgradeSent: false
     property bool   liveActive: false
     property string liveChatJid: ""
     property double liveUntil: 0
@@ -890,6 +891,18 @@ ApplicationWindow {
                 paired = data.paired === true
                 daemonRunning = data.daemon === true
                 backendVersion = data.version || ""
+                // Daemon-Selbst-Update: nach einem RPM-Update laeuft noch der
+                // alte Prozess. Einmal pro App-Sitzung /daemon/restart rufen -
+                // der Daemon beendet sich mit Exit 1, systemd startet den neu
+                // installierten Binary, die Port-Wiederfindung dockt neu an.
+                if (daemonRunning && installedVersion !== "" && backendVersion !== ""
+                        && backendVersion !== installedVersion && !daemonUpgradeSent) {
+                    daemonUpgradeSent = true
+                    globalNotice = "Updating background daemon to " + installedVersion + "\u2026"
+                    var rx = new XMLHttpRequest()
+                    rx.open("POST", "http://127.0.0.1:" + backendPort + "/daemon/restart")
+                    rx.send()
+                }
                 if (!prefsLoaded && connState !== "starting") {
                     loadPrefs()
                 }
@@ -2152,6 +2165,16 @@ Label {
                             color: Theme.primaryColor
                             text: "systemctl --user restart harbour-whatsapp-daemon.service"
                         }
+                    }
+
+                    Label {
+                        visible: daemonRunning || downloadPrefs["daemon_autostart"] === "1"
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*Theme.horizontalPageMargin
+                        text: "\u26a0 Stops autostart - notifications end after next reboot:"
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.errorColor
                     }
 
                     BackgroundItem {
