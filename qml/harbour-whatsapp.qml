@@ -601,6 +601,33 @@ ApplicationWindow {
     function sendErrorText(status, body) {
         var code = sendRejectCode(body)
         if (code > 0) return loc.sendRejected.replace("%1", code)
+        // Sandbox statt Serverfehler: das Backend darf ausserhalb seines
+        // Datenordners nichts lesen, solange die Speicher-Berechtigung
+        // fehlt. Der rohe "permission denied"-Text schickt die Leute auf
+        // die falsche Faehrte (Dateirechte statt Sailjail)
+        if ((body || "").indexOf("permission denied") >= 0) {
+            var pd = (body || "").replace(/\s+$/, "")
+            if (pd.length > 160) pd = pd.substring(0, 160) + "\u2026"
+            // Erteilt, aber der laufende Prozess traegt noch das alte
+            // Profil - sailjail wendet es beim START an. Ein App-Neustart
+            // allein reicht nicht, wenn der Daemon die Datei oeffnet
+            var head
+            if (!mediaPermConfigured && mediaPermMissing !== ""
+                    && mediaPermMissing.split(", ").length < 3) {
+                // Teil-Grant: benennen, was fehlt, und sagen dass der
+                // Befehl gefahrlos erneut laufen darf (er haengt nur
+                // Fehlendes an)
+                head = loc.sendPermissionPartial.replace("%1", mediaPermMissing)
+            } else if (mediaPermConfigured && !mediaPermEffective) {
+                // Wer keinen Daemon hat, dessen Backend ist Kind der App und
+                // erbt deren Jail - ein App-Neustart genuegt dann wirklich
+                head = daemonRunning ? loc.sendPermissionInactiveDaemon
+                                     : loc.sendPermissionInactiveApp
+            } else {
+                head = loc.sendPermissionDenied
+            }
+            return head + "\n" + pd
+        }
         var why = (body || "").replace(/\s+$/, "")
         if (why.length > 200) why = why.substring(0, 200) + "\u2026"
         return loc.sendFailed.replace("%1", status)
@@ -715,6 +742,30 @@ ApplicationWindow {
     // "content" nimmt den nach Typ sortierten (Bilder/Videos/Musik/
     // Dokumente), "file" den Dateibaum. Wunsch von kempertom
     property string attachPicker: "ask"
+
+    // Berechtigungslage: was in der Desktop-Datei steht (configured) und
+    // was der laufende Prozess tatsaechlich darf (effective)
+    property bool mediaPermConfigured: false
+    property bool mediaPermEffective: false
+    // Kommaliste der fehlenden Marken - ein Teil-Grant (z.B. ohne
+    // RemovableMedia, also ohne SD-Karte) sah frueher aus wie "gar nichts
+    // erteilt" und schickte Leute auf die Suche, die den Befehl laengst
+    // ausgefuehrt hatten
+    property string mediaPermMissing: ""
+    function refreshPermState() {
+        var x = new XMLHttpRequest()
+        x.open("GET", "http://127.0.0.1:" + backendPort + "/permcheck")
+        x.onreadystatechange = function() {
+            if (x.readyState !== 4 || x.status !== 200) return
+            try {
+                var p = JSON.parse(x.responseText)
+                mediaPermConfigured = p.mediaPermission === true
+                mediaPermEffective = p.mediaAccessEffective === true
+                mediaPermMissing = (p.mediaMissing || []).join(", ")
+            } catch (e) {}
+        }
+        x.send()
+    }
     property bool daemonAutostart: false
     property bool daemonDownWarned: false
     Timer {
@@ -752,6 +803,7 @@ ApplicationWindow {
                 showNavBar = p.bottom_bar !== "0"
                 appLanguage = p.app_language || ""
                 daemonAutostart = p.daemon_autostart === "1"
+                refreshPermState()
                 attachPicker = p.attach_picker || "ask"
                 prefsLoaded = true
                 // Auch fuer Bestandsinstallationen und Systemsprache setzen

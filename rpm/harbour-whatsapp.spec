@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.193
+Version:    0.9.196
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -124,6 +124,55 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.196-1
+- A partial storage grant is now named as such. permcheck reported the
+  three media tokens as one yes-or-no, so having UserDirs and
+  MediaIndexing but not RemovableMedia - internal storage fine, SD card
+  denied - looked exactly like "nothing granted at all", which is useless
+  advice for someone who ran the grant long ago. The missing tokens are
+  reported individually now and the message names them, points out that
+  RemovableMedia is the one for the SD card, and says the GRANT command
+  may simply be run again: it appends only what is missing, so a second
+  run is harmless. That last part matters because the desktop file is
+  config(noreplace) and can therefore be in any historical state, from
+  before a token existed - it survives every update untouched, which is
+  the point of the flag and also the trap. In all 22 languages
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.194-1
+- "Permission denied" on a file now says what it means. Reported by
+  kempertom, who had granted the permissions and still could not send a
+  file from the SD card - and he was right to be puzzled. Two things were
+  wrong. The raw error pointed at file ownership when the real cause is
+  the sandbox: outside its own data directory the backend may read
+  nothing without the storage grant. And permcheck read the DESKTOP FILE
+  rather than the live sandbox, so it reported "granted" the moment the
+  text was there, while sailjail applies a profile at process START -
+  the running process still carried the old one. Since 0.9.181 the app
+  attaches to a running daemon instead of starting its own backend, so
+  the file is opened in the DAEMON's jail and restarting the app alone
+  changes nothing. permcheck now probes what the running process can
+  actually open, and the message distinguishes the two cases: not granted
+  yet, or granted but not in effect yet - and in the latter case it names
+  the right process. With a background service running, that service has
+  to be restarted and restarting the app achieves nothing, because the
+  app attaches to it and the file is opened there. Without one, the
+  backend is the app's own child and inherits its jail, so closing the app
+  properly and reopening it is genuinely enough - telling those users to
+  restart a service they never enabled would have sent them looking for a
+  switch that is not there. In all 22 languages
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.194-1
+- "permission denied" when sending a file from the SD card is now
+  explained instead of quoted. The backend cannot read anything outside
+  its own data directory until the storage permission is granted, and the
+  raw error sends people looking at file modes rather than at sailjail -
+  reported by kempertom, whose message only reached us at all because
+  0.9.185 stopped swallowing send errors. The notice now names the cause
+  and the exact route: Settings, Sailjail permissions, GRANT storage,
+  then restart the app and the background service. The offending path
+  stays visible underneath so it is still clear which file failed. Server
+  rejections are unaffected and keep their own wording. In all 22
+  languages, with test cases covering both directions
+
 * Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.193-1
 - The daemon writes a log now. It was the only part of the system without
   one: systemd sends its output to the journal, which on the device is

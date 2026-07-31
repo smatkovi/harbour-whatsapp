@@ -4970,12 +4970,37 @@ func main() {
         data, err := os.ReadFile("/usr/share/applications/harbour-whatsapp.desktop")
         d := string(data)
         contacts := err == nil && strings.Contains(d, "Contacts;") && strings.Contains(d, "Privileged;")
-        media := err == nil && strings.Contains(d, "UserDirs;") && strings.Contains(d, "MediaIndexing;") && strings.Contains(d, "RemovableMedia;")
+        // Die drei Medien-Marken EINZELN melden. Frueher gab es nur ein
+        // gemeinsames Ja/Nein - ein Teil-Grant (etwa ohne RemovableMedia,
+        // also ohne SD-Karte) sah dadurch aus wie "gar nichts erteilt",
+        // und wer den Befehl schon ausgefuehrt hatte, suchte den Fehler
+        // anderswo. Der GRANT-Befehl haengt nur Fehlendes an, ein zweiter
+        // Lauf ist also gefahrlos - das muss die App aber auch sagen.
+        var mediaMissing []string
+        for _, want := range []string{"UserDirs", "MediaIndexing", "RemovableMedia"} {
+            if err != nil || !strings.Contains(d, want+";") {
+                mediaMissing = append(mediaMissing, want)
+            }
+        }
+        if mediaMissing == nil {
+            mediaMissing = []string{}
+        }
+        media := len(mediaMissing) == 0
         location := err == nil && strings.Contains(d, "Location;")
         mic := err == nil && strings.Contains(d, "Microphone;")
         sensors := err == nil && strings.Contains(d, "Sensors;")
         audio := err == nil && strings.Contains(d, ";Audio;")
-        json.NewEncoder(w).Encode(map[string]bool{"contactsPermission": contacts, "mediaPermission": media, "locationPermission": location, "micPermission": mic, "sensorsPermission": sensors, "audioPermission": audio})
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "contactsPermission": contacts, "mediaPermission": media,
+            "locationPermission": location, "micPermission": mic,
+            "sensorsPermission": sensors, "audioPermission": audio,
+            "mediaMissing": mediaMissing,
+            // Was in der Datei steht, ist nicht, was der Prozess darf:
+            // sailjail wendet das Profil beim START an. Wer gerade erteilt
+            // hat, liest hier sonst "granted" und wundert sich ueber
+            // "permission denied" - genau dieser Irrtum kostete Feldzeit
+            "mediaAccessEffective": mediaAccessEffective(),
+        })
     })
 
     http.HandleFunc("/storage", func(w http.ResponseWriter, r *http.Request) {
@@ -5373,4 +5398,21 @@ func workDirName() string {
         return d
     }
     return "?"
+}
+
+// mediaAccessEffective probiert, was das Profil des LAUFENDEN Prozesses
+// tatsaechlich hergibt, statt die Desktop-Datei zu lesen. Ohne UserDirs
+// sind diese Ordner im Jail nicht zu oeffnen.
+func mediaAccessEffective() bool {
+    home, err := os.UserHomeDir()
+    if err != nil {
+        return false
+    }
+    for _, d := range []string{"Pictures", "Documents", "Videos"} {
+        if f, oerr := os.Open(home + "/" + d); oerr == nil {
+            f.Close()
+            return true
+        }
+    }
+    return false
 }

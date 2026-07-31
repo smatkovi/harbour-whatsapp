@@ -16,9 +16,11 @@ function grab(name) {
 }
 const src = grab('sendRejectCode') + '\n' + grab('sendErrorText');
 
-function ctx(lang) {
+function ctx(lang, configured, effective, daemon, missing) {
   const loc = TR.catalog(lang);
-  return (new Function('loc', src + '; return {sendRejectCode: sendRejectCode, sendErrorText: sendErrorText};'))(loc);
+  return (new Function('loc', 'mediaPermConfigured', 'mediaPermEffective', 'daemonRunning', 'mediaPermMissing',
+    src + '; return {sendRejectCode: sendRejectCode, sendErrorText: sendErrorText};'))(
+      loc, configured === true, effective === true, daemon === true, missing || "");
 }
 
 let fails = 0;
@@ -51,6 +53,35 @@ check('463 englisch',                en.sendErrorText(500, 'server returned erro
 check('kein Backend',                de.sendErrorText(0, ''), v => v.indexOf('keine Antwort vom Backend') >= 0, 'erwartet Backend-Hinweis');
 check('Status im Text',              de.sendErrorText(503, 'service unavailable'), v => v.indexOf('503') >= 0, 'erwartet Statusnummer');
 check('Rohtext durchgereicht',       de.sendErrorText(500, 'no LID found for 4366'), v => v.indexOf('no LID found') >= 0, 'erwartet Originalfehler');
+const perm = de.sendErrorText(500, 'open /run/media/defaultuser/D1E4-D00D/TWRP/BACKUPS/x/fsg.emmc.win.sha2: permission denied');
+check('Sandbox-Fehler erkannt',      perm, v => v.indexOf('Sailjail') >= 0 && v.indexOf('SD-Karte') >= 0, 'erwartet Hinweis auf die Speicher-Berechtigung');
+check('Pfad bleibt sichtbar',        perm, v => v.indexOf('fsg.emmc.win.sha2') >= 0, 'erwartet den Dateipfad zur Einordnung');
+check('Sandbox-Fehler englisch',     en.sendErrorText(500, 'open /x: permission denied'), v => v.indexOf('sandbox') >= 0, 'erwartet englische Fassung');
+const withDaemon = ctx('de', true, false, true);
+check('nicht wirksam, Daemon laeuft', withDaemon.sendErrorText(500, 'open /x: permission denied'),
+      v => v.indexOf('Hintergrunddienst') >= 0 && v.indexOf('Kachel') < 0,
+      'erwartet Dienst-Neustart, nicht App schliessen');
+const noDaemon = ctx('de', true, false, false);
+check('nicht wirksam, kein Daemon',  noDaemon.sendErrorText(500, 'open /x: permission denied'),
+      v => v.indexOf('vollst') >= 0 && v.indexOf('Hintergrunddienst') < 0,
+      'erwartet App-Neustart, kein Hinweis auf einen Dienst den es nicht gibt');
+check('kein Daemon, englisch',       ctx('en', true, false, false).sendErrorText(500, 'open /x: permission denied'),
+      v => v.indexOf('Close the app') >= 0, 'erwartet englische App-Fassung');
+const partial = ctx('de', false, false, true, 'RemovableMedia');
+check('Teil-Grant benennt das Fehlende', partial.sendErrorText(500, 'open /run/media/x: permission denied'),
+      v => v.indexOf('RemovableMedia') >= 0 && v.indexOf('SD-Karte') >= 0 && v.indexOf('erneut') >= 0,
+      'erwartet Name der fehlenden Marke und Hinweis auf erneuten Lauf');
+const partial2 = ctx('de', false, false, true, 'MediaIndexing, RemovableMedia');
+check('zwei fehlende Marken',        partial2.sendErrorText(500, 'open /x: permission denied'),
+      v => v.indexOf('MediaIndexing, RemovableMedia') >= 0, 'erwartet beide Namen');
+const nothing = ctx('de', false, false, true, 'UserDirs, MediaIndexing, RemovableMedia');
+check('gar nichts erteilt',          nothing.sendErrorText(500, 'open /x: permission denied'),
+      v => v.indexOf('nur teilweise') < 0, 'bei komplett fehlender Berechtigung kein Teil-Grant-Text');
+const active = ctx('de', true, true, true, '');
+check('erteilt und wirksam',         active.sendErrorText(500, 'open /x: permission denied'),
+      v => v.indexOf('Sailjail') >= 0 && v.indexOf('noch nicht wirksam') < 0,
+      'bei wirksamer Berechtigung kein Neustart-Hinweis');
+check('463 bleibt Ablehnung',        de.sendErrorText(500, 'server returned error 463'), v => v.indexOf('Sailjail') < 0, 'Server-Ablehnung darf nicht als Sandbox-Fehler gelten');
 const long = de.sendErrorText(500, 'x'.repeat(500));
 check('langer Text gekuerzt',        long, v => v.length < 260 && v.indexOf('\u2026') >= 0, 'erwartet Kuerzung mit Auslassung');
 check('Zeilenumbrueche im Body',     de.sendErrorText(500, 'zeile1\nzeile2\n\n'), v => v.indexOf('zeile2') >= 0, 'erwartet beide Zeilen, ohne Leerlauf am Ende');
@@ -64,6 +95,7 @@ for (const l of langs) {
   if (txt.indexOf('%1') >= 0) bad.push(l + ' (Platzhalter nicht ersetzt)');
   if (gen.indexOf('502') < 0) bad.push(l + ' (Status fehlt in sendFailed)');
   if (gen.indexOf('%1') >= 0) bad.push(l + ' (Platzhalter in sendFailed)');
+  if (c.sendErrorText(500, 'open /x: permission denied').indexOf('%1') >= 0) bad.push(l + ' (Platzhalter in sendPermissionDenied)');
 }
 check('Platzhalter in allen Sprachen', bad, v => v.length === 0, 'Probleme: ' + bad.join(', '));
 
