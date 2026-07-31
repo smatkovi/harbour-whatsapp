@@ -6111,7 +6111,7 @@ Label {
                             visible: modelData.text && modelData.text !== "" && modelData.mediaType !== "poll"
                             width: Math.min(msgTxt.implicitWidth + Theme.paddingLarge * 2, parent.width)
                             height: visible ? msgTxt.height + Theme.paddingMedium * 2 : 0
-                            color: modelData.fromMe ? Theme.highlightBackgroundColor : Theme.rgba(Theme.primaryColor, 0.1)
+                            color: modelData.fromMe ? Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity) : Theme.rgba(Theme.primaryColor, 0.1)
                             radius: Theme.paddingMedium
 
                             Label {

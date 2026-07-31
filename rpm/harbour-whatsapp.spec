@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.183
+Version:    0.9.184
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -114,6 +114,14 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.184-1
+- Own message bubbles are translucent now (Theme.highlightBackgroundColor
+  at the ambience-tuned Theme.highlightBackgroundOpacity instead of the
+  solid color): with light ambiences the black text sat on heavy color
+  and was hardly readable - thanks kempertom for the report. Incoming
+  bubbles were already translucent; readability now follows the
+  ambience contrast in both directions
+
 * Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.183-1
 - No functional changes: version bump to field-verify the app-free
   daemon self-update chain end to end (install RPM, touch nothing, the
