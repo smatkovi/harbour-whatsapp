@@ -269,7 +269,13 @@ var en = {
     "sendBlockedHint": "WhatsApp rejected the first message to this contact. Leave the chat and open it again for another try - or start the conversation on your phone.",
     "tapToCopy": "(tap to copy)",
     "copiedToClipboard": "Copied to clipboard",
-    "daemonDownNotice": "The background service is not running - you will not receive notifications. Settings, Background daemon, Restart."
+    "daemonDownNotice": "The background service is not running - you will not receive notifications. Settings, Background daemon, Restart.",
+    "attachPicker": "Attachment picker",
+    "attachPickerDesc": "Which chooser opens when you tap the paperclip. The media library sorts by type (pictures, videos, music, documents); the file browser walks the folders.",
+    "attachPickerAsk": "Ask every time",
+    "attachPickerContent": "Media library",
+    "attachPickerFile": "File browser",
+    "chooseAttachSource": "Send from"
 }
 
 var catalogs = {
@@ -534,7 +540,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp hat die erste Nachricht an diesen Kontakt abgelehnt. Chat verlassen und erneut öffnen für einen weiteren Versuch - oder das Gespräch am Telefon beginnen.",
         "tapToCopy": "(zum Kopieren antippen)",
         "copiedToClipboard": "In die Zwischenablage kopiert",
-        "daemonDownNotice": "Der Hintergrunddienst läuft nicht - du bekommst keine Benachrichtigungen. Einstellungen, Hintergrunddienst, Neu starten."
+        "daemonDownNotice": "Der Hintergrunddienst läuft nicht - du bekommst keine Benachrichtigungen. Einstellungen, Hintergrunddienst, Neu starten.",
+        "attachPicker": "Dateiauswahl",
+        "attachPickerDesc": "Welcher Wähler sich beim Tippen auf die Büroklammer öffnet. Die Medienbibliothek sortiert nach Typ (Bilder, Videos, Musik, Dokumente), der Dateibrowser läuft durch die Ordner.",
+        "attachPickerAsk": "Jedes Mal fragen",
+        "attachPickerContent": "Medienbibliothek",
+        "attachPickerFile": "Dateibrowser",
+        "chooseAttachSource": "Senden aus"
     },
     "fi": {
         "language": "Kieli",
@@ -797,7 +809,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp hylkäsi ensimmäisen viestin tälle yhteystiedolle. Poistu keskustelusta ja avaa se uudelleen yrittääksesi vielä kerran - tai aloita keskustelu puhelimella.",
         "tapToCopy": "(kopioi napauttamalla)",
         "copiedToClipboard": "Kopioitu leikepöydälle",
-        "daemonDownNotice": "Taustapalvelu ei ole käynnissä - et saa ilmoituksia. Asetukset, taustapalvelu, käynnistä uudelleen."
+        "daemonDownNotice": "Taustapalvelu ei ole käynnissä - et saa ilmoituksia. Asetukset, taustapalvelu, käynnistä uudelleen.",
+        "attachPicker": "Liitteen valitsin",
+        "attachPickerDesc": "Mikä valitsin avautuu paperiliitintä napauttamalla. Mediakirjasto lajittelee tyypin mukaan (kuvat, videot, musiikki, asiakirjat), tiedostoselain käy kansiot läpi.",
+        "attachPickerAsk": "Kysy joka kerta",
+        "attachPickerContent": "Mediakirjasto",
+        "attachPickerFile": "Tiedostoselain",
+        "chooseAttachSource": "Lähetä kohteesta"
     },
     "sv": {
         "language": "Språk",
@@ -1060,7 +1078,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp avvisade det första meddelandet till den här kontakten. Lämna chatten och öppna den igen för ett nytt försök - eller starta samtalet på telefonen.",
         "tapToCopy": "(tryck för att kopiera)",
         "copiedToClipboard": "Kopierat till urklipp",
-        "daemonDownNotice": "Bakgrundstjänsten körs inte - du får inga aviseringar. Inställningar, bakgrundstjänst, starta om."
+        "daemonDownNotice": "Bakgrundstjänsten körs inte - du får inga aviseringar. Inställningar, bakgrundstjänst, starta om.",
+        "attachPicker": "Filväljare",
+        "attachPickerDesc": "Vilken väljare som öppnas när du trycker på gemet. Mediebiblioteket sorterar efter typ (bilder, videor, musik, dokument), filbläddraren går igenom mapparna.",
+        "attachPickerAsk": "Fråga varje gång",
+        "attachPickerContent": "Mediebibliotek",
+        "attachPickerFile": "Filbläddrare",
+        "chooseAttachSource": "Skicka från"
     },
     "hu": {
         "language": "Nyelv",
@@ -1323,7 +1347,13 @@ var catalogs = {
         "sendBlockedHint": "A WhatsApp elutasította az első üzenetet ehhez a névjegyhez. Lépj ki a beszélgetésből és nyisd meg újra egy további próbához - vagy kezdd el a beszélgetést a telefonon.",
         "tapToCopy": "(koppints a másoláshoz)",
         "copiedToClipboard": "Vágólapra másolva",
-        "daemonDownNotice": "A háttérszolgáltatás nem fut - nem kapsz értesítéseket. Beállítások, háttérszolgáltatás, újraindítás."
+        "daemonDownNotice": "A háttérszolgáltatás nem fut - nem kapsz értesítéseket. Beállítások, háttérszolgáltatás, újraindítás.",
+        "attachPicker": "Fájlválasztó",
+        "attachPickerDesc": "Melyik választó nyíljon meg a gemkapocsra koppintva. A médiatár típus szerint rendez (képek, videók, zene, dokumentumok), a fájlböngésző a mappákat járja be.",
+        "attachPickerAsk": "Kérdezzen mindig",
+        "attachPickerContent": "Médiatár",
+        "attachPickerFile": "Fájlböngésző",
+        "chooseAttachSource": "Küldés innen"
     },
     "ru": {
         "language": "Язык",
@@ -1586,7 +1616,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp отклонил первое сообщение этому контакту. Выйдите из чата и откройте его снова для ещё одной попытки - или начните разговор на телефоне.",
         "tapToCopy": "(нажмите, чтобы скопировать)",
         "copiedToClipboard": "Скопировано в буфер обмена",
-        "daemonDownNotice": "Фоновая служба не работает - уведомления приходить не будут. Настройки, фоновая служба, перезапустить."
+        "daemonDownNotice": "Фоновая служба не работает - уведомления приходить не будут. Настройки, фоновая служба, перезапустить.",
+        "attachPicker": "Выбор файлов",
+        "attachPickerDesc": "Какой выбор открывается по нажатию на скрепку. Медиатека сортирует по типу (изображения, видео, музыка, документы), файловый браузер проходит по папкам.",
+        "attachPickerAsk": "Спрашивать каждый раз",
+        "attachPickerContent": "Медиатека",
+        "attachPickerFile": "Файловый браузер",
+        "chooseAttachSource": "Отправить из"
     },
     "fr": {
         "language": "Langue",
@@ -1849,7 +1885,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp a refusé le premier message à ce contact. Quittez la conversation et rouvrez-la pour un nouvel essai - ou commencez-la sur le téléphone.",
         "tapToCopy": "(appuyer pour copier)",
         "copiedToClipboard": "Copié dans le presse-papiers",
-        "daemonDownNotice": "Le service en arrière-plan ne tourne pas - vous ne recevrez pas de notifications. Paramètres, service en arrière-plan, redémarrer."
+        "daemonDownNotice": "Le service en arrière-plan ne tourne pas - vous ne recevrez pas de notifications. Paramètres, service en arrière-plan, redémarrer.",
+        "attachPicker": "Sélecteur de fichiers",
+        "attachPickerDesc": "Quel sélecteur s'ouvre en touchant le trombone. La médiathèque trie par type (images, vidéos, musique, documents), le navigateur de fichiers parcourt les dossiers.",
+        "attachPickerAsk": "Demander à chaque fois",
+        "attachPickerContent": "Médiathèque",
+        "attachPickerFile": "Navigateur de fichiers",
+        "chooseAttachSource": "Envoyer depuis"
     },
     "la": {
         "language": "Lingua",
@@ -2112,7 +2154,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp primum nuntium ad hunc familiarem reiecit. Relinque colloquium et iterum aperi ad alterum conatum - vel colloquium in telephono incipe.",
         "tapToCopy": "(tange ut exscribas)",
         "copiedToClipboard": "In tabulam translatum",
-        "daemonDownNotice": "Ministerium occultum non currit - nuntiationes non accipies. Optiones, ministerium occultum, iterum incipe."
+        "daemonDownNotice": "Ministerium occultum non currit - nuntiationes non accipies. Optiones, ministerium occultum, iterum incipe.",
+        "attachPicker": "Delectus limarum",
+        "attachPickerDesc": "Qui delectus aperiatur cum fibulam tangis. Bibliotheca mediorum secundum genus disponit (imagines, pelliculae, musica, documenta), lustrator limarum per scrinia vadit.",
+        "attachPickerAsk": "Semper roga",
+        "attachPickerContent": "Bibliotheca mediorum",
+        "attachPickerFile": "Lustrator limarum",
+        "chooseAttachSource": "Mitte ex"
     },
     "es": {
         "language": "Idioma",
@@ -2363,7 +2411,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp rechazó el primer mensaje a este contacto. Sal del chat y ábrelo de nuevo para otro intento, o empieza la conversación en el teléfono.",
         "tapToCopy": "(toca para copiar)",
         "copiedToClipboard": "Copiado al portapapeles",
-        "daemonDownNotice": "El servicio en segundo plano no se está ejecutando: no recibirás notificaciones. Ajustes, servicio en segundo plano, reiniciar."
+        "daemonDownNotice": "El servicio en segundo plano no se está ejecutando: no recibirás notificaciones. Ajustes, servicio en segundo plano, reiniciar.",
+        "attachPicker": "Selector de archivos",
+        "attachPickerDesc": "Qué selector se abre al tocar el clip. La biblioteca multimedia ordena por tipo (imágenes, vídeos, música, documentos); el explorador recorre las carpetas.",
+        "attachPickerAsk": "Preguntar cada vez",
+        "attachPickerContent": "Biblioteca multimedia",
+        "attachPickerFile": "Explorador de archivos",
+        "chooseAttachSource": "Enviar desde"
     },
     "it": {
         "language": "Lingua",
@@ -2614,7 +2668,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp ha rifiutato il primo messaggio a questo contatto. Esci dalla chat e riaprila per un altro tentativo, oppure inizia la conversazione sul telefono.",
         "tapToCopy": "(tocca per copiare)",
         "copiedToClipboard": "Copiato negli appunti",
-        "daemonDownNotice": "Il servizio in background non è in esecuzione: non riceverai notifiche. Impostazioni, servizio in background, riavvia."
+        "daemonDownNotice": "Il servizio in background non è in esecuzione: non riceverai notifiche. Impostazioni, servizio in background, riavvia.",
+        "attachPicker": "Selettore file",
+        "attachPickerDesc": "Quale selettore si apre toccando la graffetta. La libreria multimediale ordina per tipo (immagini, video, musica, documenti), il browser dei file percorre le cartelle.",
+        "attachPickerAsk": "Chiedi ogni volta",
+        "attachPickerContent": "Libreria multimediale",
+        "attachPickerFile": "Browser dei file",
+        "chooseAttachSource": "Invia da"
     },
     "pt": {
         "language": "Idioma",
@@ -2865,7 +2925,13 @@ var catalogs = {
         "sendBlockedHint": "O WhatsApp rejeitou a primeira mensagem para este contacto. Saia da conversa e abra-a novamente para outra tentativa - ou comece a conversa no telemóvel.",
         "tapToCopy": "(tocar para copiar)",
         "copiedToClipboard": "Copiado para a área de transferência",
-        "daemonDownNotice": "O serviço em segundo plano não está a correr - não vai receber notificações. Definições, serviço em segundo plano, reiniciar."
+        "daemonDownNotice": "O serviço em segundo plano não está a correr - não vai receber notificações. Definições, serviço em segundo plano, reiniciar.",
+        "attachPicker": "Seletor de ficheiros",
+        "attachPickerDesc": "Que seletor abre ao tocar no clipe. A biblioteca multimédia ordena por tipo (imagens, vídeos, música, documentos); o explorador percorre as pastas.",
+        "attachPickerAsk": "Perguntar sempre",
+        "attachPickerContent": "Biblioteca multimédia",
+        "attachPickerFile": "Explorador de ficheiros",
+        "chooseAttachSource": "Enviar de"
     },
     "nl": {
         "language": "Taal",
@@ -3116,7 +3182,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp heeft het eerste bericht aan dit contact geweigerd. Verlaat de chat en open hem opnieuw voor nog een poging - of begin het gesprek op de telefoon.",
         "tapToCopy": "(tik om te kopiëren)",
         "copiedToClipboard": "Gekopieerd naar klembord",
-        "daemonDownNotice": "De achtergronddienst draait niet - je krijgt geen meldingen. Instellingen, achtergronddienst, opnieuw starten."
+        "daemonDownNotice": "De achtergronddienst draait niet - je krijgt geen meldingen. Instellingen, achtergronddienst, opnieuw starten.",
+        "attachPicker": "Bestandskiezer",
+        "attachPickerDesc": "Welke kiezer opent bij het tikken op de paperclip. De mediabibliotheek sorteert op type (afbeeldingen, video's, muziek, documenten), de bestandsbrowser loopt door de mappen.",
+        "attachPickerAsk": "Elke keer vragen",
+        "attachPickerContent": "Mediabibliotheek",
+        "attachPickerFile": "Bestandsbrowser",
+        "chooseAttachSource": "Verzenden vanuit"
     },
     "pl": {
         "language": "Język",
@@ -3367,7 +3439,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp odrzucił pierwszą wiadomość do tego kontaktu. Wyjdź z czatu i otwórz go ponownie, aby spróbować jeszcze raz - albo rozpocznij rozmowę na telefonie.",
         "tapToCopy": "(dotknij, aby skopiować)",
         "copiedToClipboard": "Skopiowano do schowka",
-        "daemonDownNotice": "Usługa w tle nie działa - nie otrzymasz powiadomień. Ustawienia, usługa w tle, uruchom ponownie."
+        "daemonDownNotice": "Usługa w tle nie działa - nie otrzymasz powiadomień. Ustawienia, usługa w tle, uruchom ponownie.",
+        "attachPicker": "Wybór plików",
+        "attachPickerDesc": "Który wybór otwiera się po dotknięciu spinacza. Biblioteka multimediów sortuje według typu (zdjęcia, filmy, muzyka, dokumenty), przeglądarka plików przechodzi przez foldery.",
+        "attachPickerAsk": "Pytaj za każdym razem",
+        "attachPickerContent": "Biblioteka multimediów",
+        "attachPickerFile": "Przeglądarka plików",
+        "chooseAttachSource": "Wyślij z"
     },
     "tr": {
         "language": "Dil",
@@ -3618,7 +3696,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp bu kişiye giden ilk mesajı reddetti. Sohbetten çıkıp yeniden açarak bir kez daha deneyebilirsiniz - ya da sohbeti telefonda başlatın.",
         "tapToCopy": "(kopyalamak için dokunun)",
         "copiedToClipboard": "Panoya kopyalandı",
-        "daemonDownNotice": "Arka plan hizmeti çalışmıyor - bildirim almayacaksınız. Ayarlar, arka plan hizmeti, yeniden başlat."
+        "daemonDownNotice": "Arka plan hizmeti çalışmıyor - bildirim almayacaksınız. Ayarlar, arka plan hizmeti, yeniden başlat.",
+        "attachPicker": "Dosya seçici",
+        "attachPickerDesc": "Ataça dokununca hangi seçicinin açılacağı. Medya kitaplığı türe göre sıralar (resimler, videolar, müzik, belgeler), dosya tarayıcısı klasörleri gezer.",
+        "attachPickerAsk": "Her seferinde sor",
+        "attachPickerContent": "Medya kitaplığı",
+        "attachPickerFile": "Dosya tarayıcısı",
+        "chooseAttachSource": "Şuradan gönder"
     },
     "da": {
         "language": "Sprog",
@@ -3869,7 +3953,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp afviste den første besked til denne kontakt. Forlad chatten og åbn den igen for endnu et forsøg - eller start samtalen på telefonen.",
         "tapToCopy": "(tryk for at kopiere)",
         "copiedToClipboard": "Kopieret til udklipsholder",
-        "daemonDownNotice": "Baggrundstjenesten kører ikke - du får ingen notifikationer. Indstillinger, baggrundstjeneste, genstart."
+        "daemonDownNotice": "Baggrundstjenesten kører ikke - du får ingen notifikationer. Indstillinger, baggrundstjeneste, genstart.",
+        "attachPicker": "Filvælger",
+        "attachPickerDesc": "Hvilken vælger der åbnes ved tryk på clipsen. Mediebiblioteket sorterer efter type (billeder, videoer, musik, dokumenter), filbrowseren gennemgår mapperne.",
+        "attachPickerAsk": "Spørg hver gang",
+        "attachPickerContent": "Mediebibliotek",
+        "attachPickerFile": "Filbrowser",
+        "chooseAttachSource": "Send fra"
     },
     "nb": {
         "language": "Språk",
@@ -4120,7 +4210,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp avviste den første meldingen til denne kontakten. Forlat samtalen og åpne den på nytt for et nytt forsøk - eller start samtalen på telefonen.",
         "tapToCopy": "(trykk for å kopiere)",
         "copiedToClipboard": "Kopiert til utklippstavlen",
-        "daemonDownNotice": "Bakgrunnstjenesten kjører ikke - du får ingen varsler. Innstillinger, bakgrunnstjeneste, start på nytt."
+        "daemonDownNotice": "Bakgrunnstjenesten kjører ikke - du får ingen varsler. Innstillinger, bakgrunnstjeneste, start på nytt.",
+        "attachPicker": "Filvelger",
+        "attachPickerDesc": "Hvilken velger som åpnes når du trykker på bindersen. Mediebiblioteket sorterer etter type (bilder, videoer, musikk, dokumenter), filutforskeren går gjennom mappene.",
+        "attachPickerAsk": "Spør hver gang",
+        "attachPickerContent": "Mediebibliotek",
+        "attachPickerFile": "Filutforsker",
+        "chooseAttachSource": "Send fra"
     },
     "cs": {
         "language": "Jazyk",
@@ -4371,7 +4467,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp odmítl první zprávu tomuto kontaktu. Opusťte konverzaci a otevřete ji znovu pro další pokus - nebo ji začněte v telefonu.",
         "tapToCopy": "(klepnutím zkopírujete)",
         "copiedToClipboard": "Zkopírováno do schránky",
-        "daemonDownNotice": "Služba na pozadí neběží - nebudete dostávat oznámení. Nastavení, služba na pozadí, restartovat."
+        "daemonDownNotice": "Služba na pozadí neběží - nebudete dostávat oznámení. Nastavení, služba na pozadí, restartovat.",
+        "attachPicker": "Výběr souborů",
+        "attachPickerDesc": "Který výběr se otevře po klepnutí na sponku. Knihovna médií řadí podle typu (obrázky, videa, hudba, dokumenty), prohlížeč souborů prochází složky.",
+        "attachPickerAsk": "Ptát se pokaždé",
+        "attachPickerContent": "Knihovna médií",
+        "attachPickerFile": "Prohlížeč souborů",
+        "chooseAttachSource": "Odeslat z"
     },
     "el": {
         "language": "Γλώσσα",
@@ -4622,7 +4724,13 @@ var catalogs = {
         "sendBlockedHint": "Το WhatsApp απέρριψε το πρώτο μήνυμα προς αυτή την επαφή. Βγείτε από τη συνομιλία και ανοίξτε την ξανά για άλλη μια προσπάθεια - ή ξεκινήστε τη συνομιλία στο τηλέφωνο.",
         "tapToCopy": "(πατήστε για αντιγραφή)",
         "copiedToClipboard": "Αντιγράφηκε στο πρόχειρο",
-        "daemonDownNotice": "Η υπηρεσία παρασκηνίου δεν εκτελείται - δεν θα λαμβάνετε ειδοποιήσεις. Ρυθμίσεις, υπηρεσία παρασκηνίου, επανεκκίνηση."
+        "daemonDownNotice": "Η υπηρεσία παρασκηνίου δεν εκτελείται - δεν θα λαμβάνετε ειδοποιήσεις. Ρυθμίσεις, υπηρεσία παρασκηνίου, επανεκκίνηση.",
+        "attachPicker": "Επιλογέας αρχείων",
+        "attachPickerDesc": "Ποιος επιλογέας ανοίγει όταν πατάτε τον συνδετήρα. Η βιβλιοθήκη πολυμέσων ταξινομεί κατά τύπο (εικόνες, βίντεο, μουσική, έγγραφα), ο περιηγητής αρχείων διατρέχει τους φακέλους.",
+        "attachPickerAsk": "Ερώτηση κάθε φορά",
+        "attachPickerContent": "Βιβλιοθήκη πολυμέσων",
+        "attachPickerFile": "Περιηγητής αρχείων",
+        "chooseAttachSource": "Αποστολή από"
     },
     "et": {
         "language": "Keel",
@@ -4873,7 +4981,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp lükkas esimese sõnumi sellele kontaktile tagasi. Lahku vestlusest ja ava see uuesti veel üheks katseks - või alusta vestlust telefonis.",
         "tapToCopy": "(koputa kopeerimiseks)",
         "copiedToClipboard": "Kopeeritud lõikelauale",
-        "daemonDownNotice": "Taustateenus ei tööta - sa ei saa teavitusi. Seaded, taustateenus, taaskäivita."
+        "daemonDownNotice": "Taustateenus ei tööta - sa ei saa teavitusi. Seaded, taustateenus, taaskäivita.",
+        "attachPicker": "Failivalija",
+        "attachPickerDesc": "Milline valija avaneb kirjaklambrit puudutades. Meediakogu sorteerib tüübi järgi (pildid, videod, muusika, dokumendid), failisirvija käib kaustad läbi.",
+        "attachPickerAsk": "Küsi iga kord",
+        "attachPickerContent": "Meediakogu",
+        "attachPickerFile": "Failisirvija",
+        "chooseAttachSource": "Saada asukohast"
     },
     "lv": {
         "language": "Valoda",
@@ -5124,7 +5238,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp noraidīja pirmo ziņu šim kontaktam. Izej no sarakstes un atver to vēlreiz vēl vienam mēģinājumam - vai sāc sarunu telefonā.",
         "tapToCopy": "(pieskaries, lai kopētu)",
         "copiedToClipboard": "Nokopēts starpliktuvē",
-        "daemonDownNotice": "Fona pakalpojums nedarbojas - tu nesaņemsi paziņojumus. Iestatījumi, fona pakalpojums, restartēt."
+        "daemonDownNotice": "Fona pakalpojums nedarbojas - tu nesaņemsi paziņojumus. Iestatījumi, fona pakalpojums, restartēt.",
+        "attachPicker": "Failu atlasītājs",
+        "attachPickerDesc": "Kurš atlasītājs atveras, pieskaroties saspraudei. Multivides bibliotēka kārto pēc veida (attēli, video, mūzika, dokumenti), failu pārlūks iet cauri mapēm.",
+        "attachPickerAsk": "Jautāt katru reizi",
+        "attachPickerContent": "Multivides bibliotēka",
+        "attachPickerFile": "Failu pārlūks",
+        "chooseAttachSource": "Sūtīt no"
     },
     "lt": {
         "language": "Kalba",
@@ -5375,7 +5495,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp atmetė pirmą žinutę šiam kontaktui. Išeik iš pokalbio ir atidaryk jį vėl dar vienam bandymui - arba pradėk pokalbį telefone.",
         "tapToCopy": "(bakstelėk, kad nukopijuotum)",
         "copiedToClipboard": "Nukopijuota į iškarpinę",
-        "daemonDownNotice": "Fono tarnyba neveikia - negausi pranešimų. Nustatymai, fono tarnyba, paleisti iš naujo."
+        "daemonDownNotice": "Fono tarnyba neveikia - negausi pranešimų. Nustatymai, fono tarnyba, paleisti iš naujo.",
+        "attachPicker": "Failų parinkiklis",
+        "attachPickerDesc": "Kuris parinkiklis atsidaro bakstelėjus sąvaržėlę. Medijos biblioteka rikiuoja pagal tipą (paveikslėliai, vaizdo įrašai, muzika, dokumentai), failų naršyklė eina per aplankus.",
+        "attachPickerAsk": "Klausti kiekvieną kartą",
+        "attachPickerContent": "Medijos biblioteka",
+        "attachPickerFile": "Failų naršyklė",
+        "chooseAttachSource": "Siųsti iš"
     },
     "sl": {
         "language": "Jezik",
@@ -5626,7 +5752,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp je zavrnil prvo sporočilo temu stiku. Zapusti pogovor in ga znova odpri za nov poskus - ali pa pogovor začni na telefonu.",
         "tapToCopy": "(tapni za kopiranje)",
         "copiedToClipboard": "Kopirano v odložišče",
-        "daemonDownNotice": "Storitev v ozadju ne teče - obvestil ne boš prejemal. Nastavitve, storitev v ozadju, ponovni zagon."
+        "daemonDownNotice": "Storitev v ozadju ne teče - obvestil ne boš prejemal. Nastavitve, storitev v ozadju, ponovni zagon.",
+        "attachPicker": "Izbirnik datotek",
+        "attachPickerDesc": "Kateri izbirnik se odpre ob dotiku sponke. Predstavnostna knjižnica razvršča po vrsti (slike, videoposnetki, glasba, dokumenti), brskalnik datotek gre skozi mape.",
+        "attachPickerAsk": "Vprašaj vsakič",
+        "attachPickerContent": "Predstavnostna knjižnica",
+        "attachPickerFile": "Brskalnik datotek",
+        "chooseAttachSource": "Pošlji iz"
     },
     "zh": {
         "language": "语言",
@@ -5877,7 +6009,13 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp 拒绝了发给该联系人的第一条消息。退出聊天再重新打开可再试一次，或先在手机上发起对话。",
         "tapToCopy": "（点按以复制）",
         "copiedToClipboard": "已复制到剪贴板",
-        "daemonDownNotice": "后台服务未运行——你将收不到通知。设置、后台服务、重新启动。"
+        "daemonDownNotice": "后台服务未运行——你将收不到通知。设置、后台服务、重新启动。",
+        "attachPicker": "附件选择器",
+        "attachPickerDesc": "点按回形针时打开哪个选择器。媒体库按类型分类（图片、视频、音乐、文档），文件浏览器则逐层浏览文件夹。",
+        "attachPickerAsk": "每次询问",
+        "attachPickerContent": "媒体库",
+        "attachPickerFile": "文件浏览器",
+        "chooseAttachSource": "发送来源"
     }
 }
 

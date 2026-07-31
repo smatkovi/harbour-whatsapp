@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.188
+Version:    0.9.189
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -124,6 +124,17 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.189-1
+- The paperclip no longer forces the folder tree on you. Sailfish ships
+  more than one chooser, and the one kempertom was asking about is the
+  content picker, which sorts by type - pictures, videos, music,
+  documents - the same component the status page has always used. Tapping
+  attach now asks which one to use, and More settings holds the default
+  (ask every time, media library, file browser) for anyone who wants the
+  question gone. Picking from the question replaces rather than stacks,
+  so the way back from a chooser leads to the chat. Six new strings in
+  all 22 languages
+
 * Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.188-1
 - No functional changes: a version bump to field-test the daemon guard
   repaired in 0.9.187. Only a version difference sends the app down the

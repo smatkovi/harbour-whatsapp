@@ -320,6 +320,36 @@ ApplicationWindow {
                         }
                     }
 
+                    ComboBox {
+                        id: attachBox
+                        width: parent.width
+                        label: loc.attachPicker
+                        description: loc.attachPickerDesc
+                        // Kein Binding auf currentIndex: Silicas ComboBox
+                        // weist ihn intern imperativ zu (s. Auto-Download-
+                        // Boxen) - deshalb synchron setzen, sobald die
+                        // Prefs da sind
+                        function syncFromPrefs() {
+                            currentIndex = attachPicker === "content" ? 1
+                                         : (attachPicker === "file" ? 2 : 0)
+                        }
+                        Component.onCompleted: syncFromPrefs()
+                        onCurrentIndexChanged: {
+                            if (!prefsLoaded) return
+                            var v = currentIndex === 1 ? "content"
+                                  : (currentIndex === 2 ? "file" : "ask")
+                            if (attachPicker !== v) {
+                                attachPicker = v
+                                setPref("attach_picker", v)
+                            }
+                        }
+                        menu: ContextMenu {
+                            MenuItem { text: loc.attachPickerAsk }
+                            MenuItem { text: loc.attachPickerContent }
+                            MenuItem { text: loc.attachPickerFile }
+                        }
+                    }
+
                     TextSwitch {
                         text: loc.topSwitcher
                         description: loc.topSwitcherDesc
@@ -681,6 +711,10 @@ ApplicationWindow {
     // waehrend des Updates getauscht, Start-Rate-Bremse). Dann bleiben
     // Benachrichtigungen aus und NIEMAND sagt es - man merkt es zufaellig,
     // wenn man die App oeffnet. Wer ihn eingeschaltet hat, erfaehrt es jetzt.
+    // Welcher Dateiwaehler am Anhang-Knopf: "ask" fragt jedes Mal,
+    // "content" nimmt den nach Typ sortierten (Bilder/Videos/Musik/
+    // Dokumente), "file" den Dateibaum. Wunsch von kempertom
+    property string attachPicker: "ask"
     property bool daemonAutostart: false
     property bool daemonDownWarned: false
     Timer {
@@ -718,6 +752,7 @@ ApplicationWindow {
                 showNavBar = p.bottom_bar !== "0"
                 appLanguage = p.app_language || ""
                 daemonAutostart = p.daemon_autostart === "1"
+                attachPicker = p.attach_picker || "ask"
                 prefsLoaded = true
                 // Auch fuer Bestandsinstallationen und Systemsprache setzen
                 if (p.notif_reply_label !== loc.reply)
@@ -5311,6 +5346,55 @@ Label {
                 }
             }
 
+            // Nach Typ sortierte Auswahl (Bilder, Videos, Musik, Dokumente) -
+            // dasselbe Bauteil, das die Status-Seite schon nutzt
+            Component {
+                id: contentPicker
+                ContentPickerPage {
+                    onSelectedContentPropertiesChanged: {
+                        console.log("WASEND contentPicker fired path="
+                                    + (selectedContentProperties
+                                       ? selectedContentProperties.filePath : "(keine Props)"))
+                        chatPageItem.sendFile(selectedContentProperties
+                                              ? selectedContentProperties.filePath : "")
+                    }
+                }
+            }
+
+            // Fragt nur, wenn die Einstellung auf "ask" steht. replace statt
+            // push: der Rueckweg aus dem Waehler fuehrt in den Chat, nicht
+            // wieder in diese Auswahl
+            Component {
+                id: attachChooser
+                Page {
+                    SilicaFlickable {
+                        anchors.fill: parent
+                        contentHeight: attachCol.height
+                        Column {
+                            id: attachCol
+                            width: parent.width
+                            PageHeader { title: loc.chooseAttachSource }
+                            ListItem {
+                                onClicked: pageStack.replace(contentPicker)
+                                Label {
+                                    x: Theme.horizontalPageMargin
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: loc.attachPickerContent
+                                }
+                            }
+                            ListItem {
+                                onClicked: pageStack.replace(filePicker)
+                                Label {
+                                    x: Theme.horizontalPageMargin
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: loc.attachPickerFile
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Component {
                 id: filePicker
                 FilePickerPage {
@@ -6367,8 +6451,12 @@ Label {
                                 inputRow.recording = false
                                 python.call('start_backend.voice_cancel', [])
                                 globalNotice = "Recording discarded"
-                            } else {
+                            } else if (attachPicker === "content") {
+                                pageStack.push(contentPicker)
+                            } else if (attachPicker === "file") {
                                 pageStack.push(filePicker)
+                            } else {
+                                pageStack.push(attachChooser)
                             }
                         }
                     }
