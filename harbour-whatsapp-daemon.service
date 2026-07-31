@@ -6,6 +6,11 @@ Description=WhatsApp backend daemon (harbour-whatsapp, opt-in)
 # (Stores sind SQLCipher-verschluesselt, Schluessel liegt im Secrets-Daemon).
 Requires=lipstick.service
 After=lipstick.service
+# Ein misslungenes Selbst-Update darf den Dienst nicht dauerhaft stilllegen:
+# die Vorgabe (5 Starts in 10 s) war nach einem Paketwechsel schnell
+# erreicht, danach blieb der Daemon still liegen und niemand merkte es
+StartLimitIntervalSec=600
+StartLimitBurst=30
 
 [Service]
 Type=simple
@@ -16,7 +21,7 @@ ExecStart=/usr/bin/sailjail -p harbour-whatsapp-daemon.desktop -- /usr/bin/harbo
 # on-failure: ein sauberes /quit (App-Update tauscht das Backend) darf
 # NICHT sofort wieder hochgezogen werden - die App uebernimmt dann
 Restart=on-failure
-RestartSec=5
+RestartSec=10
 
 [Install]
 WantedBy=post-user-session.target

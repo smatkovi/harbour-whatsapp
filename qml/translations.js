@@ -262,7 +262,14 @@ var en = {
     "pinnedBadge": "Pinned",
     "mentionedYou": "Mentioned you",
     "poll": "Poll",
-    "document": "Document"
+    "document": "Document",
+    "sendFailed": "Sending failed (%1)",
+    "sendRejected": "WhatsApp rejected this message (error %1). With a new contact this is usually a temporary account restriction - existing chats keep working. Please do not retry, repeated attempts prolong it. Opening the chat once on your phone helps.",
+    "sendNoBackendReply": "no response from the backend",
+    "sendBlockedHint": "WhatsApp rejected the first message to this contact. Leave the chat and open it again for another try - or start the conversation on your phone.",
+    "tapToCopy": "(tap to copy)",
+    "copiedToClipboard": "Copied to clipboard",
+    "daemonDownNotice": "The background service is not running - you will not receive notifications. Settings, Background daemon, Restart."
 }
 
 var catalogs = {
@@ -520,7 +527,14 @@ var catalogs = {
         "pinnedBadge": "Angepinnt",
         "mentionedYou": "Du wurdest erwähnt",
         "poll": "Umfrage",
-        "document": "Dokument"
+        "document": "Dokument",
+        "sendFailed": "Senden fehlgeschlagen (%1)",
+        "sendRejected": "WhatsApp hat diese Nachricht abgelehnt (Fehler %1). Bei einem neuen Kontakt ist das meist eine vorübergehende Kontobeschränkung - bestehende Chats funktionieren weiter. Bitte nicht wiederholen, wiederholte Versuche verlängern sie. Den Chat einmal am Telefon zu öffnen hilft.",
+        "sendNoBackendReply": "keine Antwort vom Backend",
+        "sendBlockedHint": "WhatsApp hat die erste Nachricht an diesen Kontakt abgelehnt. Chat verlassen und erneut öffnen für einen weiteren Versuch - oder das Gespräch am Telefon beginnen.",
+        "tapToCopy": "(zum Kopieren antippen)",
+        "copiedToClipboard": "In die Zwischenablage kopiert",
+        "daemonDownNotice": "Der Hintergrunddienst läuft nicht - du bekommst keine Benachrichtigungen. Einstellungen, Hintergrunddienst, Neu starten."
     },
     "fi": {
         "language": "Kieli",
@@ -776,7 +790,14 @@ var catalogs = {
         "pinnedBadge": "Kiinnitetty",
         "mentionedYou": "Mainitsi sinut",
         "poll": "Kysely",
-        "document": "Asiakirja"
+        "document": "Asiakirja",
+        "sendFailed": "Lähetys epäonnistui (%1)",
+        "sendRejected": "WhatsApp hylkäsi tämän viestin (virhe %1). Uuden yhteystiedon kohdalla kyse on yleensä tilapäisestä tilirajoituksesta - olemassa olevat keskustelut toimivat edelleen. Älä yritä uudelleen, toistuvat yritykset pidentävät sitä. Auttaa, jos avaat keskustelun kerran puhelimella.",
+        "sendNoBackendReply": "ei vastausta taustapalvelusta",
+        "sendBlockedHint": "WhatsApp hylkäsi ensimmäisen viestin tälle yhteystiedolle. Poistu keskustelusta ja avaa se uudelleen yrittääksesi vielä kerran - tai aloita keskustelu puhelimella.",
+        "tapToCopy": "(kopioi napauttamalla)",
+        "copiedToClipboard": "Kopioitu leikepöydälle",
+        "daemonDownNotice": "Taustapalvelu ei ole käynnissä - et saa ilmoituksia. Asetukset, taustapalvelu, käynnistä uudelleen."
     },
     "sv": {
         "language": "Språk",
@@ -1032,7 +1053,14 @@ var catalogs = {
         "pinnedBadge": "Fäst",
         "mentionedYou": "Nämnde dig",
         "poll": "Omröstning",
-        "document": "Dokument"
+        "document": "Dokument",
+        "sendFailed": "Sändningen misslyckades (%1)",
+        "sendRejected": "WhatsApp avvisade det här meddelandet (fel %1). För en ny kontakt är det oftast en tillfällig kontobegränsning - befintliga chattar fungerar fortfarande. Försök inte igen, upprepade försök förlänger den. Det hjälper att öppna chatten en gång på telefonen.",
+        "sendNoBackendReply": "inget svar från backend",
+        "sendBlockedHint": "WhatsApp avvisade det första meddelandet till den här kontakten. Lämna chatten och öppna den igen för ett nytt försök - eller starta samtalet på telefonen.",
+        "tapToCopy": "(tryck för att kopiera)",
+        "copiedToClipboard": "Kopierat till urklipp",
+        "daemonDownNotice": "Bakgrundstjänsten körs inte - du får inga aviseringar. Inställningar, bakgrundstjänst, starta om."
     },
     "hu": {
         "language": "Nyelv",
@@ -1288,7 +1316,14 @@ var catalogs = {
         "pinnedBadge": "Rögzítve",
         "mentionedYou": "Megemlített téged",
         "poll": "Szavazás",
-        "document": "Dokumentum"
+        "document": "Dokumentum",
+        "sendFailed": "A küldés sikertelen (%1)",
+        "sendRejected": "A WhatsApp elutasította ezt az üzenetet (%1 hiba). Új névjegynél ez általában átmeneti fiókkorlátozás - a meglévő beszélgetések továbbra is működnek. Ne próbálkozz újra, az ismételt kísérletek meghosszabbítják. Segít, ha a beszélgetést egyszer a telefonon nyitod meg.",
+        "sendNoBackendReply": "nincs válasz a háttérszolgáltatástól",
+        "sendBlockedHint": "A WhatsApp elutasította az első üzenetet ehhez a névjegyhez. Lépj ki a beszélgetésből és nyisd meg újra egy további próbához - vagy kezdd el a beszélgetést a telefonon.",
+        "tapToCopy": "(koppints a másoláshoz)",
+        "copiedToClipboard": "Vágólapra másolva",
+        "daemonDownNotice": "A háttérszolgáltatás nem fut - nem kapsz értesítéseket. Beállítások, háttérszolgáltatás, újraindítás."
     },
     "ru": {
         "language": "Язык",
@@ -1544,7 +1579,14 @@ var catalogs = {
         "pinnedBadge": "Закреплено",
         "mentionedYou": "Упомянул(а) вас",
         "poll": "Опрос",
-        "document": "Документ"
+        "document": "Документ",
+        "sendFailed": "Не удалось отправить (%1)",
+        "sendRejected": "WhatsApp отклонил это сообщение (ошибка %1). Для нового контакта это обычно временное ограничение аккаунта - существующие чаты продолжают работать. Не повторяйте попытку: повторные попытки продлевают ограничение. Помогает один раз открыть чат на телефоне.",
+        "sendNoBackendReply": "нет ответа от бэкенда",
+        "sendBlockedHint": "WhatsApp отклонил первое сообщение этому контакту. Выйдите из чата и откройте его снова для ещё одной попытки - или начните разговор на телефоне.",
+        "tapToCopy": "(нажмите, чтобы скопировать)",
+        "copiedToClipboard": "Скопировано в буфер обмена",
+        "daemonDownNotice": "Фоновая служба не работает - уведомления приходить не будут. Настройки, фоновая служба, перезапустить."
     },
     "fr": {
         "language": "Langue",
@@ -1800,7 +1842,14 @@ var catalogs = {
         "pinnedBadge": "Épinglé",
         "mentionedYou": "Vous a mentionné",
         "poll": "Sondage",
-        "document": "Document"
+        "document": "Document",
+        "sendFailed": "Échec de l'envoi (%1)",
+        "sendRejected": "WhatsApp a refusé ce message (erreur %1). Pour un nouveau contact, il s'agit généralement d'une restriction temporaire du compte - les conversations existantes continuent de fonctionner. N'insistez pas : les tentatives répétées la prolongent. Ouvrir la conversation une fois sur le téléphone aide.",
+        "sendNoBackendReply": "aucune réponse du backend",
+        "sendBlockedHint": "WhatsApp a refusé le premier message à ce contact. Quittez la conversation et rouvrez-la pour un nouvel essai - ou commencez-la sur le téléphone.",
+        "tapToCopy": "(appuyer pour copier)",
+        "copiedToClipboard": "Copié dans le presse-papiers",
+        "daemonDownNotice": "Le service en arrière-plan ne tourne pas - vous ne recevrez pas de notifications. Paramètres, service en arrière-plan, redémarrer."
     },
     "la": {
         "language": "Lingua",
@@ -2056,7 +2105,14 @@ var catalogs = {
         "pinnedBadge": "Fixum",
         "mentionedYou": "Te memoravit",
         "poll": "Suffragium",
-        "document": "Documentum"
+        "document": "Documentum",
+        "sendFailed": "Missio defecit (%1)",
+        "sendRejected": "WhatsApp hunc nuntium reiecit (error %1). Apud novum familiarem plerumque restrictio rationis temporaria est - colloquia iam exstantia adhuc valent. Noli iterare: conatus repetiti eam producunt. Iuvat colloquium semel in telephono aperire.",
+        "sendNoBackendReply": "nullum responsum ab apparatu interiore",
+        "sendBlockedHint": "WhatsApp primum nuntium ad hunc familiarem reiecit. Relinque colloquium et iterum aperi ad alterum conatum - vel colloquium in telephono incipe.",
+        "tapToCopy": "(tange ut exscribas)",
+        "copiedToClipboard": "In tabulam translatum",
+        "daemonDownNotice": "Ministerium occultum non currit - nuntiationes non accipies. Optiones, ministerium occultum, iterum incipe."
     },
     "es": {
         "language": "Idioma",
@@ -2300,7 +2356,14 @@ var catalogs = {
         "pinnedBadge": "Fijado",
         "mentionedYou": "Te mencionó",
         "poll": "Encuesta",
-        "document": "Documento"
+        "document": "Documento",
+        "sendFailed": "Error al enviar (%1)",
+        "sendRejected": "WhatsApp rechazó este mensaje (error %1). Con un contacto nuevo suele ser una restricción temporal de la cuenta; los chats existentes siguen funcionando. No lo intentes de nuevo: los intentos repetidos la prolongan. Ayuda abrir el chat una vez en el teléfono.",
+        "sendNoBackendReply": "sin respuesta del backend",
+        "sendBlockedHint": "WhatsApp rechazó el primer mensaje a este contacto. Sal del chat y ábrelo de nuevo para otro intento, o empieza la conversación en el teléfono.",
+        "tapToCopy": "(toca para copiar)",
+        "copiedToClipboard": "Copiado al portapapeles",
+        "daemonDownNotice": "El servicio en segundo plano no se está ejecutando: no recibirás notificaciones. Ajustes, servicio en segundo plano, reiniciar."
     },
     "it": {
         "language": "Lingua",
@@ -2544,7 +2607,14 @@ var catalogs = {
         "pinnedBadge": "Fissato",
         "mentionedYou": "Ti ha menzionato",
         "poll": "Sondaggio",
-        "document": "Documento"
+        "document": "Documento",
+        "sendFailed": "Invio non riuscito (%1)",
+        "sendRejected": "WhatsApp ha rifiutato questo messaggio (errore %1). Con un nuovo contatto di solito è una limitazione temporanea dell'account: le chat esistenti continuano a funzionare. Non riprovare, i tentativi ripetuti la prolungano. Aiuta aprire la chat una volta sul telefono.",
+        "sendNoBackendReply": "nessuna risposta dal backend",
+        "sendBlockedHint": "WhatsApp ha rifiutato il primo messaggio a questo contatto. Esci dalla chat e riaprila per un altro tentativo, oppure inizia la conversazione sul telefono.",
+        "tapToCopy": "(tocca per copiare)",
+        "copiedToClipboard": "Copiato negli appunti",
+        "daemonDownNotice": "Il servizio in background non è in esecuzione: non riceverai notifiche. Impostazioni, servizio in background, riavvia."
     },
     "pt": {
         "language": "Idioma",
@@ -2788,7 +2858,14 @@ var catalogs = {
         "pinnedBadge": "Fixada",
         "mentionedYou": "Mencionou-o",
         "poll": "Sondagem",
-        "document": "Documento"
+        "document": "Documento",
+        "sendFailed": "Falha ao enviar (%1)",
+        "sendRejected": "O WhatsApp rejeitou esta mensagem (erro %1). Com um contacto novo costuma ser uma restrição temporária da conta - as conversas existentes continuam a funcionar. Não tente de novo: tentativas repetidas prolongam-na. Ajuda abrir a conversa uma vez no telemóvel.",
+        "sendNoBackendReply": "sem resposta do backend",
+        "sendBlockedHint": "O WhatsApp rejeitou a primeira mensagem para este contacto. Saia da conversa e abra-a novamente para outra tentativa - ou comece a conversa no telemóvel.",
+        "tapToCopy": "(tocar para copiar)",
+        "copiedToClipboard": "Copiado para a área de transferência",
+        "daemonDownNotice": "O serviço em segundo plano não está a correr - não vai receber notificações. Definições, serviço em segundo plano, reiniciar."
     },
     "nl": {
         "language": "Taal",
@@ -3032,7 +3109,14 @@ var catalogs = {
         "pinnedBadge": "Vastgezet",
         "mentionedYou": "Heeft je genoemd",
         "poll": "Peiling",
-        "document": "Document"
+        "document": "Document",
+        "sendFailed": "Verzenden mislukt (%1)",
+        "sendRejected": "WhatsApp heeft dit bericht geweigerd (fout %1). Bij een nieuw contact is dat meestal een tijdelijke accountbeperking - bestaande chats blijven werken. Probeer het niet opnieuw: herhaalde pogingen verlengen de beperking. Het helpt om de chat één keer op de telefoon te openen.",
+        "sendNoBackendReply": "geen antwoord van de backend",
+        "sendBlockedHint": "WhatsApp heeft het eerste bericht aan dit contact geweigerd. Verlaat de chat en open hem opnieuw voor nog een poging - of begin het gesprek op de telefoon.",
+        "tapToCopy": "(tik om te kopiëren)",
+        "copiedToClipboard": "Gekopieerd naar klembord",
+        "daemonDownNotice": "De achtergronddienst draait niet - je krijgt geen meldingen. Instellingen, achtergronddienst, opnieuw starten."
     },
     "pl": {
         "language": "Język",
@@ -3276,7 +3360,14 @@ var catalogs = {
         "pinnedBadge": "Przypięta",
         "mentionedYou": "Wspomniał(a) o Tobie",
         "poll": "Ankieta",
-        "document": "Dokument"
+        "document": "Dokument",
+        "sendFailed": "Nie udało się wysłać (%1)",
+        "sendRejected": "WhatsApp odrzucił tę wiadomość (błąd %1). W przypadku nowego kontaktu to zwykle tymczasowe ograniczenie konta - istniejące czaty działają dalej. Nie ponawiaj próby: powtarzane próby je wydłużają. Pomaga jednorazowe otwarcie czatu na telefonie.",
+        "sendNoBackendReply": "brak odpowiedzi z backendu",
+        "sendBlockedHint": "WhatsApp odrzucił pierwszą wiadomość do tego kontaktu. Wyjdź z czatu i otwórz go ponownie, aby spróbować jeszcze raz - albo rozpocznij rozmowę na telefonie.",
+        "tapToCopy": "(dotknij, aby skopiować)",
+        "copiedToClipboard": "Skopiowano do schowka",
+        "daemonDownNotice": "Usługa w tle nie działa - nie otrzymasz powiadomień. Ustawienia, usługa w tle, uruchom ponownie."
     },
     "tr": {
         "language": "Dil",
@@ -3520,7 +3611,14 @@ var catalogs = {
         "pinnedBadge": "Sabitlendi",
         "mentionedYou": "Senden bahsetti",
         "poll": "Anket",
-        "document": "Belge"
+        "document": "Belge",
+        "sendFailed": "Gönderilemedi (%1)",
+        "sendRejected": "WhatsApp bu mesajı reddetti (hata %1). Yeni bir kişide bu genellikle geçici bir hesap kısıtlamasıdır; mevcut sohbetler çalışmaya devam eder. Lütfen tekrar denemeyin, tekrarlanan denemeler kısıtlamayı uzatır. Sohbeti telefonda bir kez açmak yardımcı olur.",
+        "sendNoBackendReply": "arka uçtan yanıt yok",
+        "sendBlockedHint": "WhatsApp bu kişiye giden ilk mesajı reddetti. Sohbetten çıkıp yeniden açarak bir kez daha deneyebilirsiniz - ya da sohbeti telefonda başlatın.",
+        "tapToCopy": "(kopyalamak için dokunun)",
+        "copiedToClipboard": "Panoya kopyalandı",
+        "daemonDownNotice": "Arka plan hizmeti çalışmıyor - bildirim almayacaksınız. Ayarlar, arka plan hizmeti, yeniden başlat."
     },
     "da": {
         "language": "Sprog",
@@ -3764,7 +3862,14 @@ var catalogs = {
         "pinnedBadge": "Fastgjort",
         "mentionedYou": "Nævnte dig",
         "poll": "Afstemning",
-        "document": "Dokument"
+        "document": "Dokument",
+        "sendFailed": "Afsendelse mislykkedes (%1)",
+        "sendRejected": "WhatsApp afviste denne besked (fejl %1). Ved en ny kontakt er det som regel en midlertidig kontobegrænsning - eksisterende chats virker fortsat. Prøv ikke igen: gentagne forsøg forlænger den. Det hjælper at åbne chatten én gang på telefonen.",
+        "sendNoBackendReply": "intet svar fra backend",
+        "sendBlockedHint": "WhatsApp afviste den første besked til denne kontakt. Forlad chatten og åbn den igen for endnu et forsøg - eller start samtalen på telefonen.",
+        "tapToCopy": "(tryk for at kopiere)",
+        "copiedToClipboard": "Kopieret til udklipsholder",
+        "daemonDownNotice": "Baggrundstjenesten kører ikke - du får ingen notifikationer. Indstillinger, baggrundstjeneste, genstart."
     },
     "nb": {
         "language": "Språk",
@@ -4008,7 +4113,14 @@ var catalogs = {
         "pinnedBadge": "Festet",
         "mentionedYou": "Nevnte deg",
         "poll": "Avstemning",
-        "document": "Dokument"
+        "document": "Dokument",
+        "sendFailed": "Sending mislyktes (%1)",
+        "sendRejected": "WhatsApp avviste denne meldingen (feil %1). For en ny kontakt er dette som regel en midlertidig kontobegrensning - eksisterende samtaler fungerer fortsatt. Ikke prøv igjen: gjentatte forsøk forlenger den. Det hjelper å åpne samtalen én gang på telefonen.",
+        "sendNoBackendReply": "ingen svar fra backend",
+        "sendBlockedHint": "WhatsApp avviste den første meldingen til denne kontakten. Forlat samtalen og åpne den på nytt for et nytt forsøk - eller start samtalen på telefonen.",
+        "tapToCopy": "(trykk for å kopiere)",
+        "copiedToClipboard": "Kopiert til utklippstavlen",
+        "daemonDownNotice": "Bakgrunnstjenesten kjører ikke - du får ingen varsler. Innstillinger, bakgrunnstjeneste, start på nytt."
     },
     "cs": {
         "language": "Jazyk",
@@ -4252,7 +4364,14 @@ var catalogs = {
         "pinnedBadge": "Připnuto",
         "mentionedYou": "Zmínil(a) vás",
         "poll": "Anketa",
-        "document": "Dokument"
+        "document": "Dokument",
+        "sendFailed": "Odeslání selhalo (%1)",
+        "sendRejected": "WhatsApp tuto zprávu odmítl (chyba %1). U nového kontaktu jde obvykle o dočasné omezení účtu - stávající konverzace fungují dál. Nezkoušejte to znovu, opakované pokusy omezení prodlužují. Pomůže konverzaci jednou otevřít v telefonu.",
+        "sendNoBackendReply": "žádná odpověď z backendu",
+        "sendBlockedHint": "WhatsApp odmítl první zprávu tomuto kontaktu. Opusťte konverzaci a otevřete ji znovu pro další pokus - nebo ji začněte v telefonu.",
+        "tapToCopy": "(klepnutím zkopírujete)",
+        "copiedToClipboard": "Zkopírováno do schránky",
+        "daemonDownNotice": "Služba na pozadí neběží - nebudete dostávat oznámení. Nastavení, služba na pozadí, restartovat."
     },
     "el": {
         "language": "Γλώσσα",
@@ -4496,7 +4615,14 @@ var catalogs = {
         "pinnedBadge": "Καρφιτσωμένο",
         "mentionedYou": "Σας ανέφερε",
         "poll": "Ψηφοφορία",
-        "document": "Έγγραφο"
+        "document": "Έγγραφο",
+        "sendFailed": "Η αποστολή απέτυχε (%1)",
+        "sendRejected": "Το WhatsApp απέρριψε αυτό το μήνυμα (σφάλμα %1). Σε νέα επαφή αυτό είναι συνήθως προσωρινός περιορισμός λογαριασμού - οι υπάρχουσες συνομιλίες συνεχίζουν να λειτουργούν. Μην ξαναδοκιμάσετε: οι επαναλαμβανόμενες προσπάθειες τον παρατείνουν. Βοηθά να ανοίξετε τη συνομιλία μία φορά στο τηλέφωνο.",
+        "sendNoBackendReply": "καμία απάντηση από το backend",
+        "sendBlockedHint": "Το WhatsApp απέρριψε το πρώτο μήνυμα προς αυτή την επαφή. Βγείτε από τη συνομιλία και ανοίξτε την ξανά για άλλη μια προσπάθεια - ή ξεκινήστε τη συνομιλία στο τηλέφωνο.",
+        "tapToCopy": "(πατήστε για αντιγραφή)",
+        "copiedToClipboard": "Αντιγράφηκε στο πρόχειρο",
+        "daemonDownNotice": "Η υπηρεσία παρασκηνίου δεν εκτελείται - δεν θα λαμβάνετε ειδοποιήσεις. Ρυθμίσεις, υπηρεσία παρασκηνίου, επανεκκίνηση."
     },
     "et": {
         "language": "Keel",
@@ -4740,7 +4866,14 @@ var catalogs = {
         "pinnedBadge": "Kinnitatud",
         "mentionedYou": "Mainis sind",
         "poll": "Küsitlus",
-        "document": "Dokument"
+        "document": "Dokument",
+        "sendFailed": "Saatmine ebaõnnestus (%1)",
+        "sendRejected": "WhatsApp lükkas selle sõnumi tagasi (viga %1). Uue kontakti puhul on see tavaliselt ajutine kontopiirang - olemasolevad vestlused toimivad edasi. Ära proovi uuesti: korduvad katsed pikendavad piirangut. Aitab, kui avad vestluse korra telefonis.",
+        "sendNoBackendReply": "backendilt pole vastust",
+        "sendBlockedHint": "WhatsApp lükkas esimese sõnumi sellele kontaktile tagasi. Lahku vestlusest ja ava see uuesti veel üheks katseks - või alusta vestlust telefonis.",
+        "tapToCopy": "(koputa kopeerimiseks)",
+        "copiedToClipboard": "Kopeeritud lõikelauale",
+        "daemonDownNotice": "Taustateenus ei tööta - sa ei saa teavitusi. Seaded, taustateenus, taaskäivita."
     },
     "lv": {
         "language": "Valoda",
@@ -4984,7 +5117,14 @@ var catalogs = {
         "pinnedBadge": "Piesprausta",
         "mentionedYou": "Pieminēja jūs",
         "poll": "Aptauja",
-        "document": "Dokuments"
+        "document": "Dokuments",
+        "sendFailed": "Nosūtīšana neizdevās (%1)",
+        "sendRejected": "WhatsApp noraidīja šo ziņu (kļūda %1). Jaunam kontaktam tas parasti ir īslaicīgs konta ierobežojums - esošās sarakstes turpina darboties. Nemēģini vēlreiz: atkārtoti mēģinājumi to pagarina. Palīdz vienreiz atvērt saraksti telefonā.",
+        "sendNoBackendReply": "nav atbildes no backend",
+        "sendBlockedHint": "WhatsApp noraidīja pirmo ziņu šim kontaktam. Izej no sarakstes un atver to vēlreiz vēl vienam mēģinājumam - vai sāc sarunu telefonā.",
+        "tapToCopy": "(pieskaries, lai kopētu)",
+        "copiedToClipboard": "Nokopēts starpliktuvē",
+        "daemonDownNotice": "Fona pakalpojums nedarbojas - tu nesaņemsi paziņojumus. Iestatījumi, fona pakalpojums, restartēt."
     },
     "lt": {
         "language": "Kalba",
@@ -5228,7 +5368,14 @@ var catalogs = {
         "pinnedBadge": "Prisegta",
         "mentionedYou": "Paminėjo jus",
         "poll": "Apklausa",
-        "document": "Dokumentas"
+        "document": "Dokumentas",
+        "sendFailed": "Nepavyko išsiųsti (%1)",
+        "sendRejected": "WhatsApp atmetė šią žinutę (klaida %1). Naujam kontaktui tai paprastai laikinas paskyros apribojimas - esami pokalbiai veikia toliau. Nebandyk iš naujo: pakartotiniai bandymai jį pratęsia. Padeda kartą atidaryti pokalbį telefone.",
+        "sendNoBackendReply": "nėra atsakymo iš backend",
+        "sendBlockedHint": "WhatsApp atmetė pirmą žinutę šiam kontaktui. Išeik iš pokalbio ir atidaryk jį vėl dar vienam bandymui - arba pradėk pokalbį telefone.",
+        "tapToCopy": "(bakstelėk, kad nukopijuotum)",
+        "copiedToClipboard": "Nukopijuota į iškarpinę",
+        "daemonDownNotice": "Fono tarnyba neveikia - negausi pranešimų. Nustatymai, fono tarnyba, paleisti iš naujo."
     },
     "sl": {
         "language": "Jezik",
@@ -5472,7 +5619,14 @@ var catalogs = {
         "pinnedBadge": "Pripeto",
         "mentionedYou": "Vas je omenil(a)",
         "poll": "Anketa",
-        "document": "Dokument"
+        "document": "Dokument",
+        "sendFailed": "Pošiljanje ni uspelo (%1)",
+        "sendRejected": "WhatsApp je to sporočilo zavrnil (napaka %1). Pri novem stiku gre običajno za začasno omejitev računa - obstoječi pogovori delujejo naprej. Ne poskušaj znova: ponavljajoči se poskusi jo podaljšajo. Pomaga, če pogovor enkrat odpreš na telefonu.",
+        "sendNoBackendReply": "ni odziva iz zaledja",
+        "sendBlockedHint": "WhatsApp je zavrnil prvo sporočilo temu stiku. Zapusti pogovor in ga znova odpri za nov poskus - ali pa pogovor začni na telefonu.",
+        "tapToCopy": "(tapni za kopiranje)",
+        "copiedToClipboard": "Kopirano v odložišče",
+        "daemonDownNotice": "Storitev v ozadju ne teče - obvestil ne boš prejemal. Nastavitve, storitev v ozadju, ponovni zagon."
     },
     "zh": {
         "language": "语言",
@@ -5716,7 +5870,14 @@ var catalogs = {
         "pinnedBadge": "已置顶",
         "mentionedYou": "提到了你",
         "poll": "投票",
-        "document": "文档"
+        "document": "文档",
+        "sendFailed": "发送失败（%1）",
+        "sendRejected": "WhatsApp 拒绝了这条消息（错误 %1）。对于新联系人，这通常是账号被临时限制——已有的聊天仍可正常使用。请不要重试，反复尝试会延长限制。先在手机上打开一次该聊天会有帮助。",
+        "sendNoBackendReply": "后端无响应",
+        "sendBlockedHint": "WhatsApp 拒绝了发给该联系人的第一条消息。退出聊天再重新打开可再试一次，或先在手机上发起对话。",
+        "tapToCopy": "（点按以复制）",
+        "copiedToClipboard": "已复制到剪贴板",
+        "daemonDownNotice": "后台服务未运行——你将收不到通知。设置、后台服务、重新启动。"
     }
 }
 

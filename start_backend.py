@@ -2,6 +2,7 @@ import subprocess
 import signal
 import os
 import time
+import json
 import urllib.request
 import pyotherside
 
@@ -347,8 +348,12 @@ def start():
             try:
                 r = urllib.request.urlopen("http://127.0.0.1:%d/status" % port, timeout=3)
                 is_daemon = bool(json.loads(r.read().decode()).get("daemon"))
-            except Exception:
-                pass
+            except Exception as e:
+                # NICHT verschlucken: genau hier starb die Wache still an
+                # einem NameError (json war nur lokal in backend_version
+                # importiert), is_daemon blieb False und /quit erledigte
+                # den Daemon endgueltig. Ein Fehlschlag muss sichtbar sein
+                print("daemon check failed (%r) - treating as own child" % (e,))
             if is_daemon:
                 pyotherside.send('backendReady', True, port)
                 return True

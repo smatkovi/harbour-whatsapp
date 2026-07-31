@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.184
+Version:    0.9.188
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -108,12 +108,75 @@ fi
 ln -f /usr/bin/gst-launch-1.0 /usr/share/harbour-whatsapp/gst-launch-1.0 2>/dev/null ||   cp /usr/bin/gst-launch-1.0 /usr/share/harbour-whatsapp/gst-launch-1.0 2>/dev/null || true
 ln -f /usr/bin/pactl /usr/share/harbour-whatsapp/pactl 2>/dev/null ||   cp /usr/bin/pactl /usr/share/harbour-whatsapp/pactl 2>/dev/null || true
 
+# systemd von der neuen Unit-Datei in Kenntnis setzen. Ohne das lief der
+# alte Daemon nach dem Update gegen eine im Speicher veraltete Definition -
+# genau die Warnung "unit file changed on disk" - und das absichtliche
+# Exit-1-Selbstupdate fand keinen Weg zurueck. try-restart beruehrt nur
+# einen LAUFENDEN Dienst, wer ihn nie eingeschaltet hat bleibt unbehelligt.
+if [ -x /usr/bin/systemctl-user ]; then
+  /usr/bin/systemctl-user daemon-reload || true
+  /usr/bin/systemctl-user try-restart harbour-whatsapp-daemon.service || true
+fi
+
 %postun
 if [ "$1" = "0" ]; then
   rm -f /usr/share/harbour-whatsapp/gst-launch-1.0 /usr/share/harbour-whatsapp/pactl
 fi
 
 %changelog
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.188-1
+- No functional changes: a version bump to field-test the daemon guard
+  repaired in 0.9.187. Only a version difference sends the app down the
+  /quit path at all, so 0.9.187 could not test itself - install this,
+  touch the daemon with nothing, open the app, and the daemon must still
+  be there afterwards. Also drops qml/harbour-whatsapp.qml.bak, a stale
+  300 KB copy of the main QML file that cp -r had been shipping to every
+  user
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.187-1
+- Found the real reason the daemon vanished after an update, and it was
+  not what 0.9.186 guessed. The guard from 0.9.181 - never replace a
+  running DAEMON via /quit, because a clean exit is one systemd will not
+  restart - was dead code: it parses the status with json, but json was
+  imported inside backend_version() only, so the module namespace never
+  had it. The resulting NameError landed in a bare except, is_daemon
+  stayed False, and the app politely shot the daemon dead on every start
+  after a version bump. The backend log shows it exactly: two "Quit
+  requested" and not a single "self-updating via exit 1". One import
+  moved to module level fixes it; the except now reports instead of
+  swallowing, since a silent failure there is what disabled the guard in
+  the first place
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.186-1
+- The background daemon no longer dies quietly on update. Installing the
+  RPM replaced the unit file while the old daemon deliberately exited 1
+  for its self-update - systemd still held the stale definition ("unit
+  file changed on disk") and the restart never happened, so notifications
+  stopped and nothing said so; it was noticed by chance when opening the
+  app. The %%post script now runs daemon-reload and try-restart via systemctl-user,
+  which only touches a daemon that was actually running. The start rate
+  limit is relaxed (30 starts per 10 minutes, 10 s apart) so a single
+  failed self-update cannot park the service for good. And if it is
+  stopped anyway while autostart is on, the app says so on the main page
+  after twenty seconds instead of leaving it to be discovered - in all 22
+  languages
+
+* Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.185-1
+- Failed sends are no longer silent: the text path only ever handled HTTP
+  200, so a rejection left the message sitting in the box with no hint at
+  all - the reason existed, it was thrown away. Every non-200 now shows
+  the backend's answer, and WhatsApp's own rejection codes (4xx in the
+  server ack, e.g. 463 on a first contact during a temporary account
+  restriction) are translated into a plain explanation instead of a bare
+  number. After such a rejection in an empty chat, further attempts are
+  held back - repeated first-contact tries are exactly what prolongs a
+  restriction. Voice notes and file sends use the same wording. Error
+  colouring no longer depends on the English word "failed" appearing in
+  the text, which quietly broke for every translated message. Six new
+  strings in all 22 languages. The backend also releases its port file on
+  every clean exit (quit, SIGTERM, self-update) instead of leaving it
+  pointing at a dead port
+
 * Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.184-1
 - Own message bubbles are translucent now (Theme.highlightBackgroundColor
   at the ambience-tuned Theme.highlightBackgroundOpacity instead of the

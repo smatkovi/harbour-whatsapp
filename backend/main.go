@@ -2627,6 +2627,7 @@ func main() {
         saveMessages()
         saveContacts()
         saveRawMedia()
+        releasePortFile()
         json.NewEncoder(w).Encode(map[string]bool{"ok": true})
         go func() {
             time.Sleep(300 * time.Millisecond)
@@ -2642,6 +2643,7 @@ func main() {
         saveMessages()
         saveContacts()
         saveRawMedia()
+        releasePortFile()
         json.NewEncoder(w).Encode(map[string]bool{"ok": true})
         go func() {
             time.Sleep(300 * time.Millisecond)
@@ -2832,6 +2834,7 @@ func main() {
                     saveMessages()
                     saveContacts()
                     saveRawMedia()
+                    releasePortFile()
                     os.Exit(1)
                 }
             }
@@ -5144,5 +5147,20 @@ func main() {
     saveMessages()
     saveContacts()
     saveAvatars()
+    releasePortFile()
     client.Disconnect()
+}
+
+// Die Portdatei zeigt nach einem Prozessende sonst auf einen toten Port -
+// jeder Leser (App-Neustart, Skript, Daemon) rennt dann gegen eine
+// geschlossene Tuer. Nur loeschen, wenn WIR darin stehen: laeuft parallel
+// eine zweite Instanz auf einem anderen Port, gehoert der Eintrag ihr.
+func releasePortFile() {
+    b, err := os.ReadFile("backend.port")
+    if err != nil {
+        return
+    }
+    if strings.TrimSpace(string(b)) == fmt.Sprintf("%d", boundPort) {
+        os.Remove("backend.port")
+    }
 }

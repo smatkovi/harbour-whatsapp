@@ -542,6 +542,41 @@ ApplicationWindow {
     }
     property string globalNotice: ""
 
+    // Fehler sollen rot erscheinen. Bisher wurde dafuer auf das englische
+    // Wort "failed" IM TEXT geprueft - mit uebersetzten Meldungen traegt
+    // das nicht mehr. Jede neue Meldung startet neutral, Fehlerpfade setzen
+    // das Flag direkt NACH dem Text (Reihenfolge zaehlt).
+    property bool noticeIsError: false
+    onGlobalNoticeChanged: noticeIsError = false
+
+    // Rot faerben und "antippen zum Kopieren" anbieten: neues Flag ODER
+    // die alte englische Heuristik, damit noch nicht umgestellte Meldungen
+    // weiter als Fehler erkennbar bleiben
+    function noticeLooksLikeError() {
+        return noticeIsError || globalNotice.indexOf("failed") >= 0
+    }
+
+    // WhatsApp quittiert eine abgelehnte Nachricht mit einem Fehlercode im
+    // <ack>; whatsmeow reicht ihn als "server returned error NNN" durch.
+    // Die 4xx-Familie heisst: der Server hat die Nachricht ANGENOMMEN und
+    // dann verworfen - kein Fehler im Client. Bei Erstkontakten ist das
+    // typischerweise eine voruebergehende Kontobeschraenkung.
+    function sendRejectCode(body) {
+        var m = (body || "").match(/server returned error (\d+)/)
+        if (!m) return 0
+        var c = parseInt(m[1], 10)
+        return (c >= 400 && c < 500) ? c : 0
+    }
+
+    function sendErrorText(status, body) {
+        var code = sendRejectCode(body)
+        if (code > 0) return loc.sendRejected.replace("%1", code)
+        var why = (body || "").replace(/\s+$/, "")
+        if (why.length > 200) why = why.substring(0, 200) + "\u2026"
+        return loc.sendFailed.replace("%1", status)
+               + ": " + (why !== "" ? why : loc.sendNoBackendReply)
+    }
+
     // ---- Live-Standort-Freigabe (app-weit, ueberlebt Seitenwechsel) ----
     property bool   daemonRunning: false
     property string backendVersion: ""
@@ -642,6 +677,30 @@ ApplicationWindow {
 
     property bool prefsLoaded: false
 
+    // Der Daemon kann still sterben (misslungenes Selbst-Update, Unit-Datei
+    // waehrend des Updates getauscht, Start-Rate-Bremse). Dann bleiben
+    // Benachrichtigungen aus und NIEMAND sagt es - man merkt es zufaellig,
+    // wenn man die App oeffnet. Wer ihn eingeschaltet hat, erfaehrt es jetzt.
+    property bool daemonAutostart: false
+    property bool daemonDownWarned: false
+    Timer {
+        id: daemonWatch
+        interval: 20000
+        repeat: true
+        running: true
+        onTriggered: {
+            // Erst urteilen, wenn die Prefs da sind und der Daemon Zeit zum
+            // Hochlaufen hatte - sonst warnt es beim Kaltstart grundlos
+            if (!prefsLoaded) return
+            stop()
+            if (daemonAutostart && !daemonRunning && !daemonDownWarned) {
+                daemonDownWarned = true
+                globalNotice = loc.daemonDownNotice
+                noticeIsError = true
+            }
+        }
+    }
+
     function loadPrefs() {
         var xhr = new XMLHttpRequest()
         xhr.open("GET", "http://127.0.0.1:" + backendPort + "/prefs")
@@ -658,6 +717,7 @@ ApplicationWindow {
                 showViewSwitcher = p.top_switcher !== "0"
                 showNavBar = p.bottom_bar !== "0"
                 appLanguage = p.app_language || ""
+                daemonAutostart = p.daemon_autostart === "1"
                 prefsLoaded = true
                 // Auch fuer Bestandsinstallationen und Systemsprache setzen
                 if (p.notif_reply_label !== loc.reply)
@@ -1163,17 +1223,18 @@ ApplicationWindow {
                     height: visible ? noticeLbl1.height + 2*Theme.paddingSmall : 0
                     onClicked: {
                         Clipboard.text = globalNotice
-                        globalNotice = "Copied to clipboard"
+                        globalNotice = loc.copiedToClipboard
                     }
                     Label {
                         id: noticeLbl1
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
                         anchors.verticalCenter: parent.verticalCenter
-                        text: globalNotice
+                        text: globalNotice + (noticeLooksLikeError()
+                                              ? "\n" + loc.tapToCopy : "")
                         wrapMode: Text.Wrap
                         font.pixelSize: Theme.fontSizeSmall
-                        color: Theme.highlightColor
+                        color: noticeLooksLikeError() ? Theme.errorColor : Theme.highlightColor
                     }
                 }
             }
@@ -1572,18 +1633,18 @@ ApplicationWindow {
                     height: visible ? noticeLbl2.height + 2*Theme.paddingSmall : 0
                     onClicked: {
                         Clipboard.text = globalNotice
-                        globalNotice = "Copied to clipboard"
+                        globalNotice = loc.copiedToClipboard
                     }
                     Label {
                         id: noticeLbl2
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
                         anchors.verticalCenter: parent.verticalCenter
-                        text: globalNotice + (globalNotice.indexOf("failed") >= 0
-                                              ? "\n(tap to copy)" : "")
+                        text: globalNotice + (noticeLooksLikeError()
+                                              ? "\n" + loc.tapToCopy : "")
                         wrapMode: Text.Wrap
                         font.pixelSize: Theme.fontSizeSmall
-                        color: globalNotice.indexOf("failed") >= 0 ? Theme.errorColor : Theme.highlightColor
+                        color: noticeLooksLikeError() ? Theme.errorColor : Theme.highlightColor
                     }
                 }
 
@@ -1610,13 +1671,13 @@ ApplicationWindow {
                         height: pairErrLabel.height + 2*Theme.paddingMedium
                         onClicked: {
                             Clipboard.text = pairErrorMsg
-                            globalNotice = "Error text copied to clipboard"
+                            globalNotice = loc.copiedToClipboard
                         }
                         Label {
                             id: pairErrLabel
                             width: parent.width - 2*Theme.horizontalPageMargin
                             anchors.centerIn: parent
-                            text: pairErrorMsg + "\n(tap to copy)"
+                            text: pairErrorMsg + "\n" + loc.tapToCopy
                             wrapMode: Text.Wrap
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.errorColor
@@ -1679,7 +1740,7 @@ ApplicationWindow {
                             Label {
                                 id: copiedNotice
                                 width: parent.width
-                                text: "✓ Copied to clipboard"
+                                text: "\u2713 " + loc.copiedToClipboard
                                 font.pixelSize: Theme.fontSizeSmall
                                 horizontalAlignment: Text.AlignHCenter
                                 color: Theme.highlightColor
@@ -5084,8 +5145,18 @@ Label {
             // (load() kehrt bei unveraendertem JSON frueh zurueck)
             property bool forceEnd: false
 
+            // Nach einer Server-Ablehnung im leeren Chat gesetzt; gilt nur
+            // fuer diese Seiteninstanz - Chat verlassen und neu oeffnen
+            // gibt den Versuch bewusst wieder frei
+            property bool sendBlocked: false
+
             function send() {
                 if (input.text === "") return
+                if (sendBlocked) {
+                    globalNotice = loc.sendBlockedHint
+                    noticeIsError = true
+                    return
+                }
                 var url
                 if (editingId !== "") {
                     url = "http://127.0.0.1:" + backendPort + "/edit?chat=" + chatJid
@@ -5111,14 +5182,29 @@ Label {
                 var xhr = new XMLHttpRequest()
                 xhr.open("GET", url)
                 xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4 && xhr.status === 200) {
-                        input.text = ""
-                        editingId = ""
-                        replyToId = ""; replyToText = ""; replyToSender = ""
-                        forceEnd = true
-                        load()
-                        loadChats()
+                    if (xhr.readyState !== 4) return
+                    if (xhr.status !== 200) {
+                        // Fehler NICHT verschlucken: bisher gab es nur den
+                        // 200-Zweig, der Text blieb stehen und es sah aus,
+                        // als passiere schlicht nichts. Der Dateiversand
+                        // meldet seit 0.9.167 sauber - der Textversand nicht
+                        globalNotice = sendErrorText(xhr.status, xhr.responseText)
+                        noticeIsError = true
+                        // Erstkontakt-Bremse: eine vom Server abgelehnte
+                        // erste Nachricht an einen noch leeren Chat nicht
+                        // wieder und wieder abfeuern - genau dieses Muster
+                        // verlaengert eine Kontobeschraenkung
+                        if (sendRejectCode(xhr.responseText) > 0 && msgs.length === 0) {
+                            sendBlocked = true
+                        }
+                        return
                     }
+                    input.text = ""
+                    editingId = ""
+                    replyToId = ""; replyToText = ""; replyToSender = ""
+                    forceEnd = true
+                    load()
+                    loadChats()
                 }
                 xhr.send()
             }
@@ -5164,11 +5250,12 @@ Label {
                         // Status 500, der Grund des Backends ging verloren und
                         // es sah aus, als passiere schlicht nichts
                         if (xhr.status !== 200) {
-                            var why = (xhr.responseText || "").replace(/\s+$/, "")
-                            if (why.length > 200) why = why.substring(0, 200) + "\u2026"
-                            globalNotice = "Send failed (" + xhr.status + "): "
-                                           + (why !== "" ? why : "no response from backend")
+                            globalNotice = sendErrorText(xhr.status, xhr.responseText)
                                            + " [" + path + "]"
+                            noticeIsError = true
+                            if (sendRejectCode(xhr.responseText) > 0 && msgs.length === 0) {
+                                sendBlocked = true
+                            }
                             return
                         }
                         if (globalNotice.indexOf("Sending ") === 0) globalNotice = ""
@@ -6173,18 +6260,18 @@ Label {
                     height: visible ? chatNoticeLbl.height + 2*Theme.paddingSmall : 0
                     onClicked: {
                         Clipboard.text = globalNotice
-                        globalNotice = "Copied to clipboard"
+                        globalNotice = loc.copiedToClipboard
                     }
                     Label {
                         id: chatNoticeLbl
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*x
                         anchors.verticalCenter: parent.verticalCenter
-                        text: globalNotice + (globalNotice.indexOf("failed") >= 0
-                                              ? "\n(tap to copy)" : "")
+                        text: globalNotice + (noticeLooksLikeError()
+                                              ? "\n" + loc.tapToCopy : "")
                         wrapMode: Text.Wrap
                         font.pixelSize: Theme.fontSizeSmall
-                        color: globalNotice.indexOf("failed") >= 0 ? Theme.errorColor : Theme.highlightColor
+                        color: noticeLooksLikeError() ? Theme.errorColor : Theme.highlightColor
                     }
                 }
 
@@ -6349,7 +6436,13 @@ Label {
                                     xhr.onreadystatechange = function() {
                                         if (xhr.readyState !== 4) return
                                         if (xhr.status === 200) { load() }
-                                        else globalNotice = "Voice note failed: " + xhr.responseText
+                                        else {
+                                            globalNotice = sendErrorText(xhr.status, xhr.responseText)
+                                            noticeIsError = true
+                                            if (sendRejectCode(xhr.responseText) > 0 && msgs.length === 0) {
+                                                sendBlocked = true
+                                            }
+                                        }
                                     }
                                     xhr.send()
                                 })
