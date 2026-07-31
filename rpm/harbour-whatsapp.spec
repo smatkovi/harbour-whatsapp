@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.189
+Version:    0.9.193
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -124,6 +124,78 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.193-1
+- The daemon writes a log now. It was the only part of the system without
+  one: systemd sends its output to the journal, which on the device is
+  volatile, capped at one megabyte and unreadable without being in the
+  systemd-journal group - so the instance that is meant to run unattended
+  logged into nothing. Every diagnosis so far read backend.log, which
+  only ever contained the app's own backend; the daemon's side of the
+  same events was simply absent, including the logout this morning. It
+  writes to daemon.log in the data directory now, trimmed at startup the
+  same way. File descriptors 1 and 2 are swapped rather than os.Stdout,
+  so whatsmeow's own logger follows too, and a separate file is used
+  because start_backend.py rotates backend.log at app start - the daemon
+  would have carried on writing into a deleted inode. Doing it in the
+  backend rather than via StandardOutput=append: keeps it independent of
+  the systemd version on the device
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.192-1
+- Half of what the matrix called device-only turned out not to be. The
+  daemon guard in start_backend.py now runs against a real HTTP backend
+  on port 8085 and counts which endpoints get touched: an old daemon must
+  not be replaced via /quit, an old child must, matching versions leave
+  everyone alone, and an unknown installed version shoots nothing. Cross
+  checked against the broken 0.9.186 state, where two of those cases
+  fail - so the test actually tests something. The connman handling now
+  runs against a real bus with a stand-in net.connman, exercising
+  watchNetwork unchanged: match rule, signal name, object path and
+  variant unpacking, none of which a table test can reach. Port file
+  release is covered too, including the case where the entry belongs to
+  another instance. connectWithGuard grew a nil-client check on the way,
+  since a network signal can arrive before initialisation finishes. What
+  is left for the device is genuinely device-bound: sailjail, systemd,
+  the WhatsApp servers, and the screen
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.191-1
+- Same code as the corrected 0.9.190 under a version number that can
+  actually be installed: 0.9.190 was built twice, the second time with
+  the backoff overflow fix, and pkcon refuses to reinstall a version it
+  already has. Adds TESTMATRIX.md, which lists what is checked
+  automatically (backoff ladder, watchdog decisions, connman property
+  handling, wake channel, the eight-hour offline simulation, error text
+  and catalogue coverage) and what only a device can answer (sailjail and
+  the system bus, systemd restart timing, first contact against the
+  actual servers). The three most expensive bugs in this project would
+  not have been caught by any unit test - they were all in the log, and
+  the matrix says so out loud
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.190-1
+- The daemon now survives being offline, which it did not. With
+  whatsmeow's own auto-reconnect deliberately off since 0.9.178, a failed
+  connection attempt produces neither a Disconnected nor a ConnectFailure
+  event - so the one place that could have scheduled another try simply
+  printed the error and returned. One dead spot with no signal (a tunnel,
+  flight mode, wifi dropping at the wrong second) and the daemon stopped
+  trying for good: still running, still answering /status, just never
+  connecting again and never saying so. Failed attempts now reschedule
+  through the same guard, and a watchdog checks every minute whether we
+  ought to be connected but are not. On top of that the daemon listens to
+  connman on the system bus (already covered by Internet.permission,
+  which includes Connman.permission): when wifi, mobile data or the end
+  of flight mode brings the network back, the pending backoff is cut
+  short instead of waiting out up to five minutes. /status gained a
+  network field for diagnosis. Testing the new code turned up an old
+  overflow in the backoff itself: 5*(1<<61) does not fit in an int64, so
+  after roughly sixty consecutive failures - about five hours without a
+  signal - the five-minute spacing collapsed to zero and only the ten
+  second floor remained. Simulated over an eight hour night that is 1752
+  connection attempts instead of 100, which is precisely the storm the
+  guard exists to prevent. The exponent is now clamped before shifting.
+  The reconnect logic, the connman handling and the watchdog decisions
+  come with a test suite (backend/reconnect_test.go,
+  backend/offline_scenario_test.go)
+
 * Fri Jul 31 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.189-1
 - The paperclip no longer forces the folder tree on you. Sailfish ships
   more than one chooser, and the one kempertom was asking about is the

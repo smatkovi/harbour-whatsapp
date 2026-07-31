@@ -4,6 +4,7 @@ import (
     "unicode/utf16"
     neturl "net/url"
     "github.com/godbus/dbus/v5"
+    "golang.org/x/sys/unix"
     "context"
     "encoding/hex"
     "encoding/base64"
@@ -151,6 +152,15 @@ var lastConnectedAt time.Time
 
 const minConnectInterval = 10 * time.Second
 
+// Weckkanal: kehrt das Netz zurueck, soll ein laufender Backoff-Schlaf
+// nicht bis zu fuenf Minuten ausgesessen werden
+var connectWake = make(chan struct{}, 1)
+
+// Letzter von connman gemeldeter Zustand: offline|idle|ready|online.
+// "unknown" heisst, wir konnten ihn nicht ermitteln - dann wird der
+// periodische Versuch NICHT unterdrueckt, lieber einmal zu viel probieren
+var netState = "unknown"
+
 // anotherInstanceConnected: haelt eine ANDERE lokale Instanz die Session?
 func anotherInstanceConnected() bool {
     cl := &http.Client{Timeout: 1500 * time.Millisecond}
@@ -174,11 +184,21 @@ func anotherInstanceConnected() bool {
     return false
 }
 
+// Deckel BEIM EXPONENTEN, nicht erst am Ergebnis: 5*(1<<61) laeuft in
+// int64 ueber und lieferte 0 - nach etwa fuenf Stunden ohne Netz waere aus
+// dem Fuenf-Minuten-Abstand ein Zehn-Sekunden-Takt geworden, also genau der
+// Sturm, gegen den die Wache gebaut wurde. 7 ergibt 5*64 = 320 s > Deckel.
+const maxBackoffStep = 7
+
 func reconnectDelay() time.Duration {
     if consecReconnects <= 0 {
         return 0
     }
-    d := time.Duration(5*(1<<uint(consecReconnects-1))) * time.Second
+    n := consecReconnects
+    if n > maxBackoffStep {
+        n = maxBackoffStep
+    }
+    d := time.Duration(5*(1<<uint(n-1))) * time.Second
     if d > 5*time.Minute {
         d = 5 * time.Minute
     }
@@ -202,7 +222,11 @@ func connectWithGuard(reason string) {
         }()
         if d := reconnectDelay(); d > 0 {
             fmt.Printf("⏳ reconnect backoff %s (attempt %d, %s)\n", d, consecReconnects, reason)
-            time.Sleep(d)
+            select {
+            case <-time.After(d):
+            case <-connectWake:
+                fmt.Println("⏭ backoff aborted - network came back")
+            }
         }
         if since := time.Since(lastConnectAttempt); since < minConnectInterval && !lastConnectAttempt.IsZero() {
             time.Sleep(minConnectInterval - since)
@@ -217,10 +241,28 @@ func connectWithGuard(reason string) {
             fmt.Println("⏸ not reconnecting: state " + connState)
             return
         }
+        if client == nil {
+            // Kann beim Start passieren (Netzsignal vor der Initialisierung)
+            fmt.Println("⏸ not connecting: client not initialised yet")
+            return
+        }
         lastConnectAttempt = time.Now()
         fmt.Printf("🔌 connecting (%s)\n", reason)
         if cerr := client.Connect(); cerr != nil {
             fmt.Printf("❌ connect error (%s): %v\n", reason, cerr)
+            // Ohne whatsmeows Auto-Reconnect (bewusst aus, s.o.) folgt auf
+            // einen gescheiterten Verbindungsaufbau KEIN Disconnected- und
+            // kein ConnectFailure-Ereignis. Ohne die Nachplanung hier hoerte
+            // der Daemon nach einem einzigen Fehlversuch im Funkloch
+            // endgueltig auf - still, ohne Benachrichtigungen.
+            consecReconnects++
+            connState = "reconnecting"
+            // Kurz warten, damit connectPending (defer) schon zurueckgesetzt
+            // ist - sonst verwuerfe der naechste Aufruf sich selbst
+            go func() {
+                time.Sleep(500 * time.Millisecond)
+                connectWithGuard("retry-after-error")
+            }()
         }
     }()
 }
@@ -2585,6 +2627,7 @@ func sendVoice(to string, filePath string, seconds uint32) error {
 func main() {
     // Initialize paths first
     initPaths()
+    redirectDaemonOutput()
     daemonTakeover()
     go startReplyService()
     go daemonWatchdog()
@@ -2696,6 +2739,7 @@ func main() {
             "lastError": lastError,
             "version":   version,
             "daemon":    isDaemon,
+            "network":   netState,
             "paired":    client != nil && client.Store != nil && client.Store.ID != nil,
         })
     })
@@ -2910,6 +2954,8 @@ func main() {
         connState = "connecting"
     }
     connectWithGuard("startup")
+    go watchNetwork()
+    go connectionWatchdog()
 
 
     http.HandleFunc("/pair", func(w http.ResponseWriter, r *http.Request) {
@@ -5163,4 +5209,168 @@ func releasePortFile() {
     if strings.TrimSpace(string(b)) == fmt.Sprintf("%d", boundPort) {
         os.Remove("backend.port")
     }
+}
+
+// nudgeConnect: das Netz ist zurueck - Backoff verwerfen und sofort ran
+func nudgeConnect(reason string) {
+    consecReconnects = 0
+    select {
+    case connectWake <- struct{}{}:
+    default:
+    }
+    connectWithGuard(reason)
+}
+
+// watchNetwork: connman auf dem System-Bus melden lassen, wenn WLAN,
+// mobile Daten oder das Ende des Flugmodus die Verbindung zurueckbringen.
+// Die Berechtigung dafuer steckt bereits in Internet.permission, die
+// Connman.permission einbindet (talk + broadcast). Faellt das aus, traegt
+// der periodische Waechter allein - deshalb hier nur Meldung, kein Abbruch
+// der uebrigen Arbeit.
+func watchNetwork() {
+    conn, err := dbus.SystemBus()
+    if err != nil {
+        fmt.Printf("⚠ connman: no system bus (%v) - periodic check only\n", err)
+        return
+    }
+    obj := conn.Object("net.connman", "/")
+    var props map[string]dbus.Variant
+    if cerr := obj.Call("net.connman.Manager.GetProperties", 0).Store(&props); cerr == nil {
+        if v, ok := props["State"]; ok {
+            if str, ok := v.Value().(string); ok && str != "" {
+                netState = str
+            }
+        }
+    } else {
+        fmt.Printf("⚠ connman: GetProperties failed (%v)\n", cerr)
+    }
+    if merr := conn.AddMatchSignal(
+        dbus.WithMatchInterface("net.connman.Manager"),
+        dbus.WithMatchMember("PropertyChanged"),
+    ); merr != nil {
+        fmt.Printf("⚠ connman: signal subscription failed (%v) - periodic check only\n", merr)
+        return
+    }
+    ch := make(chan *dbus.Signal, 16)
+    conn.Signal(ch)
+    fmt.Printf("📶 connman watcher active (state=%s)\n", netState)
+    for sig := range ch {
+        if sig.Name != "net.connman.Manager.PropertyChanged" || len(sig.Body) < 2 {
+            continue
+        }
+        name, _ := sig.Body[0].(string)
+        v, ok := sig.Body[1].(dbus.Variant)
+        if !ok {
+            continue
+        }
+        connected := client != nil && client.IsConnected()
+        if reason := handleNetworkProperty(name, v.Value(), connected); reason != "" {
+            nudgeConnect(reason)
+        }
+    }
+}
+
+// handleNetworkProperty pflegt netState und sagt, ob ein Verbindungsversuch
+// faellig ist. Ausgelagert, damit die Fallunterscheidung ohne D-Bus pruefbar
+// ist. Rueckgabe "" heisst: nichts zu tun.
+func handleNetworkProperty(name string, val interface{}, connected bool) string {
+    switch name {
+    case "State":
+        str, _ := val.(string)
+        if str == "" || str == netState {
+            return ""
+        }
+        netState = str
+        fmt.Printf("📶 network state: %s\n", str)
+        if (str == "ready" || str == "online") && !connected {
+            return "network-up"
+        }
+    case "OfflineMode":
+        off, ok := val.(bool)
+        if !ok {
+            return ""
+        }
+        fmt.Printf("📶 offline mode: %v\n", off)
+        if !off && !connected {
+            return "flight-mode-off"
+        }
+    }
+    return ""
+}
+
+// connectionWatchdog: Grundsicherung ohne Bus und ohne Berechtigung.
+// Sollten wir verbunden sein, sind es aber nicht, wird ueber die Wache ein
+// Versuch angestossen; deren Backoff verhindert weiterhin jeden Sturm.
+func connectionWatchdog() {
+    for {
+        time.Sleep(60 * time.Second)
+        if client == nil || client.Store == nil || client.Store.ID == nil {
+            continue
+        }
+        if watchdogShouldConnect(connState, client.IsConnected(), netState) {
+            connectWithGuard("watchdog")
+        }
+    }
+}
+
+// watchdogShouldConnect: sollten wir verbunden sein, sind es aber nicht?
+// Bei bekanntem Funkloch schweigen - "unknown" gilt als "probier es".
+func watchdogShouldConnect(state string, connected bool, net string) bool {
+    switch state {
+    case "logged_out", "relogin_required", "waiting_for_pair", "standby":
+        return false
+    }
+    if connected {
+        return false
+    }
+    if net == "offline" || net == "idle" {
+        return false
+    }
+    return true
+}
+
+// redirectDaemonOutput: der Daemon hatte als einziger Teil kein lesbares
+// Protokoll. systemd schickt seine Ausgabe ins Journal, das auf dem Geraet
+// fluechtig ist (Storage=volatile, RuntimeMaxUse=1M) und dem Nutzer ohne
+// Gruppenmitgliedschaft verschlossen bleibt - ausgerechnet die Instanz,
+// die unbeaufsichtigt laufen soll, protokollierte ins Nichts.
+//
+// Getauscht werden die Dateideskriptoren 1 und 2 statt os.Stdout: nur so
+// folgt auch whatsmeows eigener Logger, der sich sein Ziel selbst holt.
+// Eigene Datei statt backend.log, weil start_backend.py jene beim
+// App-Start stutzt und ersetzt - der Daemon schriebe danach in einen
+// geloeschten Inode weiter.
+func redirectDaemonOutput() {
+    if !isDaemon {
+        return
+    }
+    const name = "daemon.log"
+    // Beim Start stutzen wie backend.log, sonst waechst es unbegrenzt
+    if st, err := os.Stat(name); err == nil && st.Size() > 512*1024 {
+        if b, rerr := os.ReadFile(name); rerr == nil && len(b) > 128*1024 {
+            os.WriteFile(name, append([]byte("[log trimmed at startup]\n"),
+                b[len(b)-128*1024:]...), 0600)
+        }
+    }
+    f, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+    if err != nil {
+        fmt.Printf("⚠ daemon log: %v (output stays in the journal)\n", err)
+        return
+    }
+    // Dup3 statt Dup2: auf arm64 gibt es Dup2 nicht
+    if err := unix.Dup3(int(f.Fd()), 1, 0); err != nil {
+        fmt.Printf("⚠ daemon log: stdout redirect failed: %v\n", err)
+        return
+    }
+    if err := unix.Dup3(int(f.Fd()), 2, 0); err != nil {
+        fmt.Printf("⚠ daemon log: stderr redirect failed: %v\n", err)
+    }
+    fmt.Printf("📝 daemon log opened (%s in %s)\n", name, workDirName())
+}
+
+func workDirName() string {
+    if d, err := os.Getwd(); err == nil {
+        return d
+    }
+    return "?"
 }
