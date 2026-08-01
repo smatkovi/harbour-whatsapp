@@ -284,7 +284,12 @@ var en = {
     "permPendingRevoke": "Revoked, but the running process still has access - sailjail applies a profile at start. It stays available until the background service is restarted (or the app, if you do not use one).",
     "restartServiceNow": "Restart background service now",
     "daemonRestarting": "Background service is restarting - the permission takes effect in a few seconds.",
-    "daemonRestartFailed": "Could not restart the background service. Use Settings, background service, restart."
+    "daemonRestartFailed": "Could not restart the background service. Use Settings, background service, restart.",
+    "orientation": "Screen orientation",
+    "orientationDesc": "Follow the device, or keep the interface fixed. Fullscreen photos, status and video always rotate freely - viewing them sideways is the point.",
+    "orientationDynamic": "Follow device",
+    "orientationPortrait": "Portrait only",
+    "orientationLandscape": "Landscape only"
 }
 
 var catalogs = {
@@ -564,7 +569,12 @@ var catalogs = {
         "permPendingRevoke": "Entzogen, aber der laufende Prozess hat weiterhin Zugriff - Sailjail wendet ein Profil beim Start an. Er bleibt bestehen, bis der Hintergrunddienst neu startet (oder die App, wenn du keinen nutzt).",
         "restartServiceNow": "Hintergrunddienst jetzt neu starten",
         "daemonRestarting": "Hintergrunddienst startet neu - die Berechtigung greift in wenigen Sekunden.",
-        "daemonRestartFailed": "Der Hintergrunddienst konnte nicht neu gestartet werden. Nutze Einstellungen, Hintergrunddienst, Neu starten."
+        "daemonRestartFailed": "Der Hintergrunddienst konnte nicht neu gestartet werden. Nutze Einstellungen, Hintergrunddienst, Neu starten.",
+        "orientation": "Bildschirmausrichtung",
+        "orientationDesc": "Der Lage des Geräts folgen oder die Oberfläche fest stehen lassen. Vollbild für Fotos, Status und Video dreht sich immer frei - quer anzusehen ist ja der Zweck.",
+        "orientationDynamic": "Der Lage folgen",
+        "orientationPortrait": "Nur Hochformat",
+        "orientationLandscape": "Nur Querformat"
     },
     "fi": {
         "language": "Kieli",
@@ -842,7 +852,12 @@ var catalogs = {
         "permPendingRevoke": "Peruttu, mutta käynnissä olevalla prosessilla on yhä pääsy - sailjail ottaa profiilin käyttöön käynnistyksessä. Pääsy säilyy, kunnes taustapalvelu käynnistetään uudelleen (tai sovellus, jos et käytä palvelua).",
         "restartServiceNow": "Käynnistä taustapalvelu nyt uudelleen",
         "daemonRestarting": "Taustapalvelu käynnistyy uudelleen - oikeus astuu voimaan muutamassa sekunnissa.",
-        "daemonRestartFailed": "Taustapalvelua ei voitu käynnistää uudelleen. Käytä Asetukset, taustapalvelu, käynnistä uudelleen."
+        "daemonRestartFailed": "Taustapalvelua ei voitu käynnistää uudelleen. Käytä Asetukset, taustapalvelu, käynnistä uudelleen.",
+        "orientation": "Näytön suunta",
+        "orientationDesc": "Seuraa laitteen asentoa tai pidä käyttöliittymä kiinteänä. Koko näytön kuvat, tila ja video kääntyvät aina vapaasti - vaakakatselu on niiden tarkoitus.",
+        "orientationDynamic": "Seuraa laitetta",
+        "orientationPortrait": "Vain pysty",
+        "orientationLandscape": "Vain vaaka"
     },
     "sv": {
         "language": "Språk",
@@ -1120,7 +1135,12 @@ var catalogs = {
         "permPendingRevoke": "Återkallad, men den körande processen har fortfarande åtkomst - sailjail tillämpar profilen vid start. Den kvarstår tills bakgrundstjänsten startas om (eller appen om du inte använder någon).",
         "restartServiceNow": "Starta om bakgrundstjänsten nu",
         "daemonRestarting": "Bakgrundstjänsten startar om - behörigheten börjar gälla om några sekunder.",
-        "daemonRestartFailed": "Kunde inte starta om bakgrundstjänsten. Använd Inställningar, bakgrundstjänst, starta om."
+        "daemonRestartFailed": "Kunde inte starta om bakgrundstjänsten. Använd Inställningar, bakgrundstjänst, starta om.",
+        "orientation": "Skärmorientering",
+        "orientationDesc": "Följ enhetens läge eller håll gränssnittet fast. Helskärmsbilder, status och video roterar alltid fritt - att se dem liggande är själva poängen.",
+        "orientationDynamic": "Följ enheten",
+        "orientationPortrait": "Endast stående",
+        "orientationLandscape": "Endast liggande"
     },
     "hu": {
         "language": "Nyelv",
@@ -1398,7 +1418,12 @@ var catalogs = {
         "permPendingRevoke": "Visszavonva, de a futó folyamatnak még van hozzáférése - a sailjail induláskor alkalmazza a profilt. Ez megmarad, amíg a háttérszolgáltatás újra nem indul (vagy az alkalmazás, ha nem használsz szolgáltatást).",
         "restartServiceNow": "Háttérszolgáltatás újraindítása most",
         "daemonRestarting": "A háttérszolgáltatás újraindul - a jogosultság néhány másodperc múlva érvényes.",
-        "daemonRestartFailed": "A háttérszolgáltatást nem sikerült újraindítani. Használd: Beállítások, háttérszolgáltatás, újraindítás."
+        "daemonRestartFailed": "A háttérszolgáltatást nem sikerült újraindítani. Használd: Beállítások, háttérszolgáltatás, újraindítás.",
+        "orientation": "Képernyő tájolása",
+        "orientationDesc": "Kövesse a készülék helyzetét, vagy maradjon rögzített a felület. A teljes képernyős képek, állapotok és videók mindig szabadon forognak - fekvő nézetük a lényeg.",
+        "orientationDynamic": "Kövesse a készüléket",
+        "orientationPortrait": "Csak álló",
+        "orientationLandscape": "Csak fekvő"
     },
     "ru": {
         "language": "Язык",
@@ -1676,7 +1701,12 @@ var catalogs = {
         "permPendingRevoke": "Отозвано, но работающий процесс всё ещё имеет доступ - sailjail применяет профиль при запуске. Доступ сохранится до перезапуска фоновой службы (или приложения, если службы нет).",
         "restartServiceNow": "Перезапустить фоновую службу сейчас",
         "daemonRestarting": "Фоновая служба перезапускается - разрешение вступит в силу через несколько секунд.",
-        "daemonRestartFailed": "Не удалось перезапустить фоновую службу. Используйте Настройки, фоновая служба, перезапустить."
+        "daemonRestartFailed": "Не удалось перезапустить фоновую службу. Используйте Настройки, фоновая служба, перезапустить.",
+        "orientation": "Ориентация экрана",
+        "orientationDesc": "Следовать положению устройства или зафиксировать интерфейс. Полноэкранные фото, статусы и видео всегда поворачиваются свободно - в этом их смысл.",
+        "orientationDynamic": "Следовать устройству",
+        "orientationPortrait": "Только портрет",
+        "orientationLandscape": "Только альбом"
     },
     "fr": {
         "language": "Langue",
@@ -1954,7 +1984,12 @@ var catalogs = {
         "permPendingRevoke": "Révoqué, mais le processus en cours y a toujours accès : sailjail applique un profil au démarrage. L'accès subsiste jusqu'au redémarrage du service en arrière-plan (ou de l'application si vous n'en utilisez pas).",
         "restartServiceNow": "Redémarrer le service maintenant",
         "daemonRestarting": "Le service en arrière-plan redémarre - la permission prendra effet dans quelques secondes.",
-        "daemonRestartFailed": "Impossible de redémarrer le service en arrière-plan. Utilisez Paramètres, service en arrière-plan, redémarrer."
+        "daemonRestartFailed": "Impossible de redémarrer le service en arrière-plan. Utilisez Paramètres, service en arrière-plan, redémarrer.",
+        "orientation": "Orientation de l'écran",
+        "orientationDesc": "Suivre l'appareil ou garder l'interface fixe. Les photos, statuts et vidéos en plein écran pivotent toujours librement : les voir en paysage est justement l'intérêt.",
+        "orientationDynamic": "Suivre l'appareil",
+        "orientationPortrait": "Portrait uniquement",
+        "orientationLandscape": "Paysage uniquement"
     },
     "la": {
         "language": "Lingua",
@@ -2232,7 +2267,12 @@ var catalogs = {
         "permPendingRevoke": "Revocatum, sed processus currens adhuc aditum habet - sailjail formam in initio applicat. Manet donec ministerium occultum iterum incipiat (vel applicatio, si nullo uteris).",
         "restartServiceNow": "Ministerium occultum nunc iterum incipe",
         "daemonRestarting": "Ministerium occultum iterum incipit - licentia paucis secundis valebit.",
-        "daemonRestartFailed": "Ministerium occultum iterum incipi non potuit. Utere Optionibus, ministerium occultum, iterum incipe."
+        "daemonRestartFailed": "Ministerium occultum iterum incipi non potuit. Utere Optionibus, ministerium occultum, iterum incipe.",
+        "orientation": "Situs scrinii",
+        "orientationDesc": "Situm instrumenti sequi vel superficiem fixam servare. Imagines, status et pellicula in pleno scrinio semper libere vertuntur - id enim eorum consilium est.",
+        "orientationDynamic": "Instrumentum sequi",
+        "orientationPortrait": "Tantum erectum",
+        "orientationLandscape": "Tantum iacens"
     },
     "es": {
         "language": "Idioma",
@@ -2498,7 +2538,12 @@ var catalogs = {
         "permPendingRevoke": "Revocado, pero el proceso en ejecución sigue teniendo acceso: sailjail aplica el perfil al iniciar. Se mantiene hasta que se reinicie el servicio en segundo plano (o la aplicación si no usas ninguno).",
         "restartServiceNow": "Reiniciar el servicio ahora",
         "daemonRestarting": "El servicio en segundo plano se está reiniciando: el permiso será efectivo en unos segundos.",
-        "daemonRestartFailed": "No se pudo reiniciar el servicio en segundo plano. Usa Ajustes, servicio en segundo plano, reiniciar."
+        "daemonRestartFailed": "No se pudo reiniciar el servicio en segundo plano. Usa Ajustes, servicio en segundo plano, reiniciar.",
+        "orientation": "Orientación de la pantalla",
+        "orientationDesc": "Seguir al dispositivo o mantener fija la interfaz. Las fotos, estados y vídeos a pantalla completa siempre giran libremente: verlos apaisados es la idea.",
+        "orientationDynamic": "Seguir al dispositivo",
+        "orientationPortrait": "Solo vertical",
+        "orientationLandscape": "Solo horizontal"
     },
     "it": {
         "language": "Lingua",
@@ -2764,7 +2809,12 @@ var catalogs = {
         "permPendingRevoke": "Revocato, ma il processo in esecuzione ha ancora accesso: sailjail applica il profilo all'avvio. Resta finché il servizio in background non viene riavviato (o l'app, se non ne usi uno).",
         "restartServiceNow": "Riavvia ora il servizio in background",
         "daemonRestarting": "Il servizio in background si sta riavviando: il permesso sarà attivo tra pochi secondi.",
-        "daemonRestartFailed": "Non è stato possibile riavviare il servizio in background. Usa Impostazioni, servizio in background, riavvia."
+        "daemonRestartFailed": "Non è stato possibile riavviare il servizio in background. Usa Impostazioni, servizio in background, riavvia.",
+        "orientation": "Orientamento dello schermo",
+        "orientationDesc": "Seguire il dispositivo o mantenere fissa l'interfaccia. Foto, stati e video a schermo intero ruotano sempre liberamente: vederli in orizzontale è lo scopo.",
+        "orientationDynamic": "Segui il dispositivo",
+        "orientationPortrait": "Solo verticale",
+        "orientationLandscape": "Solo orizzontale"
     },
     "pt": {
         "language": "Idioma",
@@ -3030,7 +3080,12 @@ var catalogs = {
         "permPendingRevoke": "Revogado, mas o processo em execução ainda tem acesso - o sailjail aplica o perfil no arranque. Mantém-se até o serviço em segundo plano ser reiniciado (ou a aplicação, se não usar nenhum).",
         "restartServiceNow": "Reiniciar o serviço agora",
         "daemonRestarting": "O serviço em segundo plano está a reiniciar - a permissão fica ativa em poucos segundos.",
-        "daemonRestartFailed": "Não foi possível reiniciar o serviço em segundo plano. Use Definições, serviço em segundo plano, reiniciar."
+        "daemonRestartFailed": "Não foi possível reiniciar o serviço em segundo plano. Use Definições, serviço em segundo plano, reiniciar.",
+        "orientation": "Orientação do ecrã",
+        "orientationDesc": "Seguir o dispositivo ou manter a interface fixa. Fotos, estados e vídeos em ecrã inteiro rodam sempre livremente - vê-los na horizontal é o objetivo.",
+        "orientationDynamic": "Seguir o dispositivo",
+        "orientationPortrait": "Apenas vertical",
+        "orientationLandscape": "Apenas horizontal"
     },
     "nl": {
         "language": "Taal",
@@ -3296,7 +3351,12 @@ var catalogs = {
         "permPendingRevoke": "Ingetrokken, maar het draaiende proces heeft nog toegang - sailjail past een profiel toe bij de start. Die blijft tot de achtergronddienst opnieuw start (of de app als je er geen gebruikt).",
         "restartServiceNow": "Achtergronddienst nu opnieuw starten",
         "daemonRestarting": "De achtergronddienst start opnieuw - de rechten gelden over enkele seconden.",
-        "daemonRestartFailed": "Kon de achtergronddienst niet opnieuw starten. Gebruik Instellingen, achtergronddienst, opnieuw starten."
+        "daemonRestartFailed": "Kon de achtergronddienst niet opnieuw starten. Gebruik Instellingen, achtergronddienst, opnieuw starten.",
+        "orientation": "Schermoriëntatie",
+        "orientationDesc": "Het apparaat volgen of de interface vast houden. Schermvullende foto's, status en video draaien altijd vrij - liggend bekijken is juist de bedoeling.",
+        "orientationDynamic": "Apparaat volgen",
+        "orientationPortrait": "Alleen staand",
+        "orientationLandscape": "Alleen liggend"
     },
     "pl": {
         "language": "Język",
@@ -3562,7 +3622,12 @@ var catalogs = {
         "permPendingRevoke": "Cofnięte, ale działający proces nadal ma dostęp - sailjail stosuje profil przy starcie. Utrzyma się do ponownego uruchomienia usługi w tle (albo aplikacji, jeśli usługi nie używasz).",
         "restartServiceNow": "Uruchom teraz usługę w tle ponownie",
         "daemonRestarting": "Usługa w tle uruchamia się ponownie - uprawnienie zadziała za kilka sekund.",
-        "daemonRestartFailed": "Nie udało się uruchomić ponownie usługi w tle. Użyj Ustawienia, usługa w tle, uruchom ponownie."
+        "daemonRestartFailed": "Nie udało się uruchomić ponownie usługi w tle. Użyj Ustawienia, usługa w tle, uruchom ponownie.",
+        "orientation": "Orientacja ekranu",
+        "orientationDesc": "Podążaj za urządzeniem albo zablokuj interfejs. Zdjęcia, statusy i filmy na pełnym ekranie zawsze obracają się swobodnie - o to właśnie chodzi.",
+        "orientationDynamic": "Podążaj za urządzeniem",
+        "orientationPortrait": "Tylko pionowo",
+        "orientationLandscape": "Tylko poziomo"
     },
     "tr": {
         "language": "Dil",
@@ -3828,7 +3893,12 @@ var catalogs = {
         "permPendingRevoke": "Geri alındı ancak çalışan sürecin erişimi sürüyor - sailjail profili başlangıçta uygular. Arka plan hizmeti yeniden başlatılana kadar geçerli kalır (hizmet kullanmıyorsanız uygulama).",
         "restartServiceNow": "Arka plan hizmetini şimdi yeniden başlat",
         "daemonRestarting": "Arka plan hizmeti yeniden başlıyor - izin birkaç saniye içinde etkin olacak.",
-        "daemonRestartFailed": "Arka plan hizmeti yeniden başlatılamadı. Ayarlar, arka plan hizmeti, yeniden başlat yolunu kullanın."
+        "daemonRestartFailed": "Arka plan hizmeti yeniden başlatılamadı. Ayarlar, arka plan hizmeti, yeniden başlat yolunu kullanın.",
+        "orientation": "Ekran yönü",
+        "orientationDesc": "Cihazın konumunu izle ya da arayüzü sabit tut. Tam ekran fotoğraf, durum ve videolar her zaman serbestçe döner - yatay izlemek zaten amaçtır.",
+        "orientationDynamic": "Cihazı izle",
+        "orientationPortrait": "Yalnızca dikey",
+        "orientationLandscape": "Yalnızca yatay"
     },
     "da": {
         "language": "Sprog",
@@ -4094,7 +4164,12 @@ var catalogs = {
         "permPendingRevoke": "Tilbagekaldt, men den kørende proces har stadig adgang - sailjail anvender profilen ved start. Den består, indtil baggrundstjenesten genstartes (eller appen, hvis du ikke bruger en).",
         "restartServiceNow": "Genstart baggrundstjenesten nu",
         "daemonRestarting": "Baggrundstjenesten genstarter - tilladelsen træder i kraft om få sekunder.",
-        "daemonRestartFailed": "Kunne ikke genstarte baggrundstjenesten. Brug Indstillinger, baggrundstjeneste, genstart."
+        "daemonRestartFailed": "Kunne ikke genstarte baggrundstjenesten. Brug Indstillinger, baggrundstjeneste, genstart.",
+        "orientation": "Skærmretning",
+        "orientationDesc": "Følg enheden, eller hold grænsefladen fast. Fuldskærmsbilleder, status og video roterer altid frit - at se dem på tværs er netop pointen.",
+        "orientationDynamic": "Følg enheden",
+        "orientationPortrait": "Kun stående",
+        "orientationLandscape": "Kun liggende"
     },
     "nb": {
         "language": "Språk",
@@ -4360,7 +4435,12 @@ var catalogs = {
         "permPendingRevoke": "Trukket tilbake, men prosessen som kjører har fortsatt tilgang - sailjail bruker profilen ved oppstart. Den varer til bakgrunnstjenesten startes på nytt (eller appen hvis du ikke bruker en).",
         "restartServiceNow": "Start bakgrunnstjenesten på nytt nå",
         "daemonRestarting": "Bakgrunnstjenesten starter på nytt - tillatelsen gjelder om noen sekunder.",
-        "daemonRestartFailed": "Kunne ikke starte bakgrunnstjenesten på nytt. Bruk Innstillinger, bakgrunnstjeneste, start på nytt."
+        "daemonRestartFailed": "Kunne ikke starte bakgrunnstjenesten på nytt. Bruk Innstillinger, bakgrunnstjeneste, start på nytt.",
+        "orientation": "Skjermretning",
+        "orientationDesc": "Følg enheten, eller hold grensesnittet fast. Fullskjermbilder, status og video roterer alltid fritt - å se dem liggende er hele poenget.",
+        "orientationDynamic": "Følg enheten",
+        "orientationPortrait": "Bare stående",
+        "orientationLandscape": "Bare liggende"
     },
     "cs": {
         "language": "Jazyk",
@@ -4626,7 +4706,12 @@ var catalogs = {
         "permPendingRevoke": "Odebráno, ale běžící proces má stále přístup - sailjail použije profil při startu. Zůstane, dokud se nerestartuje služba na pozadí (nebo aplikace, pokud žádnou nepoužíváte).",
         "restartServiceNow": "Restartovat službu na pozadí",
         "daemonRestarting": "Služba na pozadí se restartuje - oprávnění začne platit za pár sekund.",
-        "daemonRestartFailed": "Službu na pozadí se nepodařilo restartovat. Použijte Nastavení, služba na pozadí, restartovat."
+        "daemonRestartFailed": "Službu na pozadí se nepodařilo restartovat. Použijte Nastavení, služba na pozadí, restartovat.",
+        "orientation": "Orientace obrazovky",
+        "orientationDesc": "Sledovat polohu zařízení, nebo nechat rozhraní pevné. Fotky, statusy a videa na celou obrazovku se vždy otáčejí volně - dívat se na ně na šířku je smysl věci.",
+        "orientationDynamic": "Podle zařízení",
+        "orientationPortrait": "Jen na výšku",
+        "orientationLandscape": "Jen na šířku"
     },
     "el": {
         "language": "Γλώσσα",
@@ -4892,7 +4977,12 @@ var catalogs = {
         "permPendingRevoke": "Ανακλήθηκε, αλλά η διεργασία που εκτελείται έχει ακόμη πρόσβαση - το sailjail εφαρμόζει το προφίλ κατά την εκκίνηση. Παραμένει μέχρι να επανεκκινηθεί η υπηρεσία παρασκηνίου (ή η εφαρμογή αν δεν χρησιμοποιείτε υπηρεσία).",
         "restartServiceNow": "Επανεκκίνηση υπηρεσίας τώρα",
         "daemonRestarting": "Η υπηρεσία παρασκηνίου επανεκκινείται - η άδεια ισχύει σε λίγα δευτερόλεπτα.",
-        "daemonRestartFailed": "Δεν ήταν δυνατή η επανεκκίνηση της υπηρεσίας παρασκηνίου. Χρησιμοποιήστε Ρυθμίσεις, υπηρεσία παρασκηνίου, επανεκκίνηση."
+        "daemonRestartFailed": "Δεν ήταν δυνατή η επανεκκίνηση της υπηρεσίας παρασκηνίου. Χρησιμοποιήστε Ρυθμίσεις, υπηρεσία παρασκηνίου, επανεκκίνηση.",
+        "orientation": "Προσανατολισμός οθόνης",
+        "orientationDesc": "Να ακολουθεί τη συσκευή ή να μένει σταθερή η διεπαφή. Οι φωτογραφίες, οι καταστάσεις και τα βίντεο σε πλήρη οθόνη περιστρέφονται πάντα ελεύθερα - αυτό είναι το νόημα.",
+        "orientationDynamic": "Ακολούθηση συσκευής",
+        "orientationPortrait": "Μόνο κατακόρυφα",
+        "orientationLandscape": "Μόνο οριζόντια"
     },
     "et": {
         "language": "Keel",
@@ -5158,7 +5248,12 @@ var catalogs = {
         "permPendingRevoke": "Tühistatud, kuid töötaval protsessil on endiselt juurdepääs - sailjail rakendab profiili käivitumisel. See püsib, kuni taustateenus taaskäivitatakse (või rakendus, kui teenust ei kasuta).",
         "restartServiceNow": "Taaskäivita taustateenus kohe",
         "daemonRestarting": "Taustateenus taaskäivitub - õigus jõustub mõne sekundi pärast.",
-        "daemonRestartFailed": "Taustateenust ei õnnestunud taaskäivitada. Kasuta Seaded, taustateenus, taaskäivita."
+        "daemonRestartFailed": "Taustateenust ei õnnestunud taaskäivitada. Kasuta Seaded, taustateenus, taaskäivita.",
+        "orientation": "Ekraani suund",
+        "orientationDesc": "Järgi seadme asendit või hoia liides paigal. Täisekraanil fotod, staatused ja videod pöörlevad alati vabalt - rõhtsalt vaatamine ongi mõte.",
+        "orientationDynamic": "Järgi seadet",
+        "orientationPortrait": "Ainult püstpaigutus",
+        "orientationLandscape": "Ainult rõhtpaigutus"
     },
     "lv": {
         "language": "Valoda",
@@ -5424,7 +5519,12 @@ var catalogs = {
         "permPendingRevoke": "Atsaukts, bet strādājošajam procesam joprojām ir piekļuve - sailjail piemēro profilu startā. Tā saglabājas, līdz fona pakalpojums tiek restartēts (vai lietotne, ja pakalpojumu nelieto).",
         "restartServiceNow": "Restartēt fona pakalpojumu tagad",
         "daemonRestarting": "Fona pakalpojums restartējas - atļauja stāsies spēkā pēc dažām sekundēm.",
-        "daemonRestartFailed": "Neizdevās restartēt fona pakalpojumu. Izmanto Iestatījumi, fona pakalpojums, restartēt."
+        "daemonRestartFailed": "Neizdevās restartēt fona pakalpojumu. Izmanto Iestatījumi, fona pakalpojums, restartēt.",
+        "orientation": "Ekrāna orientācija",
+        "orientationDesc": "Sekot ierīces stāvoklim vai saglabāt fiksētu saskarni. Pilnekrāna foto, statusi un video vienmēr griežas brīvi - to skatīšanās guļus ir jēga.",
+        "orientationDynamic": "Sekot ierīcei",
+        "orientationPortrait": "Tikai portrets",
+        "orientationLandscape": "Tikai ainava"
     },
     "lt": {
         "language": "Kalba",
@@ -5690,7 +5790,12 @@ var catalogs = {
         "permPendingRevoke": "Atšaukta, bet veikiantis procesas vis dar turi prieigą - sailjail profilį pritaiko paleidimo metu. Ji išliks, kol fono tarnyba bus paleista iš naujo (arba programa, jei tarnybos nenaudoji).",
         "restartServiceNow": "Paleisti fono tarnybą iš naujo",
         "daemonRestarting": "Fono tarnyba paleidžiama iš naujo - leidimas įsigalios po kelių sekundžių.",
-        "daemonRestartFailed": "Nepavyko paleisti fono tarnybos iš naujo. Naudok Nustatymai, fono tarnyba, paleisti iš naujo."
+        "daemonRestartFailed": "Nepavyko paleisti fono tarnybos iš naujo. Naudok Nustatymai, fono tarnyba, paleisti iš naujo.",
+        "orientation": "Ekrano padėtis",
+        "orientationDesc": "Sekti įrenginio padėtį arba palikti sąsają fiksuotą. Viso ekrano nuotraukos, būsenos ir vaizdo įrašai visada sukasi laisvai - juk tam jie ir skirti.",
+        "orientationDynamic": "Sekti įrenginį",
+        "orientationPortrait": "Tik stačias",
+        "orientationLandscape": "Tik gulsčias"
     },
     "sl": {
         "language": "Jezik",
@@ -5956,7 +6061,12 @@ var catalogs = {
         "permPendingRevoke": "Preklicano, a tekoči proces ima še vedno dostop - sailjail profil uveljavi ob zagonu. Ostane, dokler se storitev v ozadju znova ne zažene (ali aplikacija, če je ne uporabljaš).",
         "restartServiceNow": "Znova zaženi storitev zdaj",
         "daemonRestarting": "Storitev v ozadju se znova zaganja - dovoljenje bo veljalo čez nekaj sekund.",
-        "daemonRestartFailed": "Storitve v ozadju ni bilo mogoče znova zagnati. Uporabi Nastavitve, storitev v ozadju, ponovni zagon."
+        "daemonRestartFailed": "Storitve v ozadju ni bilo mogoče znova zagnati. Uporabi Nastavitve, storitev v ozadju, ponovni zagon.",
+        "orientation": "Usmerjenost zaslona",
+        "orientationDesc": "Sledi napravi ali ohrani vmesnik pri miru. Fotografije, statusi in videi čez cel zaslon se vedno prosto vrtijo - ležeče gledanje je bistvo.",
+        "orientationDynamic": "Sledi napravi",
+        "orientationPortrait": "Samo pokončno",
+        "orientationLandscape": "Samo ležeče"
     },
     "zh": {
         "language": "语言",
@@ -6222,7 +6332,12 @@ var catalogs = {
         "permPendingRevoke": "已撤销，但正在运行的进程仍可访问——sailjail 在启动时应用配置。该访问会保留到后台服务重启为止（若未使用服务，则为应用）。",
         "restartServiceNow": "立即重启后台服务",
         "daemonRestarting": "后台服务正在重启——权限将在几秒内生效。",
-        "daemonRestartFailed": "无法重启后台服务。请使用设置、后台服务、重新启动。"
+        "daemonRestartFailed": "无法重启后台服务。请使用设置、后台服务、重新启动。",
+        "orientation": "屏幕方向",
+        "orientationDesc": "跟随设备方向，或将界面固定。全屏的照片、状态和视频始终自由旋转——横着看正是它们的用途。",
+        "orientationDynamic": "跟随设备",
+        "orientationPortrait": "仅竖屏",
+        "orientationLandscape": "仅横屏"
     }
 }
 

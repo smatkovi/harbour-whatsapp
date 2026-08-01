@@ -138,5 +138,22 @@ w = makeWatch(); w.autostart = false;
 w.tick(false); w.tick(false); w.tick(false);
 check('ohne Autostart nie warnen',   w.notice, v => v === '', 'wer keinen Dienst nutzt, darf keine Warnung sehen');
 
+// --- Orientierungsmaske ---
+// Aus der QML-Datei geschnitten: welche Ausrichtung erlaubt welche Einstellung?
+console.log('--- Orientierungsmaske ---');
+{
+  const Orientation = { Portrait: 1, Landscape: 2, All: 15 };
+  const maskSrc = grab('orientationMask');
+  function mask(pref) {
+    return (new Function('Orientation', 'orientationPref',
+      maskSrc + '; return orientationMask();'))(Orientation, pref);
+  }
+  check('dynamisch -> alles',      mask('dynamic'),   v => v === Orientation.All,       'erwartet Orientation.All');
+  check('Hochformat fest',         mask('portrait'),  v => v === Orientation.Portrait,  'erwartet Orientation.Portrait');
+  check('Querformat fest',         mask('landscape'), v => v === Orientation.Landscape, 'erwartet Orientation.Landscape');
+  check('unbekannter Wert -> alles', mask('quatsch'), v => v === Orientation.All,       'Vorgabe muss dynamisch sein');
+  check('leerer Wert -> alles',    mask(''),          v => v === Orientation.All,       'Vorgabe muss dynamisch sein');
+}
+
 console.log(fails === 0 ? '\nAlle Faelle bestanden.' : '\n' + fails + ' Fall/Faelle fehlgeschlagen.');
 process.exit(fails === 0 ? 0 : 1);

@@ -16,6 +16,25 @@ ApplicationWindow {
     initialPage: archPageItem
     cover: undefined
 
+    // Bisher war alles ausser den Vollbild-Ansichten fest im Hochformat.
+    // Diese Vorgabe erben alle Seiten, die nichts eigenes setzen - die
+    // drei Medien-Seiten (Avatar, Status, Video) bleiben bewusst bei
+    // Orientation.All: ein Video quer anzusehen ist der Zweck der Sache,
+    // auch wenn die Oberflaeche sonst fest stehen soll
+    allowedOrientations: orientationMask()
+    // Hinweis: allowedOrientations am Fenster ERLAUBT die Drehung nur -
+    // jede Seite entscheidet fuer sich und steht ohne eigene Angabe auf
+    // Hochformat. Deshalb traegt unten jede Page/Dialog-Komponente die
+    // Maske ausdruecklich. Silicas interne _defaultPageOrientations waere
+    // kuerzer, ist aber undokumentiert: fehlt sie in einer SFOS-Version,
+    // startet die App gar nicht mehr
+    property string orientationPref: "dynamic"
+    function orientationMask() {
+        if (orientationPref === "portrait") return Orientation.Portrait
+        if (orientationPref === "landscape") return Orientation.Landscape
+        return Orientation.All
+    }
+
     property bool connected: false
     property string pairCode: ""
     property string pairErrorMsg: ""
@@ -143,6 +162,7 @@ ApplicationWindow {
     Component {
         id: languagePage
         Page {
+            allowedOrientations: orientationMask()
             SilicaListView {
                 anchors.fill: parent
                 header: PageHeader { title: loc.language }
@@ -175,6 +195,7 @@ ApplicationWindow {
     Component {
         id: aboutAppPage
         Page {
+            allowedOrientations: orientationMask()
             SilicaFlickable {
                 anchors.fill: parent
                 contentHeight: aboutCol.height + Theme.paddingLarge * 2
@@ -283,6 +304,7 @@ ApplicationWindow {
     Component {
         id: extraSettingsPage
         Page {
+            allowedOrientations: orientationMask()
             SilicaFlickable {
                 anchors.fill: parent
                 contentHeight: extraCol.height
@@ -317,6 +339,32 @@ ApplicationWindow {
                         onSliderValueChanged: {
                             tileGap = value
                             setPref("tile_gap", String(value))
+                        }
+                    }
+
+                    ComboBox {
+                        id: orientationBox
+                        width: parent.width
+                        label: loc.orientation
+                        description: loc.orientationDesc
+                        function syncFromPrefs() {
+                            currentIndex = orientationPref === "portrait" ? 1
+                                         : (orientationPref === "landscape" ? 2 : 0)
+                        }
+                        Component.onCompleted: syncFromPrefs()
+                        onCurrentIndexChanged: {
+                            if (!prefsLoaded) return
+                            var v = currentIndex === 1 ? "portrait"
+                                  : (currentIndex === 2 ? "landscape" : "dynamic")
+                            if (orientationPref !== v) {
+                                orientationPref = v
+                                setPref("orientation", v)
+                            }
+                        }
+                        menu: ContextMenu {
+                            MenuItem { text: loc.orientationDynamic }
+                            MenuItem { text: loc.orientationPortrait }
+                            MenuItem { text: loc.orientationLandscape }
                         }
                     }
 
@@ -824,6 +872,7 @@ ApplicationWindow {
                 daemonAutostart = p.daemon_autostart === "1"
                 refreshPermState()
                 attachPicker = p.attach_picker || "ask"
+                orientationPref = p.orientation || "dynamic"
                 prefsLoaded = true
                 // Auch fuer Bestandsinstallationen und Systemsprache setzen
                 if (p.notif_reply_label !== loc.reply)
@@ -1279,6 +1328,7 @@ ApplicationWindow {
     }
 
     Page {
+        allowedOrientations: orientationMask()
         id: mainPage
 
         // Status-Seite als attached page: Sailfish zeigt den Glow-Indikator
@@ -2031,6 +2081,7 @@ ApplicationWindow {
     Component {
         id: settingsPage
         Page {
+            allowedOrientations: orientationMask()
             property var downloadPrefs: ({})
             // Schreibschutz: onCurrentIndexChanged feuert schon bei der
             // Initialisierung der ComboBoxen (Index 0 -> Default) und hat
@@ -2804,6 +2855,7 @@ Label {
     Component {
         id: profilePage
         Page {
+            allowedOrientations: orientationMask()
             property bool loaded: false
 
             property string avatarPath: ""
@@ -2914,6 +2966,7 @@ Label {
     Component {
         id: createPollPage
         Dialog {
+            allowedOrientations: orientationMask()
             id: cpDialog
             property string targetChat: ""
             property var optionTexts: ["", ""]
@@ -3001,6 +3054,7 @@ Label {
     Component {
         id: addParticipantsPage
         Dialog {
+            allowedOrientations: orientationMask()
             id: apDialog
             property string groupJid: ""
             property var existingNumbers: ({})
@@ -3122,6 +3176,7 @@ Label {
     Component {
         id: groupInfoPage
         Page {
+            allowedOrientations: orientationMask()
             id: giPage
             property string groupJid: ""
             property string groupName: ""
@@ -3379,6 +3434,7 @@ Label {
     Component {
         id: statusPostDialog
         Dialog {
+            allowedOrientations: orientationMask()
             property string statusText: textArea.text
             property string statusBg: bgRepeater.model[bgRow.selected]
             canAccept: textArea.text.trim().length > 0
@@ -3429,6 +3485,7 @@ Label {
     // Seiten sind persistente Items, weil Silica beim Zurueck-Wischen
     // Component-Seiten zerstoeren wuerde. Links bleibt der Status.
     Page {
+        allowedOrientations: orientationMask()
         id: favPageItem
         onStatusChanged: {
             if (status !== PageStatus.Active) return
@@ -3542,6 +3599,7 @@ Label {
     }
 
     Page {
+        allowedOrientations: orientationMask()
         id: archPageItem
         property bool stackBuilt: false
         onStatusChanged: {
@@ -3657,6 +3715,7 @@ Label {
     Component {
         id: contactInfoPage
         Page {
+            allowedOrientations: orientationMask()
             id: ciPage
             property string jid: ""
             property string name: ""
@@ -4031,6 +4090,7 @@ Label {
     Component {
         id: statusPage
         Page {
+            allowedOrientations: orientationMask()
             id: stPage
             property var statuses: []
             property string downloadingId: ""
@@ -4093,6 +4153,7 @@ Label {
             Component {
                 id: statusCaptionDialog
                 Dialog {
+                    allowedOrientations: orientationMask()
                     property string mediaPath: ""
                     property string captionText: captionArea.text
                     canAccept: true // Caption ist optional
@@ -4315,6 +4376,7 @@ Label {
     Component {
         id: searchPage
         Page {
+            allowedOrientations: orientationMask()
             id: spPage
             property var results: []
             property string scopeJid: ""
@@ -4422,6 +4484,7 @@ Label {
     Component {
         id: channelsPage
         Page {
+            allowedOrientations: orientationMask()
             property var channels: []
             property string chStatus: ""
 
@@ -4514,6 +4577,7 @@ Label {
     Component {
         id: joinLinkPage
         Dialog {
+            allowedOrientations: orientationMask()
             id: jlDialog
             canAccept: linkField.text.indexOf("chat.whatsapp.com") >= 0
                        || linkField.text.indexOf("whatsapp.com/channel") >= 0
@@ -4564,6 +4628,7 @@ Label {
     Component {
         id: newGroupPage
         Dialog {
+            allowedOrientations: orientationMask()
             id: ngDialog
             property var selected: ({})
             property string ngSearch: ""
@@ -4661,6 +4726,7 @@ Label {
     Component {
         id: newChatPage
         Page {
+            allowedOrientations: orientationMask()
             property string searchText: ""
 
             function filteredContacts() {
@@ -4833,6 +4899,7 @@ Label {
     Component {
         id: chatPage
         Page {
+            allowedOrientations: orientationMask()
             id: chatPageItem
             property string chatJid: ""
             property string chatName: ""
@@ -5503,6 +5570,7 @@ Label {
             Component {
                 id: attachChooser
                 Page {
+                    allowedOrientations: orientationMask()
                     SilicaFlickable {
                         anchors.fill: parent
                         contentHeight: attachCol.height
@@ -6748,6 +6816,7 @@ Label {
     Component {
         id: forwardPage
         Page {
+            allowedOrientations: orientationMask()
             property string forwardId: ""
             SilicaListView {
                 anchors.fill: parent
@@ -6780,6 +6849,7 @@ Label {
     Component {
         id: disappearingDialog
         Dialog {
+            allowedOrientations: orientationMask()
             property string chatJid: ""
             property int chosen: -1
             Column {
@@ -6819,6 +6889,7 @@ Label {
     Component {
         id: groupDescDialog
         Dialog {
+            allowedOrientations: orientationMask()
             property string descText: descArea.text
             Column {
                 width: parent.width
@@ -6835,6 +6906,7 @@ Label {
     Component {
         id: joinRequestsPage
         Page {
+            allowedOrientations: orientationMask()
             property string groupJid: ""
             property var requests: []
             property string reqStatus: ""
@@ -6906,6 +6978,7 @@ Label {
     Component {
         id: locationDialog
         Dialog {
+            allowedOrientations: orientationMask()
             id: locDlg
             property string lat: latField.text
             property string lon: lonField.text
@@ -6967,6 +7040,7 @@ Label {
     Component {
         id: liveDurationDialog
         Dialog {
+            allowedOrientations: orientationMask()
             property int durationIndex: durCombo.currentIndex
             Column {
                 width: parent.width
@@ -6996,6 +7070,7 @@ Label {
     Component {
         id: channelDirectoryPage
         Page {
+            allowedOrientations: orientationMask()
             id: chDirPage
             property var results: []
             property string dirStatus: ""
@@ -7228,6 +7303,7 @@ Label {
     Component {
         id: audioPlayerPage
         Page {
+            allowedOrientations: orientationMask()
             id: apPage
             property string audioPath: ""
             property string title: "Audio"

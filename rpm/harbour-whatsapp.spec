@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.199
+Version:    0.9.201
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -124,6 +124,32 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.201-1
+- Fixes 0.9.200, which did nothing: the app stayed in portrait whatever
+  the setting said. allowedOrientations on the window only PERMITS
+  rotation - every page decides for itself and defaults to portrait
+  without an entry of its own, so the pages went on refusing what the
+  window allowed. All thirty pages and dialogs now carry the mask
+  explicitly. Silica's internal _defaultPageOrientations would have been
+  one line instead of thirty, but it is undocumented and a version that
+  lacks it would refuse to start the app at all - not a risk worth taking
+  for brevity when the failure mode is that severe. The three fullscreen
+  views keep Orientation.All as before
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.200-1
+- The interface follows the device now. Everything except the three
+  fullscreen views was locked to portrait, which on a keyboard-less phone
+  held sideways is simply the wrong shape. More settings gained Screen
+  orientation with three choices: follow device (the new default), portrait
+  only, landscape only - the fixed options are there because a phone lying
+  on a desk or in a car mount flips at every touch, and for reading in bed
+  the lock is the whole point. The window sets the default and every page
+  inherits it. The fullscreen photo, status and video pages keep rotating
+  freely regardless of the setting: someone who locks the chat list to
+  portrait still wants a video the right way round, and watching it
+  sideways is the entire purpose of fullscreen. Five new strings in all 22
+  languages
+
 * Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.199-1
 - Tapping a group member opens the chat with them. Suggested by
   kempertom, who had only the long-press menu with call, admin and remove
