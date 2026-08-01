@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.201
+Version:    0.9.206
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -124,6 +124,89 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.206-1
+- The chat page carries the same nineteen entries twice, once as a
+  pull-down at the top and once as a push-up at the bottom, and 0.9.203
+  shortened only the first - so in landscape the long menu was still
+  there, just at the other end. Both are down to six now: search, live
+  location, location, disappearing messages, clear chat, and call, which
+  takes the poll's place in a one-to-one chat while groups keep the poll.
+  Portrait is unchanged. The entries written on a single line were edited
+  in place this time rather than given an extra line, which is what
+  produced the duplicate property and the white screen in 0.9.204
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.205-1
+- Fixes the white screen in 0.9.204. Three menu entries were written on a
+  single line with their visible property inline, and the landscape
+  condition was appended as a further line - which lands outside the
+  braces and sets visible on the enclosing menu a second time. QML refuses
+  the whole file for that, so nothing rendered at all. The three are
+  ordinary multi-line entries now. Neither qmllint nor qmlformat reports a
+  duplicate property; only the running engine does, and only as
+  "Property value set multiple times" once it is too late. There is a
+  check for it in the test suite now (tests/qml_dupprops.py), verified
+  against a deliberately broken copy. Also gives width to the list items
+  on the collected actions page and in the attachment chooser: children of
+  a Column get no width of their own, so they would have been zero pixels
+  wide - the attachment chooser has carried that since 0.9.189
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.204-1
+- Fixes 0.9.203, which had the landscape condition inverted on the entries
+  it was supposed to keep: settings, search, join via link, new group and
+  new chat carried "visible: isLandscape", so in PORTRAIT they disappeared
+  entirely - the one thing the change was explicitly not meant to touch.
+  Caught by comparing the packaged QML against the source rather than
+  trusting the build, which is now a fixed step: the file inside the RPM
+  must be byte-identical to the one in the tree. Landscape behaviour is
+  unchanged from what 0.9.203 intended - six entries per screen, All
+  actions in place of channels, portrait exactly as it always was
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.204-1
+- Calling is reachable where the number actually is. The contact info page
+  had a pull-down menu only for groups: open it for a person and there was
+  no entry at all, on the very page that shows their number. It now offers
+  Call for contacts and keeps the three group entries for groups. In a
+  one-to-one chat in landscape, Call takes the place of Create poll - a
+  poll between two people is rarely what anyone is after, and landscape
+  has room for six entries, not seven. Portrait keeps both, unchanged.
+- Fixes a mistake in 0.9.203: the six entries kept for landscape were
+  written as visible-only-in-landscape, which would have made them vanish
+  in portrait - the opposite of "portrait stays as it is". Only the hidden
+  ones carry a condition now, plus All actions, which is landscape-only by
+  design
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.203-1
+- Short pulley menus in landscape. Since 0.9.200 the interface follows the
+  device, and sideways the chat menu's nineteen entries simply do not fit -
+  the lower ones were unreachable. Landscape now shows six on each screen
+  and portrait is untouched. Chat: search, live location, location,
+  disappearing messages, clear chat, poll. Main screen: settings (in place
+  of profile), search, join via link, new group, new chat, and All actions
+  in place of channels - a page rather than a second pulley, because a list
+  scrolls and a pulley does not, so everything stays reachable from there,
+  channels and profile included. The collected page reuses the real
+  handlers, including the fifteen-second remorse window on logout, which
+  matters more in a list one can mistap than in a pulley
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.202-1
+- Same content as 0.9.201 under a number that can be installed: 0.9.201
+  was already taken
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.201-1
+- In groups the sender line often showed the GROUP name instead of the
+  person, or nothing at all. The history sync fell back to sender =
+  chatJid when a message carried no participant field, which for a group
+  is the group's own JID - and the contact map, which holds groups too,
+  then dutifully resolved it to the group name. The fallback now applies
+  only to one-to-one chats, where the chat partner really is the sender,
+  and the display order is stated plainly: your own contact name first,
+  then the name the person gave themselves (the push name the server
+  sends), then the phone number. A group JID is never a valid sender, so
+  it yields nothing and the line is omitted rather than asserting
+  something false. The empty label also used to occupy its line silently,
+  which is why the name appeared to be missing at random. Six test cases,
+  including both directions of the group-name confusion
+
 * Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.201-1
 - Fixes 0.9.200, which did nothing: the app stayed in portrait whatever
   the setting said. allowedOrientations on the window only PERMITS

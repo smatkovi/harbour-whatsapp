@@ -1398,12 +1398,12 @@ ApplicationWindow {
             PullDownMenu {
                 MenuItem {
                     text: loc.logout
-                    visible: connected
+                    visible: !mainPage.isLandscape && (connected)
                     onClicked: logoutRemorse.execute("Logging out", doLogout, 15000)
                 }
                 MenuItem {
                     text: loc.reload
-                    visible: connected
+                    visible: !mainPage.isLandscape && (connected)
                     onClicked: {
                         var xhr = new XMLHttpRequest()
                         xhr.open("GET", "http://127.0.0.1:" + backendPort + "/reload")
@@ -1419,6 +1419,7 @@ ApplicationWindow {
                 MenuItem {
                     text: loc.markAllRead
                     visible: {
+                        if (mainPage.isLandscape) return false
                         for (var i = 0; i < chats.length; i++)
                             if ((chats[i].unread || 0) > 0) return true
                         return false
@@ -1438,7 +1439,7 @@ ApplicationWindow {
                 }
                 MenuItem {
                     text: loc.profile
-                    visible: connected
+                    visible: !mainPage.isLandscape && (connected)
                     onClicked: pageStack.push(profilePage)
                 }
                 MenuItem {
@@ -1448,8 +1449,16 @@ ApplicationWindow {
                 }
                 MenuItem {
                     text: loc.channels
-                    visible: connected
+                    visible: !mainPage.isLandscape && (connected)
                     onClicked: pageStack.push(channelsPage)
+                }
+                MenuItem {
+                    // Ersetzt im Querformat die Kanaele: von hier aus
+                    // sind ALLE Aktionen erreichbar, auch die, fuer die
+                    // das kurze Menue keinen Platz hat
+                    visible: mainPage.isLandscape
+                    text: loc.allActions
+                    onClicked: pageStack.push(allActionsPage)
                 }
                 MenuItem {
                     text: loc.joinViaLink
@@ -1580,12 +1589,12 @@ ApplicationWindow {
             PullDownMenu {
                 MenuItem {
                     text: loc.logout
-                    visible: connected
+                    visible: !mainPage.isLandscape && (connected)
                     onClicked: logoutRemorse.execute("Logging out", doLogout, 15000)
                 }
                 MenuItem {
                     text: loc.reload
-                    visible: connected
+                    visible: !mainPage.isLandscape && (connected)
                     onClicked: {
                         var xhr = new XMLHttpRequest()
                         xhr.open("GET", "http://127.0.0.1:" + backendPort + "/reload")
@@ -1601,6 +1610,7 @@ ApplicationWindow {
                 MenuItem {
                     text: loc.markAllRead
                     visible: {
+                        if (mainPage.isLandscape) return false
                         for (var i = 0; i < chats.length; i++)
                             if ((chats[i].unread || 0) > 0) return true
                         return false
@@ -1620,7 +1630,7 @@ ApplicationWindow {
                 }
                 MenuItem {
                     text: loc.profile
-                    visible: connected
+                    visible: !mainPage.isLandscape && (connected)
                     onClicked: pageStack.push(profilePage)
                 }
                 MenuItem {
@@ -1630,8 +1640,16 @@ ApplicationWindow {
                 }
                 MenuItem {
                     text: loc.channels
-                    visible: connected
+                    visible: !mainPage.isLandscape && (connected)
                     onClicked: pageStack.push(channelsPage)
+                }
+                MenuItem {
+                    // Ersetzt im Querformat die Kanaele: von hier aus
+                    // sind ALLE Aktionen erreichbar, auch die, fuer die
+                    // das kurze Menue keinen Platz hat
+                    visible: mainPage.isLandscape
+                    text: loc.allActions
+                    onClicked: pageStack.push(allActionsPage)
                 }
                 MenuItem {
                     text: loc.joinViaLink
@@ -3802,13 +3820,24 @@ Label {
                 contentHeight: ciCol.height
 
                 PullDownMenu {
-                    visible: ciPage.group
+                    // Bisher hatte diese Seite NUR fuer Gruppen ein Menue - bei einem
+                    // Kontakt fehlte jeder Einstieg, obwohl dort die Nummer steht,
+                    // die man anrufen will
+                    visible: ciPage.jid !== "status"
 
                     MenuItem {
+                        text: loc.call + " +" + ciPage.jid
+                        visible: !ciPage.group
+                        onClicked: Qt.openUrlExternally("tel:+" + ciPage.jid)
+                    }
+
+                    MenuItem {
+                        visible: ciPage.group
                         text: loc.groupInfo
                         onClicked: pageStack.push(groupInfoPage, { groupJid: ciPage.jid })
                     }
                     MenuItem {
+                        visible: ciPage.group
                         text: loc.getInviteLink
                         onClicked: ciPage.groupCall("/group/invitelink?chat=" + ciPage.jid, function(xhr) {
                             if (xhr.status === 200) {
@@ -3818,6 +3847,7 @@ Label {
                         })
                     }
                     MenuItem {
+                        visible: ciPage.group
                         text: loc.leaveGroup
                         onClicked: ciPage.groupCall("/group/leave?chat=" + ciPage.jid, function() {
                             pageStack.pop(mainPage)
@@ -4723,6 +4753,109 @@ Label {
         }
     }
 
+
+    // Sammelseite fuer das Querformat: dort passen nur sechs Menuepunkte auf
+    // den Schirm, ueber diese Seite bleibt aber alles erreichbar. Bewusst
+    // eine eigene Seite und kein zweites Pulley - eine Liste scrollt, ein
+    // Pulley nicht.
+    Component {
+        id: allActionsPage
+        Page {
+            allowedOrientations: orientationMask()
+            SilicaFlickable {
+                anchors.fill: parent
+                contentHeight: aaCol.height
+                VerticalScrollDecorator {}
+                Column {
+                    id: aaCol
+                    width: parent.width
+                    PageHeader { title: loc.allActions }
+
+                    ListItem {
+                        width: parent.width
+                        onClicked: { pageStack.pop(); pageStack.push(settingsPage) }
+                        Label { x: Theme.horizontalPageMargin; anchors.verticalCenter: parent.verticalCenter
+                                text: loc.settings }
+                    }
+                    ListItem {
+                        width: parent.width
+                        onClicked: { pageStack.pop(); pageStack.push(profilePage) }
+                        Label { x: Theme.horizontalPageMargin; anchors.verticalCenter: parent.verticalCenter
+                                text: loc.profile }
+                    }
+                    ListItem {
+                        width: parent.width
+                        onClicked: { pageStack.pop(); pageStack.push(searchPage) }
+                        Label { x: Theme.horizontalPageMargin; anchors.verticalCenter: parent.verticalCenter
+                                text: loc.search }
+                    }
+                    ListItem {
+                        width: parent.width
+                        onClicked: { pageStack.pop(); pageStack.push(channelsPage) }
+                        Label { x: Theme.horizontalPageMargin; anchors.verticalCenter: parent.verticalCenter
+                                text: loc.channels }
+                    }
+                    ListItem {
+                        width: parent.width
+                        onClicked: { pageStack.pop(); pageStack.push(joinLinkPage) }
+                        Label { x: Theme.horizontalPageMargin; anchors.verticalCenter: parent.verticalCenter
+                                text: loc.joinViaLink }
+                    }
+                    ListItem {
+                        width: parent.width
+                        onClicked: { pageStack.pop(); pageStack.push(newGroupPage) }
+                        Label { x: Theme.horizontalPageMargin; anchors.verticalCenter: parent.verticalCenter
+                                text: loc.newGroup }
+                    }
+                    ListItem {
+                        width: parent.width
+                        onClicked: { pageStack.pop(); pageStack.push(newChatPage) }
+                        Label { x: Theme.horizontalPageMargin; anchors.verticalCenter: parent.verticalCenter
+                                text: loc.newChat }
+                    }
+                    ListItem {
+                        width: parent.width
+                        onClicked: {
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chats/read-all")
+                            xhr.onreadystatechange = function() { if (xhr.readyState === 4) loadChats() }
+                            xhr.send()
+                            pageStack.pop()
+                        }
+                        Label { x: Theme.horizontalPageMargin; anchors.verticalCenter: parent.verticalCenter
+                                text: loc.markAllRead }
+                    }
+                    ListItem {
+                        width: parent.width
+                        visible: connected
+                        onClicked: {
+                            pageStack.pop()
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort + "/reload")
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) { loadWAContacts(); loadChats() }
+                            }
+                            xhr.send()
+                        }
+                        Label { x: Theme.horizontalPageMargin; anchors.verticalCenter: parent.verticalCenter
+                                text: loc.reload }
+                    }
+                    ListItem {
+                        width: parent.width
+                        // Dieselbe Remorse-Sicherung wie im Pulley - Abmelden
+                        // ohne Ruecknahmefenster waere hier gefaehrlicher als
+                        // dort, weil die Liste sich leichter danebentippen laesst
+                        onClicked: {
+                            pageStack.pop()
+                            logoutRemorse.execute("Logging out", doLogout, 15000)
+                        }
+                        Label { x: Theme.horizontalPageMargin; anchors.verticalCenter: parent.verticalCenter
+                                text: loc.logout; color: Theme.errorColor }
+                    }
+                }
+            }
+        }
+    }
     Component {
         id: newChatPage
         Page {
@@ -5094,8 +5227,16 @@ Label {
                 return parts.join(" ")
             }
 
+            // Reihenfolge: eigener Kontaktname, dann der Name, den die Person
+            // sich selbst gegeben hat (PushName vom Server), sonst die Nummer.
+            // Der Gruppenname darf hier NIE stehen - Gruppen-JIDs enthalten
+            // einen Bindestrich, und waContactsMap kennt auch Gruppen. Steht
+            // in sender die Gruppe selbst (alte Nachrichten aus dem
+            // Verlaufsabgleich ohne Teilnehmerangabe), wissen wir schlicht
+            // nichts und behaupten lieber nichts.
             function senderDisplay(number) {
                 if (!number) return ""
+                if (number.indexOf("-") >= 0 || number === chatJid) return ""
                 var n = findLocalContactName(number)
                 if (n) return n
                 if (waContactsMap[number]) return waContactsMap[number]
@@ -5579,6 +5720,7 @@ Label {
                             width: parent.width
                             PageHeader { title: loc.chooseAttachSource }
                             ListItem {
+                                width: parent.width
                                 onClicked: pageStack.replace(contentPicker)
                                 Label {
                                     x: Theme.horizontalPageMargin
@@ -5587,6 +5729,7 @@ Label {
                                 }
                             }
                             ListItem {
+                                width: parent.width
                                 onClicked: pageStack.replace(filePicker)
                                 Label {
                                     x: Theme.horizontalPageMargin
@@ -5659,7 +5802,7 @@ Label {
 
                     MenuItem {
                         text: loc.refreshChannel
-                        visible: isChannel
+                        visible: !chatPageItem.isLandscape && (isChannel)
                         onClicked: {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/messages?jid=" + chatJid)
@@ -5671,7 +5814,7 @@ Label {
                     }
                     MenuItem {
                         text: loc.unfollowChannel
-                        visible: isChannel
+                        visible: !chatPageItem.isLandscape && (isChannel)
                         onClicked: blockRemorse.execute("Unfollowing channel", function() {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/unfollow?jid=" + chatJid)
@@ -5680,7 +5823,7 @@ Label {
                     }
                     MenuItem {
                         text: loc.loadHistory
-                        visible: chatJid !== "status" && !isChannel
+                        visible: !chatPageItem.isLandscape && (chatJid !== "status" && !isChannel)
                         onClicked: {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/history/request?chat=" + chatJid)
@@ -5708,7 +5851,7 @@ Label {
                     }
                     MenuItem {
                         text: loc.stopLiveLocation
-                        visible: liveActive && liveChatJid === chatJid
+                        visible: !chatPageItem.isLandscape && (liveActive && liveChatJid === chatJid)
                         onClicked: stopLiveShare()
                     }
                     MenuItem {
@@ -5749,7 +5892,7 @@ Label {
                     }
                     MenuItem {
                         text: loc.deleteChat
-                        visible: chatJid !== "status" && !isChannel
+                        visible: !chatPageItem.isLandscape && (chatJid !== "status" && !isChannel)
                         onClicked: blockRemorse.execute("Deleting chat", function() {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chat/delete?jid=" + chatJid)
@@ -5761,7 +5904,7 @@ Label {
                     }
                     MenuItem {
                         text: loc.loadOlder
-                        visible: chatJid !== "status" && !isChannel && !isChannel
+                        visible: !chatPageItem.isLandscape && (chatJid !== "status" && !isChannel && !isChannel)
                         onClicked: {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/loadolder?chat=" + chatJid)
@@ -5777,22 +5920,22 @@ Label {
                     }
                     MenuItem {
                         text: loc.createPoll
-                        visible: chatJid !== "status" && !isChannel
+                        visible: chatJid !== "status" && !isChannel && (!chatPageItem.isLandscape || isGroupChat)
                         onClicked: pageStack.push(createPollPage, { targetChat: chatJid })
                     }
                     MenuItem {
                         text: loc.groupInfo
-                        visible: isGroupChat
+                        visible: !chatPageItem.isLandscape && (isGroupChat)
                         onClicked: pageStack.push(groupInfoPage, { groupJid: chatJid })
                     }
                     MenuItem {
                         text: loc.blockContact
-                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        visible: !chatPageItem.isLandscape && (!isGroupChat && chatJid !== "status" && !isChannel)
                         onClicked: blockRemorse.execute("Blocking +" + chatJid, function() { blockAction("block") })
                     }
                     MenuItem {
                         text: loc.unblockContact
-                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        visible: !chatPageItem.isLandscape && (!isGroupChat && chatJid !== "status" && !isChannel)
                         onClicked: blockAction("unblock")
                     }
                     MenuItem {
@@ -5800,15 +5943,15 @@ Label {
                         visible: !isGroupChat && chatJid !== "status" && !isChannel
                         onClicked: Qt.openUrlExternally("tel:+" + chatJid)
                     }
-                    MenuItem { text: loc.sendFile; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(filePicker) }
-                    MenuItem { text: loc.sendImage; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(imagePicker) }
-                    MenuItem { text: loc.refresh; onClicked: load() }
+                    MenuItem { text: loc.sendFile; visible: !chatPageItem.isLandscape && (chatJid !== "status" && !isChannel); onClicked: pageStack.push(filePicker) }
+                    MenuItem { text: loc.sendImage; visible: !chatPageItem.isLandscape && (chatJid !== "status" && !isChannel); onClicked: pageStack.push(imagePicker) }
+                    MenuItem { visible: !chatPageItem.isLandscape; text: loc.refresh; onClicked: load() }
                 }
 
                 PullDownMenu {
                     MenuItem {
                         text: loc.refreshChannel
-                        visible: isChannel
+                        visible: !chatPageItem.isLandscape && (isChannel)
                         onClicked: {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/messages?jid=" + chatJid)
@@ -5820,7 +5963,7 @@ Label {
                     }
                     MenuItem {
                         text: loc.unfollowChannel
-                        visible: isChannel
+                        visible: !chatPageItem.isLandscape && (isChannel)
                         onClicked: blockRemorse.execute("Unfollowing channel", function() {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/unfollow?jid=" + chatJid)
@@ -5829,7 +5972,7 @@ Label {
                     }
                     MenuItem {
                         text: loc.loadHistory
-                        visible: chatJid !== "status" && !isChannel
+                        visible: !chatPageItem.isLandscape && (chatJid !== "status" && !isChannel)
                         onClicked: {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/history/request?chat=" + chatJid)
@@ -5857,7 +6000,7 @@ Label {
                     }
                     MenuItem {
                         text: loc.stopLiveLocation
-                        visible: liveActive && liveChatJid === chatJid
+                        visible: !chatPageItem.isLandscape && (liveActive && liveChatJid === chatJid)
                         onClicked: stopLiveShare()
                     }
                     MenuItem {
@@ -5898,7 +6041,7 @@ Label {
                     }
                     MenuItem {
                         text: loc.deleteChat
-                        visible: chatJid !== "status" && !isChannel
+                        visible: !chatPageItem.isLandscape && (chatJid !== "status" && !isChannel)
                         onClicked: blockRemorse.execute("Deleting chat", function() {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chat/delete?jid=" + chatJid)
@@ -5910,7 +6053,7 @@ Label {
                     }
                     MenuItem {
                         text: loc.loadOlder
-                        visible: chatJid !== "status" && !isChannel && !isChannel
+                        visible: !chatPageItem.isLandscape && (chatJid !== "status" && !isChannel && !isChannel)
                         onClicked: {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/loadolder?chat=" + chatJid)
@@ -5926,33 +6069,51 @@ Label {
                     }
                     MenuItem {
                         text: loc.createPoll
+                        // Im Querformat ist nur Platz fuer sechs Punkte: dort weicht die
+                        // Umfrage im Einzelchat dem Anrufen. In einem Zweiergespraech ist
+                        // eine Umfrage ohnehin selten das, was man sucht
                         visible: chatJid !== "status" && !isChannel
+                                 && (!chatPageItem.isLandscape || isGroupChat)
                         onClicked: pageStack.push(createPollPage, { targetChat: chatJid })
                     }
                     MenuItem {
                         text: loc.groupInfo
-                        visible: isGroupChat
+                        visible: !chatPageItem.isLandscape && (isGroupChat)
                         onClicked: pageStack.push(groupInfoPage, { groupJid: chatJid })
                     }
                     MenuItem {
                         text: loc.blockContact
-                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        visible: !chatPageItem.isLandscape && (!isGroupChat && chatJid !== "status" && !isChannel)
                         onClicked: blockRemorse.execute("Blocking +" + chatJid, function() { blockAction("block") })
                     }
                     MenuItem {
                         text: loc.unblockContact
-                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        visible: !chatPageItem.isLandscape && (!isGroupChat && chatJid !== "status" && !isChannel)
                         onClicked: blockAction("unblock")
                     }
                     MenuItem {
                         text: loc.call + " +" + chatJid
+                        // Nimmt im Querformat den Platz der Umfrage ein
                         visible: !isGroupChat && chatJid !== "status" && !isChannel
                         onClicked: Qt.openUrlExternally("tel:+" + chatJid)
                     }
-                    MenuItem { text: loc.sendFile; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(filePicker) }
-                    MenuItem { text: loc.sendImage; visible: chatJid !== "status" && !isChannel; onClicked: pageStack.push(imagePicker) }
-                    MenuItem { text: loc.refresh; onClicked: load() }
+                    MenuItem {
+                        text: loc.sendFile
+                        visible: !chatPageItem.isLandscape && chatJid !== "status" && !isChannel
+                        onClicked: pageStack.push(filePicker)
+                    }
+                    MenuItem {
+                        text: loc.sendImage
+                        visible: !chatPageItem.isLandscape && chatJid !== "status" && !isChannel
+                        onClicked: pageStack.push(imagePicker)
+                    }
+                    MenuItem {
+                        text: loc.refresh
+                        visible: !chatPageItem.isLandscape
+                        onClicked: load()
+                    }
                 }
+
 
                 RemorsePopup { id: blockRemorse }
 
@@ -6276,7 +6437,11 @@ Label {
                         }
 
                         Label {
+                            // Leeres Label nahm frueher trotzdem Platz ein und
+                            // die Zeile fehlte kommentarlos - jetzt entweder
+                            // ein echter Name oder gar keine Zeile
                             visible: isGroupChat && !modelData.fromMe
+                                     && senderDisplay(modelData.sender) !== ""
                             text: visible ? senderDisplay(modelData.sender) : ""
                             font.pixelSize: Theme.fontSizeExtraSmall
                             font.bold: true

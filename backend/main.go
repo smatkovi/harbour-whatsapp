@@ -2404,7 +2404,17 @@ func eventHandler(evt interface{}) {
                     if mediaType != "" {
                         stashRawMedia(msgID, msg)
                     }
-                    sender := chatJid
+                    // Bei 1:1-Chats IST der Chatpartner der Absender. Bei
+                    // Gruppen war dieser Rueckfall falsch: sender wurde die
+                    // Gruppen-JID, und die Oberflaeche fand dazu prompt den
+                    // GRUPPENNAMEN in ihrer Kontaktkarte - so stand ueber
+                    // fremden Nachrichten der Name der Gruppe. Lieber leer
+                    // lassen und die Zeile weglassen als etwas Falsches
+                    // behaupten.
+                    sender := ""
+                    if !strings.Contains(chatJid, "-") {
+                        sender = chatJid
+                    }
                     if p := hm.Message.GetKey().GetParticipant(); p != "" {
                         if pj, err := types.ParseJID(p); err == nil {
                             sender = resolvePN(pj, types.EmptyJID).User

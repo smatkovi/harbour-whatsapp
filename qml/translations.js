@@ -289,7 +289,8 @@ var en = {
     "orientationDesc": "Follow the device, or keep the interface fixed. Fullscreen photos, status and video always rotate freely - viewing them sideways is the point.",
     "orientationDynamic": "Follow device",
     "orientationPortrait": "Portrait only",
-    "orientationLandscape": "Landscape only"
+    "orientationLandscape": "Landscape only",
+    "allActions": "All actions"
 }
 
 var catalogs = {
@@ -574,7 +575,8 @@ var catalogs = {
         "orientationDesc": "Der Lage des Geräts folgen oder die Oberfläche fest stehen lassen. Vollbild für Fotos, Status und Video dreht sich immer frei - quer anzusehen ist ja der Zweck.",
         "orientationDynamic": "Der Lage folgen",
         "orientationPortrait": "Nur Hochformat",
-        "orientationLandscape": "Nur Querformat"
+        "orientationLandscape": "Nur Querformat",
+        "allActions": "Alle Aktionen"
     },
     "fi": {
         "language": "Kieli",
@@ -857,7 +859,8 @@ var catalogs = {
         "orientationDesc": "Seuraa laitteen asentoa tai pidä käyttöliittymä kiinteänä. Koko näytön kuvat, tila ja video kääntyvät aina vapaasti - vaakakatselu on niiden tarkoitus.",
         "orientationDynamic": "Seuraa laitetta",
         "orientationPortrait": "Vain pysty",
-        "orientationLandscape": "Vain vaaka"
+        "orientationLandscape": "Vain vaaka",
+        "allActions": "Kaikki toiminnot"
     },
     "sv": {
         "language": "Språk",
@@ -1140,7 +1143,8 @@ var catalogs = {
         "orientationDesc": "Följ enhetens läge eller håll gränssnittet fast. Helskärmsbilder, status och video roterar alltid fritt - att se dem liggande är själva poängen.",
         "orientationDynamic": "Följ enheten",
         "orientationPortrait": "Endast stående",
-        "orientationLandscape": "Endast liggande"
+        "orientationLandscape": "Endast liggande",
+        "allActions": "Alla åtgärder"
     },
     "hu": {
         "language": "Nyelv",
@@ -1423,7 +1427,8 @@ var catalogs = {
         "orientationDesc": "Kövesse a készülék helyzetét, vagy maradjon rögzített a felület. A teljes képernyős képek, állapotok és videók mindig szabadon forognak - fekvő nézetük a lényeg.",
         "orientationDynamic": "Kövesse a készüléket",
         "orientationPortrait": "Csak álló",
-        "orientationLandscape": "Csak fekvő"
+        "orientationLandscape": "Csak fekvő",
+        "allActions": "Összes művelet"
     },
     "ru": {
         "language": "Язык",
@@ -1706,7 +1711,8 @@ var catalogs = {
         "orientationDesc": "Следовать положению устройства или зафиксировать интерфейс. Полноэкранные фото, статусы и видео всегда поворачиваются свободно - в этом их смысл.",
         "orientationDynamic": "Следовать устройству",
         "orientationPortrait": "Только портрет",
-        "orientationLandscape": "Только альбом"
+        "orientationLandscape": "Только альбом",
+        "allActions": "Все действия"
     },
     "fr": {
         "language": "Langue",
@@ -1989,7 +1995,8 @@ var catalogs = {
         "orientationDesc": "Suivre l'appareil ou garder l'interface fixe. Les photos, statuts et vidéos en plein écran pivotent toujours librement : les voir en paysage est justement l'intérêt.",
         "orientationDynamic": "Suivre l'appareil",
         "orientationPortrait": "Portrait uniquement",
-        "orientationLandscape": "Paysage uniquement"
+        "orientationLandscape": "Paysage uniquement",
+        "allActions": "Toutes les actions"
     },
     "la": {
         "language": "Lingua",
@@ -2272,7 +2279,8 @@ var catalogs = {
         "orientationDesc": "Situm instrumenti sequi vel superficiem fixam servare. Imagines, status et pellicula in pleno scrinio semper libere vertuntur - id enim eorum consilium est.",
         "orientationDynamic": "Instrumentum sequi",
         "orientationPortrait": "Tantum erectum",
-        "orientationLandscape": "Tantum iacens"
+        "orientationLandscape": "Tantum iacens",
+        "allActions": "Omnes actiones"
     },
     "es": {
         "language": "Idioma",
@@ -2543,7 +2551,8 @@ var catalogs = {
         "orientationDesc": "Seguir al dispositivo o mantener fija la interfaz. Las fotos, estados y vídeos a pantalla completa siempre giran libremente: verlos apaisados es la idea.",
         "orientationDynamic": "Seguir al dispositivo",
         "orientationPortrait": "Solo vertical",
-        "orientationLandscape": "Solo horizontal"
+        "orientationLandscape": "Solo horizontal",
+        "allActions": "Todas las acciones"
     },
     "it": {
         "language": "Lingua",
@@ -2814,7 +2823,8 @@ var catalogs = {
         "orientationDesc": "Seguire il dispositivo o mantenere fissa l'interfaccia. Foto, stati e video a schermo intero ruotano sempre liberamente: vederli in orizzontale è lo scopo.",
         "orientationDynamic": "Segui il dispositivo",
         "orientationPortrait": "Solo verticale",
-        "orientationLandscape": "Solo orizzontale"
+        "orientationLandscape": "Solo orizzontale",
+        "allActions": "Tutte le azioni"
     },
     "pt": {
         "language": "Idioma",
@@ -3085,7 +3095,8 @@ var catalogs = {
         "orientationDesc": "Seguir o dispositivo ou manter a interface fixa. Fotos, estados e vídeos em ecrã inteiro rodam sempre livremente - vê-los na horizontal é o objetivo.",
         "orientationDynamic": "Seguir o dispositivo",
         "orientationPortrait": "Apenas vertical",
-        "orientationLandscape": "Apenas horizontal"
+        "orientationLandscape": "Apenas horizontal",
+        "allActions": "Todas as ações"
     },
     "nl": {
         "language": "Taal",
@@ -3356,7 +3367,8 @@ var catalogs = {
         "orientationDesc": "Het apparaat volgen of de interface vast houden. Schermvullende foto's, status en video draaien altijd vrij - liggend bekijken is juist de bedoeling.",
         "orientationDynamic": "Apparaat volgen",
         "orientationPortrait": "Alleen staand",
-        "orientationLandscape": "Alleen liggend"
+        "orientationLandscape": "Alleen liggend",
+        "allActions": "Alle acties"
     },
     "pl": {
         "language": "Język",
@@ -3627,7 +3639,8 @@ var catalogs = {
         "orientationDesc": "Podążaj za urządzeniem albo zablokuj interfejs. Zdjęcia, statusy i filmy na pełnym ekranie zawsze obracają się swobodnie - o to właśnie chodzi.",
         "orientationDynamic": "Podążaj za urządzeniem",
         "orientationPortrait": "Tylko pionowo",
-        "orientationLandscape": "Tylko poziomo"
+        "orientationLandscape": "Tylko poziomo",
+        "allActions": "Wszystkie akcje"
     },
     "tr": {
         "language": "Dil",
@@ -3898,7 +3911,8 @@ var catalogs = {
         "orientationDesc": "Cihazın konumunu izle ya da arayüzü sabit tut. Tam ekran fotoğraf, durum ve videolar her zaman serbestçe döner - yatay izlemek zaten amaçtır.",
         "orientationDynamic": "Cihazı izle",
         "orientationPortrait": "Yalnızca dikey",
-        "orientationLandscape": "Yalnızca yatay"
+        "orientationLandscape": "Yalnızca yatay",
+        "allActions": "Tüm eylemler"
     },
     "da": {
         "language": "Sprog",
@@ -4169,7 +4183,8 @@ var catalogs = {
         "orientationDesc": "Følg enheden, eller hold grænsefladen fast. Fuldskærmsbilleder, status og video roterer altid frit - at se dem på tværs er netop pointen.",
         "orientationDynamic": "Følg enheden",
         "orientationPortrait": "Kun stående",
-        "orientationLandscape": "Kun liggende"
+        "orientationLandscape": "Kun liggende",
+        "allActions": "Alle handlinger"
     },
     "nb": {
         "language": "Språk",
@@ -4440,7 +4455,8 @@ var catalogs = {
         "orientationDesc": "Følg enheten, eller hold grensesnittet fast. Fullskjermbilder, status og video roterer alltid fritt - å se dem liggende er hele poenget.",
         "orientationDynamic": "Følg enheten",
         "orientationPortrait": "Bare stående",
-        "orientationLandscape": "Bare liggende"
+        "orientationLandscape": "Bare liggende",
+        "allActions": "Alle handlinger"
     },
     "cs": {
         "language": "Jazyk",
@@ -4711,7 +4727,8 @@ var catalogs = {
         "orientationDesc": "Sledovat polohu zařízení, nebo nechat rozhraní pevné. Fotky, statusy a videa na celou obrazovku se vždy otáčejí volně - dívat se na ně na šířku je smysl věci.",
         "orientationDynamic": "Podle zařízení",
         "orientationPortrait": "Jen na výšku",
-        "orientationLandscape": "Jen na šířku"
+        "orientationLandscape": "Jen na šířku",
+        "allActions": "Všechny akce"
     },
     "el": {
         "language": "Γλώσσα",
@@ -4982,7 +4999,8 @@ var catalogs = {
         "orientationDesc": "Να ακολουθεί τη συσκευή ή να μένει σταθερή η διεπαφή. Οι φωτογραφίες, οι καταστάσεις και τα βίντεο σε πλήρη οθόνη περιστρέφονται πάντα ελεύθερα - αυτό είναι το νόημα.",
         "orientationDynamic": "Ακολούθηση συσκευής",
         "orientationPortrait": "Μόνο κατακόρυφα",
-        "orientationLandscape": "Μόνο οριζόντια"
+        "orientationLandscape": "Μόνο οριζόντια",
+        "allActions": "Όλες οι ενέργειες"
     },
     "et": {
         "language": "Keel",
@@ -5253,7 +5271,8 @@ var catalogs = {
         "orientationDesc": "Järgi seadme asendit või hoia liides paigal. Täisekraanil fotod, staatused ja videod pöörlevad alati vabalt - rõhtsalt vaatamine ongi mõte.",
         "orientationDynamic": "Järgi seadet",
         "orientationPortrait": "Ainult püstpaigutus",
-        "orientationLandscape": "Ainult rõhtpaigutus"
+        "orientationLandscape": "Ainult rõhtpaigutus",
+        "allActions": "Kõik toimingud"
     },
     "lv": {
         "language": "Valoda",
@@ -5524,7 +5543,8 @@ var catalogs = {
         "orientationDesc": "Sekot ierīces stāvoklim vai saglabāt fiksētu saskarni. Pilnekrāna foto, statusi un video vienmēr griežas brīvi - to skatīšanās guļus ir jēga.",
         "orientationDynamic": "Sekot ierīcei",
         "orientationPortrait": "Tikai portrets",
-        "orientationLandscape": "Tikai ainava"
+        "orientationLandscape": "Tikai ainava",
+        "allActions": "Visas darbības"
     },
     "lt": {
         "language": "Kalba",
@@ -5795,7 +5815,8 @@ var catalogs = {
         "orientationDesc": "Sekti įrenginio padėtį arba palikti sąsają fiksuotą. Viso ekrano nuotraukos, būsenos ir vaizdo įrašai visada sukasi laisvai - juk tam jie ir skirti.",
         "orientationDynamic": "Sekti įrenginį",
         "orientationPortrait": "Tik stačias",
-        "orientationLandscape": "Tik gulsčias"
+        "orientationLandscape": "Tik gulsčias",
+        "allActions": "Visi veiksmai"
     },
     "sl": {
         "language": "Jezik",
@@ -6066,7 +6087,8 @@ var catalogs = {
         "orientationDesc": "Sledi napravi ali ohrani vmesnik pri miru. Fotografije, statusi in videi čez cel zaslon se vedno prosto vrtijo - ležeče gledanje je bistvo.",
         "orientationDynamic": "Sledi napravi",
         "orientationPortrait": "Samo pokončno",
-        "orientationLandscape": "Samo ležeče"
+        "orientationLandscape": "Samo ležeče",
+        "allActions": "Vsa dejanja"
     },
     "zh": {
         "language": "语言",
@@ -6337,7 +6359,8 @@ var catalogs = {
         "orientationDesc": "跟随设备方向，或将界面固定。全屏的照片、状态和视频始终自由旋转——横着看正是它们的用途。",
         "orientationDynamic": "跟随设备",
         "orientationPortrait": "仅竖屏",
-        "orientationLandscape": "仅横屏"
+        "orientationLandscape": "仅横屏",
+        "allActions": "全部操作"
     }
 }
 

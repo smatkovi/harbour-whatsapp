@@ -155,5 +155,35 @@ console.log('--- Orientierungsmaske ---');
   check('leerer Wert -> alles',    mask(''),          v => v === Orientation.All,       'Vorgabe muss dynamisch sein');
 }
 
+// --- Absendername in Gruppen ---
+// Reihenfolge: eigener Kontaktname, dann selbst gegebener Name (PushName),
+// sonst die Nummer. Der GRUPPENNAME darf nie erscheinen - genau das passierte,
+// weil der Verlaufsabgleich die Gruppen-JID als Absender eintrug und
+// waContactsMap auch Gruppen kennt.
+console.log('--- Absendername in Gruppen ---');
+{
+  const fnSrc = grab('senderDisplay');
+  function disp(sender, opts) {
+    opts = opts || {};
+    return (new Function('chatJid', 'waContactsMap', 'findLocalContactName',
+      fnSrc + '; return senderDisplay(arguments[3]);'))(
+        opts.chatJid || '4366123-1580000000',
+        opts.wa || {},
+        function (n) { return (opts.local || {})[n] || ''; },
+        sender);
+  }
+  const grp = '4366123-1580000000';
+  check('eigener Kontaktname zuerst', disp('4366111', { local: { '4366111': 'Anna' }, wa: { '4366111': 'anna_wa' } }),
+        v => v === 'Anna', 'erwartet Anna');
+  check('sonst selbst gegebener Name', disp('4366111', { wa: { '4366111': 'Anna W.' } }),
+        v => v === 'Anna W.', 'erwartet PushName');
+  check('sonst die Nummer',          disp('4366111', {}), v => v === '+4366111', 'erwartet +Nummer');
+  check('Gruppen-JID -> nichts',     disp(grp, { chatJid: grp, wa: { [grp]: 'Wandergruppe' } }),
+        v => v === '', 'der Gruppenname darf NIE als Absender erscheinen');
+  check('fremde Gruppen-JID -> nichts', disp('4366999-1234567890', { wa: { '4366999-1234567890': 'Andere Gruppe' } }),
+        v => v === '', 'auch andere Gruppen nicht');
+  check('leerer Absender -> nichts', disp('', {}), v => v === '', 'ohne Absender keine Zeile');
+}
+
 console.log(fails === 0 ? '\nAlle Faelle bestanden.' : '\n' + fails + ' Fall/Faelle fehlgeschlagen.');
 process.exit(fails === 0 ? 0 : 1);

@@ -85,6 +85,7 @@ run "Go: Reconnect, connman, Waechter, Portdatei, Rollen, Szenario" go_tests
 run "JS: Fehlertexte und Kataloge" node "$ROOT/tests/senderror_test.js"
 run "Python: Daemon-Wache" python3 "$ROOT/tests/daemon_guard_test.py"
 run "QML-Syntax" qml_syntax
+run "QML: doppelt gesetzte Eigenschaften" python3 "$ROOT/tests/qml_dupprops.py"
 run "Python-Syntax start_backend.py" python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$ROOT/start_backend.py"
 
 echo
