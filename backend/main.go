@@ -2230,6 +2230,10 @@ func eventHandler(evt interface{}) {
         lastError = ""
         fmt.Println("✅ Connected")
         go func() {
+            time.Sleep(5 * time.Second)
+            refreshChannelNames()
+        }()
+        go func() {
             time.Sleep(2 * time.Second)
             loadContacts()
             // Diagnose: wie viele Kontakte kennt der whatsmeow-Store?
@@ -4559,6 +4563,10 @@ func main() {
         for _, m := range metas {
             out = append(out, C{JID: m.ID.User, Name: m.ThreadMeta.Name.Text, Subscribers: m.ThreadMeta.SubscriberCount})
             markChannel(m.ID.User)
+            // Den Namen auch MERKEN: bisher ging er nur an die Kanalseite,
+            // und in der Chatliste stand die nackte Kennung - eine
+            // 18-stellige Ziffernfolge, an der niemand einen Kanal erkennt
+            rememberChannelName(m.ID.User, m.ThreadMeta.Name.Text)
         }
         json.NewEncoder(w).Encode(out)
     })
@@ -5543,4 +5551,41 @@ var callingCodes = []string{
     "92", "93", "94", "95", "960", "961", "962", "963", "964", "965", "966",
     "967", "968", "970", "971", "972", "973", "974", "975", "976", "977",
     "98", "992", "993", "994", "995", "996", "998",
+}
+
+// rememberChannelName legt den Namen eines Kanals in derselben Karte ab, aus
+// der die Chatliste ihre Bezeichnungen zieht.
+func rememberChannelName(jid, name string) {
+    if jid == "" || name == "" {
+        return
+    }
+    contactsMutex.Lock()
+    changed := contacts[jid] != name
+    contacts[jid] = name
+    contactsMutex.Unlock()
+    if changed {
+        saveContacts()
+    }
+}
+
+// refreshChannelNames holt die Namen der abonnierten Kanaele einmal beim
+// Start. Ohne das stehen sie erst da, wenn jemand die Kanalseite oeffnet -
+// die Chatliste zeigte bis dahin Ziffern.
+func refreshChannelNames() {
+    if client == nil || !client.IsConnected() {
+        return
+    }
+    metas, err := client.GetSubscribedNewsletters(context.Background())
+    if err != nil {
+        fmt.Printf("⚠ channel names: %v\n", err)
+        return
+    }
+    n := 0
+    for _, m := range metas {
+        if m.ThreadMeta.Name.Text != "" {
+            rememberChannelName(m.ID.User, m.ThreadMeta.Name.Text)
+            n++
+        }
+    }
+    fmt.Printf("📛 %d channel names refreshed\n", n)
 }

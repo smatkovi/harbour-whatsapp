@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.213
+Version:    0.9.214
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -124,6 +124,16 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.214-1
+- Channels show their names. The names were being fetched all along -
+  GetSubscribedNewsletters returns them - but they went straight to the
+  channel page and were never kept, so the chat list showed the bare
+  newsletter id: an eighteen digit string nobody recognises a channel by.
+  They are stored with the other names now and refreshed shortly after
+  connecting, rather than only when someone happens to open the channel
+  page. Noticed while checking whether the status LID work had broken
+  anything for channels; it had not, they had simply never had names
+
 * Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.213-1
 - Links in status updates are tappable. The text there was rendered raw
   while the chat has run everything through linkify for ages, so a link in
