@@ -368,16 +368,28 @@ func notifyIncoming(chatJid, title, preview string) {
     if replyLabel == "" {
         replyLabel = "Reply"
     }
+    // Das ngfd-Ereignis heisst chat_exists, nicht chat. Beide sind in
+    // chat.ini definiert, aber mit ganz verschiedener Wirkung: [chat]
+    // bindet im Normalfall nur "haptic" ein - also NUR Vibration - waehrend
+    // [chat_exists] ueber "default" den Ton UND
+    // mce.led_pattern = PatternCommunicationIM mitbringt. Wir haben jahrelang
+    // "chat" gesendet und damit die funktionierende Vorgabe der Kategorie
+    // (x-nemo-feedback=chat_exists) durch etwas Wirkungsloses ersetzt: kein
+    // Ton, keine LED. Auf dem Geraet nachgemessen.
     var fb []string
     if sound {
-        fb = append(fb, "chat")
+        fb = append(fb, "chat_exists")
     }
     if vibrate {
         fb = append(fb, "vibra")
     }
-    if len(fb) > 0 {
-        hints["x-nemo-feedback"] = dbus.MakeVariant(strings.Join(fb, ","))
+    if !sound {
+        // Die LED haengt am selben Ereignis wie der Ton. Wer den Ton
+        // abschaltet, wollte Ruhe - nicht auch noch die stille Anzeige
+        // verlieren, dass etwas ungelesen ist.
+        fb = append(fb, "communication_led")
     }
+    hints["x-nemo-feedback"] = dbus.MakeVariant(strings.Join(fb, ","))
     // Antworten direkt aus der Ereignisansicht (wie bei SMS): benannte
     // Remote-Action mit type=input - lipstick zeigt Pfeil+Eingabefeld und
     // ruft unser Reply(chatJid, <text>) am Session-Bus

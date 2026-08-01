@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.206
+Version:    0.9.207
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -124,6 +124,22 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.207-1
+- Notifications make a sound again, and the LED blinks. Reported by
+  rdomschk, who had the sound switch on and heard nothing, and noticed the
+  status LED stayed dark while the official client lights it. The ngfd
+  event we asked for was named wrong: chat.ini defines both [chat] and
+  [chat_exists], and they do quite different things - [chat] pulls in only
+  "haptic", so vibration and nothing else, while [chat_exists] pulls in
+  "default" with the tone and mce.led_pattern = PatternCommunicationIM.
+  The notification category ships x-nemo-feedback=chat_exists for exactly
+  that reason, and we were overriding it with "chat,vibra", replacing
+  something that worked with something inert. Measured on the device:
+  category default rings, our value is silent, chat_exists,vibra rings and
+  vibrates. When the tone is switched off, communication_led is now sent
+  in its place, because the LED hangs off the same event - muting should
+  buy quiet, not the loss of the one silent hint that something is unread
+
 * Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.206-1
 - The chat page carries the same nineteen entries twice, once as a
   pull-down at the top and once as a push-up at the bottom, and 0.9.203
