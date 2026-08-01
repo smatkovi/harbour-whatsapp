@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.198
+Version:    0.9.199
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -124,6 +124,19 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.199-1
+- Tapping a group member opens the chat with them. Suggested by
+  kempertom, who had only the long-press menu with call, admin and remove
+  and no way to simply write to someone. Silica separates the two
+  gestures by itself - the favourites list has had a context menu and an
+  onClicked side by side all along - so the menu keeps its three entries
+  unchanged and no fourth was added; an entry duplicating what the tap
+  already does would just be clutter. Both member lists behave the same
+  now, the one on the group info page and the one further down on the
+  chat info page, because two lists of the same people that respond
+  differently are worse than either alone. Your own entry is deliberately
+  not excluded: a note to self is a real use for it
+
 * Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.198-1
 - The "background service is not running" warning was itself the bug. It
   checked once, twenty seconds after start, and then stopped the timer -

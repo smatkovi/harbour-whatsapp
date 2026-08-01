@@ -3178,6 +3178,16 @@ Label {
                 delegate: ListItem {
                     width: ListView.view.width
                     contentHeight: Theme.itemSizeMedium
+                            // Kurzer Tipp oeffnet den Einzelchat, langer Druck
+                            // das Menue - Silica trennt beides von selbst, wie
+                            // bei den Favoriten laengst ueblich. Wunsch von
+                            // kempertom. Die eigene Nummer ist ausdruecklich
+                            // NICHT ausgenommen: "Nachricht an mich" ist ein
+                            // gewollter Anwendungsfall
+                            onClicked: pageStack.push(chatPage, {
+                                chatJid: modelData.number,
+                                chatName: getDisplayName(modelData.number, modelData.name)
+                            })
                             // Menue als Component: wird erst beim Long-Press
                             // instanziiert statt 80x beim Seitenaufbau
                             menu: Component {
@@ -3845,6 +3855,13 @@ Label {
                             delegate: ListItem {
                                 width: parent.width
                                 contentHeight: Theme.itemSizeExtraSmall
+                                // Gleiches Verhalten wie in der Gruppeninfo -
+                                // zwei Listen mit denselben Eintraegen duerfen
+                                // sich nicht unterschiedlich anfuehlen
+                                onClicked: pageStack.push(chatPage, {
+                                    chatJid: modelData.number,
+                                    chatName: getDisplayName(modelData.number, modelData.name)
+                                })
                                 menu: Component {
                                     ContextMenu {
                                         MenuItem {
