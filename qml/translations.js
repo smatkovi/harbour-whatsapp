@@ -269,7 +269,7 @@ var en = {
     "sendBlockedHint": "WhatsApp rejected the first message to this contact. Leave the chat and open it again for another try - or start the conversation on your phone.",
     "tapToCopy": "(tap to copy)",
     "copiedToClipboard": "Copied to clipboard",
-    "daemonDownNotice": "The background service is not running - you will not receive notifications. Settings, Background daemon, Restart.",
+    "daemonDownNotice": "The background service is not running - you will not receive notifications. Start it in Terminal: systemctl --user start harbour-whatsapp-daemon",
     "attachPicker": "Attachment picker",
     "attachPickerDesc": "Which chooser opens when you tap the paperclip. The media library sorts by type (pictures, videos, music, documents); the file browser walks the folders.",
     "attachPickerAsk": "Ask every time",
@@ -279,7 +279,12 @@ var en = {
     "sendPermissionDenied": "The file is outside the app's sandbox (SD card or another folder). Grant storage access in Settings, Sailjail permissions, GRANT storage - then restart the app and the background service.",
     "sendPermissionInactiveDaemon": "Storage access is granted but not active in the running background service - sailjail applies a profile at start. Restart it under Settings, background service, restart. Restarting the app alone will not help: since the app attaches to the running service, the file is opened there.",
     "sendPermissionInactiveApp": "Storage access is granted but not active in the running process - sailjail applies a profile at start. Close the app completely (swipe the cover away) and open it again.",
-    "sendPermissionPartial": "Storage access is only partly granted - missing: %1. RemovableMedia is the one for the SD card. Run the GRANT storage command in Settings, Sailjail permissions again; it only adds what is missing, so running it twice is harmless. Then restart the background service, or the app if you do not use one."
+    "sendPermissionPartial": "Storage access is only partly granted - missing: %1. RemovableMedia is the one for the SD card. Run the GRANT storage command in Settings, Sailjail permissions again; it only adds what is missing, so running it twice is harmless. Then restart the background service, or the app if you do not use one.",
+    "permPendingGrant": "Granted, but not yet in effect: sailjail applies a profile at process start. Restart the background service (or the app, if you do not use one).",
+    "permPendingRevoke": "Revoked, but the running process still has access - sailjail applies a profile at start. It stays available until the background service is restarted (or the app, if you do not use one).",
+    "restartServiceNow": "Restart background service now",
+    "daemonRestarting": "Background service is restarting - the permission takes effect in a few seconds.",
+    "daemonRestartFailed": "Could not restart the background service. Use Settings, background service, restart."
 }
 
 var catalogs = {
@@ -544,7 +549,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp hat die erste Nachricht an diesen Kontakt abgelehnt. Chat verlassen und erneut öffnen für einen weiteren Versuch - oder das Gespräch am Telefon beginnen.",
         "tapToCopy": "(zum Kopieren antippen)",
         "copiedToClipboard": "In die Zwischenablage kopiert",
-        "daemonDownNotice": "Der Hintergrunddienst läuft nicht - du bekommst keine Benachrichtigungen. Einstellungen, Hintergrunddienst, Neu starten.",
+        "daemonDownNotice": "Der Hintergrunddienst läuft nicht - du bekommst keine Benachrichtigungen. Im Terminal starten: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Dateiauswahl",
         "attachPickerDesc": "Welcher Wähler sich beim Tippen auf die Büroklammer öffnet. Die Medienbibliothek sortiert nach Typ (Bilder, Videos, Musik, Dokumente), der Dateibrowser läuft durch die Ordner.",
         "attachPickerAsk": "Jedes Mal fragen",
@@ -554,7 +559,12 @@ var catalogs = {
         "sendPermissionDenied": "Die Datei liegt außerhalb der App-Sandbox (SD-Karte oder anderer Ordner). Speicherzugriff erteilen unter Einstellungen, Sailjail permissions, GRANT storage - danach App und Hintergrunddienst neu starten.",
         "sendPermissionInactiveDaemon": "Der Speicherzugriff ist erteilt, aber im laufenden Hintergrunddienst noch nicht wirksam - Sailjail wendet ein Profil beim Start an. Neu starten unter Einstellungen, Hintergrunddienst, Neu starten. Die App allein neu zu starten hilft nicht: Sie klinkt sich in den laufenden Dienst ein, dort wird die Datei geöffnet.",
         "sendPermissionInactiveApp": "Der Speicherzugriff ist erteilt, aber im laufenden Prozess noch nicht wirksam - Sailjail wendet ein Profil beim Start an. Die App vollständig schließen (Kachel wegwischen) und neu öffnen.",
-        "sendPermissionPartial": "Der Speicherzugriff ist nur teilweise erteilt - es fehlt: %1. RemovableMedia ist die Marke für die SD-Karte. Führe den GRANT-storage-Befehl unter Einstellungen, Sailjail permissions erneut aus; er hängt nur Fehlendes an, ein zweiter Lauf schadet also nicht. Danach den Hintergrunddienst neu starten, oder die App, wenn du keinen nutzt."
+        "sendPermissionPartial": "Der Speicherzugriff ist nur teilweise erteilt - es fehlt: %1. RemovableMedia ist die Marke für die SD-Karte. Führe den GRANT-storage-Befehl unter Einstellungen, Sailjail permissions erneut aus; er hängt nur Fehlendes an, ein zweiter Lauf schadet also nicht. Danach den Hintergrunddienst neu starten, oder die App, wenn du keinen nutzt.",
+        "permPendingGrant": "Erteilt, aber noch nicht wirksam: Sailjail wendet ein Profil beim Prozessstart an. Hintergrunddienst neu starten (oder die App, wenn du keinen nutzt).",
+        "permPendingRevoke": "Entzogen, aber der laufende Prozess hat weiterhin Zugriff - Sailjail wendet ein Profil beim Start an. Er bleibt bestehen, bis der Hintergrunddienst neu startet (oder die App, wenn du keinen nutzt).",
+        "restartServiceNow": "Hintergrunddienst jetzt neu starten",
+        "daemonRestarting": "Hintergrunddienst startet neu - die Berechtigung greift in wenigen Sekunden.",
+        "daemonRestartFailed": "Der Hintergrunddienst konnte nicht neu gestartet werden. Nutze Einstellungen, Hintergrunddienst, Neu starten."
     },
     "fi": {
         "language": "Kieli",
@@ -817,7 +827,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp hylkäsi ensimmäisen viestin tälle yhteystiedolle. Poistu keskustelusta ja avaa se uudelleen yrittääksesi vielä kerran - tai aloita keskustelu puhelimella.",
         "tapToCopy": "(kopioi napauttamalla)",
         "copiedToClipboard": "Kopioitu leikepöydälle",
-        "daemonDownNotice": "Taustapalvelu ei ole käynnissä - et saa ilmoituksia. Asetukset, taustapalvelu, käynnistä uudelleen.",
+        "daemonDownNotice": "Taustapalvelu ei ole käynnissä - et saa ilmoituksia. Käynnistä se päätteessä: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Liitteen valitsin",
         "attachPickerDesc": "Mikä valitsin avautuu paperiliitintä napauttamalla. Mediakirjasto lajittelee tyypin mukaan (kuvat, videot, musiikki, asiakirjat), tiedostoselain käy kansiot läpi.",
         "attachPickerAsk": "Kysy joka kerta",
@@ -827,7 +837,12 @@ var catalogs = {
         "sendPermissionDenied": "Tiedosto on sovelluksen hiekkalaatikon ulkopuolella (SD-kortti tai muu kansio). Myönnä tallennusoikeus: Asetukset, Sailjail permissions, GRANT storage - käynnistä sitten sovellus ja taustapalvelu uudelleen.",
         "sendPermissionInactiveDaemon": "Tallennusoikeus on myönnetty mutta ei voimassa käynnissä olevassa taustapalvelussa - sailjail ottaa profiilin käyttöön käynnistyksessä. Käynnistä se uudelleen: Asetukset, taustapalvelu, käynnistä uudelleen. Pelkkä sovelluksen uudelleenkäynnistys ei auta, koska sovellus liittyy käynnissä olevaan palveluun ja tiedosto avataan siellä.",
         "sendPermissionInactiveApp": "Tallennusoikeus on myönnetty mutta ei voimassa käynnissä olevassa prosessissa - sailjail ottaa profiilin käyttöön käynnistyksessä. Sulje sovellus kokonaan (pyyhkäise kansi pois) ja avaa se uudelleen.",
-        "sendPermissionPartial": "Tallennusoikeus on myönnetty vain osittain - puuttuu: %1. RemovableMedia on SD-korttia varten. Suorita GRANT storage -komento kohdassa Asetukset, Sailjail permissions uudelleen; se lisää vain puuttuvat, joten toinen suoritus ei haittaa. Käynnistä sitten taustapalvelu uudelleen, tai sovellus jos et käytä palvelua."
+        "sendPermissionPartial": "Tallennusoikeus on myönnetty vain osittain - puuttuu: %1. RemovableMedia on SD-korttia varten. Suorita GRANT storage -komento kohdassa Asetukset, Sailjail permissions uudelleen; se lisää vain puuttuvat, joten toinen suoritus ei haittaa. Käynnistä sitten taustapalvelu uudelleen, tai sovellus jos et käytä palvelua.",
+        "permPendingGrant": "Myönnetty, mutta ei vielä voimassa: sailjail ottaa profiilin käyttöön prosessin käynnistyessä. Käynnistä taustapalvelu uudelleen (tai sovellus, jos et käytä palvelua).",
+        "permPendingRevoke": "Peruttu, mutta käynnissä olevalla prosessilla on yhä pääsy - sailjail ottaa profiilin käyttöön käynnistyksessä. Pääsy säilyy, kunnes taustapalvelu käynnistetään uudelleen (tai sovellus, jos et käytä palvelua).",
+        "restartServiceNow": "Käynnistä taustapalvelu nyt uudelleen",
+        "daemonRestarting": "Taustapalvelu käynnistyy uudelleen - oikeus astuu voimaan muutamassa sekunnissa.",
+        "daemonRestartFailed": "Taustapalvelua ei voitu käynnistää uudelleen. Käytä Asetukset, taustapalvelu, käynnistä uudelleen."
     },
     "sv": {
         "language": "Språk",
@@ -1090,7 +1105,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp avvisade det första meddelandet till den här kontakten. Lämna chatten och öppna den igen för ett nytt försök - eller starta samtalet på telefonen.",
         "tapToCopy": "(tryck för att kopiera)",
         "copiedToClipboard": "Kopierat till urklipp",
-        "daemonDownNotice": "Bakgrundstjänsten körs inte - du får inga aviseringar. Inställningar, bakgrundstjänst, starta om.",
+        "daemonDownNotice": "Bakgrundstjänsten körs inte - du får inga aviseringar. Starta den i Terminal: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Filväljare",
         "attachPickerDesc": "Vilken väljare som öppnas när du trycker på gemet. Mediebiblioteket sorterar efter typ (bilder, videor, musik, dokument), filbläddraren går igenom mapparna.",
         "attachPickerAsk": "Fråga varje gång",
@@ -1100,7 +1115,12 @@ var catalogs = {
         "sendPermissionDenied": "Filen ligger utanför appens sandlåda (SD-kort eller annan mapp). Ge lagringsåtkomst under Inställningar, Sailjail permissions, GRANT storage - starta sedan om appen och bakgrundstjänsten.",
         "sendPermissionInactiveDaemon": "Lagringsåtkomsten är beviljad men inte aktiv i den körande bakgrundstjänsten - sailjail tillämpar profilen vid start. Starta om den under Inställningar, bakgrundstjänst, starta om. Att bara starta om appen hjälper inte: appen ansluter till den körande tjänsten, och filen öppnas där.",
         "sendPermissionInactiveApp": "Lagringsåtkomsten är beviljad men inte aktiv i den körande processen - sailjail tillämpar profilen vid start. Stäng appen helt (svep bort omslaget) och öppna den igen.",
-        "sendPermissionPartial": "Lagringsåtkomsten är bara delvis beviljad - saknas: %1. RemovableMedia är den för SD-kortet. Kör GRANT storage-kommandot under Inställningar, Sailjail permissions igen; det lägger bara till det som saknas, så en andra körning skadar inte. Starta sedan om bakgrundstjänsten, eller appen om du inte använder någon."
+        "sendPermissionPartial": "Lagringsåtkomsten är bara delvis beviljad - saknas: %1. RemovableMedia är den för SD-kortet. Kör GRANT storage-kommandot under Inställningar, Sailjail permissions igen; det lägger bara till det som saknas, så en andra körning skadar inte. Starta sedan om bakgrundstjänsten, eller appen om du inte använder någon.",
+        "permPendingGrant": "Beviljad men inte aktiv än: sailjail tillämpar profilen när processen startar. Starta om bakgrundstjänsten (eller appen om du inte använder någon).",
+        "permPendingRevoke": "Återkallad, men den körande processen har fortfarande åtkomst - sailjail tillämpar profilen vid start. Den kvarstår tills bakgrundstjänsten startas om (eller appen om du inte använder någon).",
+        "restartServiceNow": "Starta om bakgrundstjänsten nu",
+        "daemonRestarting": "Bakgrundstjänsten startar om - behörigheten börjar gälla om några sekunder.",
+        "daemonRestartFailed": "Kunde inte starta om bakgrundstjänsten. Använd Inställningar, bakgrundstjänst, starta om."
     },
     "hu": {
         "language": "Nyelv",
@@ -1363,7 +1383,7 @@ var catalogs = {
         "sendBlockedHint": "A WhatsApp elutasította az első üzenetet ehhez a névjegyhez. Lépj ki a beszélgetésből és nyisd meg újra egy további próbához - vagy kezdd el a beszélgetést a telefonon.",
         "tapToCopy": "(koppints a másoláshoz)",
         "copiedToClipboard": "Vágólapra másolva",
-        "daemonDownNotice": "A háttérszolgáltatás nem fut - nem kapsz értesítéseket. Beállítások, háttérszolgáltatás, újraindítás.",
+        "daemonDownNotice": "A háttérszolgáltatás nem fut - nem kapsz értesítéseket. Indítsd el a Terminálban: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Fájlválasztó",
         "attachPickerDesc": "Melyik választó nyíljon meg a gemkapocsra koppintva. A médiatár típus szerint rendez (képek, videók, zene, dokumentumok), a fájlböngésző a mappákat járja be.",
         "attachPickerAsk": "Kérdezzen mindig",
@@ -1373,7 +1393,12 @@ var catalogs = {
         "sendPermissionDenied": "A fájl az alkalmazás homokozóján kívül van (SD-kártya vagy más mappa). Adj tárolási hozzáférést: Beállítások, Sailjail permissions, GRANT storage - majd indítsd újra az alkalmazást és a háttérszolgáltatást.",
         "sendPermissionInactiveDaemon": "A tárolási hozzáférés meg van adva, de a futó háttérszolgáltatásban még nem érvényes - a sailjail induláskor alkalmazza a profilt. Indítsd újra: Beállítások, háttérszolgáltatás, újraindítás. Az alkalmazás újraindítása önmagában nem segít: az alkalmazás a futó szolgáltatáshoz csatlakozik, a fájl ott nyílik meg.",
         "sendPermissionInactiveApp": "A tárolási hozzáférés meg van adva, de a futó folyamatban még nem érvényes - a sailjail induláskor alkalmazza a profilt. Zárd be teljesen az alkalmazást (söpörd le a borítót), majd nyisd meg újra.",
-        "sendPermissionPartial": "A tárolási hozzáférés csak részben van megadva - hiányzik: %1. A RemovableMedia az SD-kártyához tartozik. Futtasd újra a GRANT storage parancsot a Beállítások, Sailjail permissions alatt; csak a hiányzókat adja hozzá, így a második futtatás ártalmatlan. Utána indítsd újra a háttérszolgáltatást, vagy az alkalmazást, ha nem használsz szolgáltatást."
+        "sendPermissionPartial": "A tárolási hozzáférés csak részben van megadva - hiányzik: %1. A RemovableMedia az SD-kártyához tartozik. Futtasd újra a GRANT storage parancsot a Beállítások, Sailjail permissions alatt; csak a hiányzókat adja hozzá, így a második futtatás ártalmatlan. Utána indítsd újra a háttérszolgáltatást, vagy az alkalmazást, ha nem használsz szolgáltatást.",
+        "permPendingGrant": "Megadva, de még nem érvényes: a sailjail a folyamat indulásakor alkalmazza a profilt. Indítsd újra a háttérszolgáltatást (vagy az alkalmazást, ha nem használsz szolgáltatást).",
+        "permPendingRevoke": "Visszavonva, de a futó folyamatnak még van hozzáférése - a sailjail induláskor alkalmazza a profilt. Ez megmarad, amíg a háttérszolgáltatás újra nem indul (vagy az alkalmazás, ha nem használsz szolgáltatást).",
+        "restartServiceNow": "Háttérszolgáltatás újraindítása most",
+        "daemonRestarting": "A háttérszolgáltatás újraindul - a jogosultság néhány másodperc múlva érvényes.",
+        "daemonRestartFailed": "A háttérszolgáltatást nem sikerült újraindítani. Használd: Beállítások, háttérszolgáltatás, újraindítás."
     },
     "ru": {
         "language": "Язык",
@@ -1636,7 +1661,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp отклонил первое сообщение этому контакту. Выйдите из чата и откройте его снова для ещё одной попытки - или начните разговор на телефоне.",
         "tapToCopy": "(нажмите, чтобы скопировать)",
         "copiedToClipboard": "Скопировано в буфер обмена",
-        "daemonDownNotice": "Фоновая служба не работает - уведомления приходить не будут. Настройки, фоновая служба, перезапустить.",
+        "daemonDownNotice": "Фоновая служба не работает - уведомления приходить не будут. Запустите её в Терминале: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Выбор файлов",
         "attachPickerDesc": "Какой выбор открывается по нажатию на скрепку. Медиатека сортирует по типу (изображения, видео, музыка, документы), файловый браузер проходит по папкам.",
         "attachPickerAsk": "Спрашивать каждый раз",
@@ -1646,7 +1671,12 @@ var catalogs = {
         "sendPermissionDenied": "Файл находится вне песочницы приложения (SD-карта или другая папка). Выдайте доступ к хранилищу: Настройки, Sailjail permissions, GRANT storage - затем перезапустите приложение и фоновую службу.",
         "sendPermissionInactiveDaemon": "Доступ к хранилищу выдан, но в работающей фоновой службе ещё не действует - sailjail применяет профиль при запуске. Перезапустите её: Настройки, фоновая служба, перезапустить. Перезапуск одного приложения не поможет: оно подключается к работающей службе, файл открывается там.",
         "sendPermissionInactiveApp": "Доступ к хранилищу выдан, но в работающем процессе ещё не действует - sailjail применяет профиль при запуске. Полностью закройте приложение (смахните обложку) и откройте снова.",
-        "sendPermissionPartial": "Доступ к хранилищу выдан лишь частично - отсутствует: %1. RemovableMedia отвечает за SD-карту. Выполните команду GRANT storage в разделе Настройки, Sailjail permissions ещё раз; она добавляет только недостающее, поэтому повторный запуск безвреден. Затем перезапустите фоновую службу или приложение, если службы нет."
+        "sendPermissionPartial": "Доступ к хранилищу выдан лишь частично - отсутствует: %1. RemovableMedia отвечает за SD-карту. Выполните команду GRANT storage в разделе Настройки, Sailjail permissions ещё раз; она добавляет только недостающее, поэтому повторный запуск безвреден. Затем перезапустите фоновую службу или приложение, если службы нет.",
+        "permPendingGrant": "Выдано, но ещё не действует: sailjail применяет профиль при запуске процесса. Перезапустите фоновую службу (или приложение, если службы нет).",
+        "permPendingRevoke": "Отозвано, но работающий процесс всё ещё имеет доступ - sailjail применяет профиль при запуске. Доступ сохранится до перезапуска фоновой службы (или приложения, если службы нет).",
+        "restartServiceNow": "Перезапустить фоновую службу сейчас",
+        "daemonRestarting": "Фоновая служба перезапускается - разрешение вступит в силу через несколько секунд.",
+        "daemonRestartFailed": "Не удалось перезапустить фоновую службу. Используйте Настройки, фоновая служба, перезапустить."
     },
     "fr": {
         "language": "Langue",
@@ -1909,7 +1939,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp a refusé le premier message à ce contact. Quittez la conversation et rouvrez-la pour un nouvel essai - ou commencez-la sur le téléphone.",
         "tapToCopy": "(appuyer pour copier)",
         "copiedToClipboard": "Copié dans le presse-papiers",
-        "daemonDownNotice": "Le service en arrière-plan ne tourne pas - vous ne recevrez pas de notifications. Paramètres, service en arrière-plan, redémarrer.",
+        "daemonDownNotice": "Le service en arrière-plan ne tourne pas - vous ne recevrez pas de notifications. Démarrez-le dans Terminal : systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Sélecteur de fichiers",
         "attachPickerDesc": "Quel sélecteur s'ouvre en touchant le trombone. La médiathèque trie par type (images, vidéos, musique, documents), le navigateur de fichiers parcourt les dossiers.",
         "attachPickerAsk": "Demander à chaque fois",
@@ -1919,7 +1949,12 @@ var catalogs = {
         "sendPermissionDenied": "Le fichier se trouve hors du bac à sable de l'application (carte SD ou autre dossier). Accordez l'accès au stockage dans Paramètres, Sailjail permissions, GRANT storage - puis redémarrez l'application et le service en arrière-plan.",
         "sendPermissionInactiveDaemon": "L'accès au stockage est accordé mais pas actif dans le service en arrière-plan en cours - sailjail applique un profil au démarrage. Redémarrez-le dans Paramètres, service en arrière-plan, redémarrer. Redémarrer l'application seule ne suffit pas : elle se rattache au service en cours, et le fichier y est ouvert.",
         "sendPermissionInactiveApp": "L'accès au stockage est accordé mais pas actif dans le processus en cours - sailjail applique un profil au démarrage. Fermez complètement l'application (balayez la vignette) et rouvrez-la.",
-        "sendPermissionPartial": "L'accès au stockage n'est accordé qu'en partie - il manque : %1. RemovableMedia est celle de la carte SD. Relancez la commande GRANT storage dans Paramètres, Sailjail permissions ; elle n'ajoute que ce qui manque, une seconde exécution est sans risque. Redémarrez ensuite le service en arrière-plan, ou l'application si vous n'en utilisez pas."
+        "sendPermissionPartial": "L'accès au stockage n'est accordé qu'en partie - il manque : %1. RemovableMedia est celle de la carte SD. Relancez la commande GRANT storage dans Paramètres, Sailjail permissions ; elle n'ajoute que ce qui manque, une seconde exécution est sans risque. Redémarrez ensuite le service en arrière-plan, ou l'application si vous n'en utilisez pas.",
+        "permPendingGrant": "Accordé mais pas encore actif : sailjail applique un profil au démarrage du processus. Redémarrez le service en arrière-plan (ou l'application si vous n'en utilisez pas).",
+        "permPendingRevoke": "Révoqué, mais le processus en cours y a toujours accès : sailjail applique un profil au démarrage. L'accès subsiste jusqu'au redémarrage du service en arrière-plan (ou de l'application si vous n'en utilisez pas).",
+        "restartServiceNow": "Redémarrer le service maintenant",
+        "daemonRestarting": "Le service en arrière-plan redémarre - la permission prendra effet dans quelques secondes.",
+        "daemonRestartFailed": "Impossible de redémarrer le service en arrière-plan. Utilisez Paramètres, service en arrière-plan, redémarrer."
     },
     "la": {
         "language": "Lingua",
@@ -2182,7 +2217,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp primum nuntium ad hunc familiarem reiecit. Relinque colloquium et iterum aperi ad alterum conatum - vel colloquium in telephono incipe.",
         "tapToCopy": "(tange ut exscribas)",
         "copiedToClipboard": "In tabulam translatum",
-        "daemonDownNotice": "Ministerium occultum non currit - nuntiationes non accipies. Optiones, ministerium occultum, iterum incipe.",
+        "daemonDownNotice": "Ministerium occultum non currit - nuntiationes non accipies. In Terminali incipe: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Delectus limarum",
         "attachPickerDesc": "Qui delectus aperiatur cum fibulam tangis. Bibliotheca mediorum secundum genus disponit (imagines, pelliculae, musica, documenta), lustrator limarum per scrinia vadit.",
         "attachPickerAsk": "Semper roga",
@@ -2192,7 +2227,12 @@ var catalogs = {
         "sendPermissionDenied": "Lima extra arenarium applicationis iacet (charta SD vel aliud scrinium). Concede aditum ad thesaurum: Optiones, Sailjail permissions, GRANT storage - deinde applicationem et ministerium occultum iterum incipe.",
         "sendPermissionInactiveDaemon": "Aditus ad thesaurum concessus est sed in ministerio occulto currente nondum valet - sailjail formam in initio applicat. Id iterum incipe: Optiones, ministerium occultum, iterum incipe. Sola applicatio iterum incepta non iuvat: ministerio currenti se adiungit, ibi lima aperitur.",
         "sendPermissionInactiveApp": "Aditus ad thesaurum concessus est sed in processu currente nondum valet - sailjail formam in initio applicat. Applicationem plane claude (tegumentum abstergendo) et rursus aperi.",
-        "sendPermissionPartial": "Aditus ad thesaurum ex parte tantum concessus est - deest: %1. RemovableMedia ad chartam SD pertinet. Mandatum GRANT storage in Optionibus, Sailjail permissions iterum exsequere; sola deficientia addit, unde alter cursus innocuus est. Deinde ministerium occultum iterum incipe, vel applicationem si nullo uteris."
+        "sendPermissionPartial": "Aditus ad thesaurum ex parte tantum concessus est - deest: %1. RemovableMedia ad chartam SD pertinet. Mandatum GRANT storage in Optionibus, Sailjail permissions iterum exsequere; sola deficientia addit, unde alter cursus innocuus est. Deinde ministerium occultum iterum incipe, vel applicationem si nullo uteris.",
+        "permPendingGrant": "Concessum sed nondum valens: sailjail formam initio processus applicat. Ministerium occultum iterum incipe (vel applicationem, si nullo uteris).",
+        "permPendingRevoke": "Revocatum, sed processus currens adhuc aditum habet - sailjail formam in initio applicat. Manet donec ministerium occultum iterum incipiat (vel applicatio, si nullo uteris).",
+        "restartServiceNow": "Ministerium occultum nunc iterum incipe",
+        "daemonRestarting": "Ministerium occultum iterum incipit - licentia paucis secundis valebit.",
+        "daemonRestartFailed": "Ministerium occultum iterum incipi non potuit. Utere Optionibus, ministerium occultum, iterum incipe."
     },
     "es": {
         "language": "Idioma",
@@ -2443,7 +2483,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp rechazó el primer mensaje a este contacto. Sal del chat y ábrelo de nuevo para otro intento, o empieza la conversación en el teléfono.",
         "tapToCopy": "(toca para copiar)",
         "copiedToClipboard": "Copiado al portapapeles",
-        "daemonDownNotice": "El servicio en segundo plano no se está ejecutando: no recibirás notificaciones. Ajustes, servicio en segundo plano, reiniciar.",
+        "daemonDownNotice": "El servicio en segundo plano no se está ejecutando: no recibirás notificaciones. Inícialo en Terminal: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Selector de archivos",
         "attachPickerDesc": "Qué selector se abre al tocar el clip. La biblioteca multimedia ordena por tipo (imágenes, vídeos, música, documentos); el explorador recorre las carpetas.",
         "attachPickerAsk": "Preguntar cada vez",
@@ -2453,7 +2493,12 @@ var catalogs = {
         "sendPermissionDenied": "El archivo está fuera del entorno aislado de la aplicación (tarjeta SD u otra carpeta). Concede acceso al almacenamiento en Ajustes, Sailjail permissions, GRANT storage y reinicia la aplicación y el servicio en segundo plano.",
         "sendPermissionInactiveDaemon": "El acceso al almacenamiento está concedido pero no activo en el servicio en segundo plano en ejecución: sailjail aplica el perfil al iniciar. Reinícialo en Ajustes, servicio en segundo plano, reiniciar. Reiniciar solo la aplicación no sirve: se conecta al servicio en ejecución y el archivo se abre allí.",
         "sendPermissionInactiveApp": "El acceso al almacenamiento está concedido pero no activo en el proceso en ejecución: sailjail aplica el perfil al iniciar. Cierra la aplicación por completo (desliza la miniatura) y ábrela de nuevo.",
-        "sendPermissionPartial": "El acceso al almacenamiento solo está concedido en parte: falta %1. RemovableMedia es la de la tarjeta SD. Vuelve a ejecutar el comando GRANT storage en Ajustes, Sailjail permissions; solo añade lo que falta, así que repetirlo es inofensivo. Después reinicia el servicio en segundo plano, o la aplicación si no usas ninguno."
+        "sendPermissionPartial": "El acceso al almacenamiento solo está concedido en parte: falta %1. RemovableMedia es la de la tarjeta SD. Vuelve a ejecutar el comando GRANT storage en Ajustes, Sailjail permissions; solo añade lo que falta, así que repetirlo es inofensivo. Después reinicia el servicio en segundo plano, o la aplicación si no usas ninguno.",
+        "permPendingGrant": "Concedido pero aún no activo: sailjail aplica el perfil al iniciar el proceso. Reinicia el servicio en segundo plano (o la aplicación si no usas ninguno).",
+        "permPendingRevoke": "Revocado, pero el proceso en ejecución sigue teniendo acceso: sailjail aplica el perfil al iniciar. Se mantiene hasta que se reinicie el servicio en segundo plano (o la aplicación si no usas ninguno).",
+        "restartServiceNow": "Reiniciar el servicio ahora",
+        "daemonRestarting": "El servicio en segundo plano se está reiniciando: el permiso será efectivo en unos segundos.",
+        "daemonRestartFailed": "No se pudo reiniciar el servicio en segundo plano. Usa Ajustes, servicio en segundo plano, reiniciar."
     },
     "it": {
         "language": "Lingua",
@@ -2704,7 +2749,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp ha rifiutato il primo messaggio a questo contatto. Esci dalla chat e riaprila per un altro tentativo, oppure inizia la conversazione sul telefono.",
         "tapToCopy": "(tocca per copiare)",
         "copiedToClipboard": "Copiato negli appunti",
-        "daemonDownNotice": "Il servizio in background non è in esecuzione: non riceverai notifiche. Impostazioni, servizio in background, riavvia.",
+        "daemonDownNotice": "Il servizio in background non è in esecuzione: non riceverai notifiche. Avvialo nel Terminale: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Selettore file",
         "attachPickerDesc": "Quale selettore si apre toccando la graffetta. La libreria multimediale ordina per tipo (immagini, video, musica, documenti), il browser dei file percorre le cartelle.",
         "attachPickerAsk": "Chiedi ogni volta",
@@ -2714,7 +2759,12 @@ var catalogs = {
         "sendPermissionDenied": "Il file è fuori dalla sandbox dell'applicazione (scheda SD o altra cartella). Concedi l'accesso allo spazio di archiviazione in Impostazioni, Sailjail permissions, GRANT storage, poi riavvia l'app e il servizio in background.",
         "sendPermissionInactiveDaemon": "L'accesso allo spazio di archiviazione è concesso ma non attivo nel servizio in background in esecuzione: sailjail applica il profilo all'avvio. Riavvialo in Impostazioni, servizio in background, riavvia. Riavviare solo l'app non basta: si collega al servizio in esecuzione e il file viene aperto lì.",
         "sendPermissionInactiveApp": "L'accesso allo spazio di archiviazione è concesso ma non attivo nel processo in esecuzione: sailjail applica il profilo all'avvio. Chiudi completamente l'app (scorri via la copertina) e riaprila.",
-        "sendPermissionPartial": "L'accesso allo spazio di archiviazione è concesso solo in parte: manca %1. RemovableMedia è quella per la scheda SD. Esegui di nuovo il comando GRANT storage in Impostazioni, Sailjail permissions; aggiunge solo ciò che manca, quindi ripeterlo è innocuo. Poi riavvia il servizio in background, o l'app se non ne usi uno."
+        "sendPermissionPartial": "L'accesso allo spazio di archiviazione è concesso solo in parte: manca %1. RemovableMedia è quella per la scheda SD. Esegui di nuovo il comando GRANT storage in Impostazioni, Sailjail permissions; aggiunge solo ciò che manca, quindi ripeterlo è innocuo. Poi riavvia il servizio in background, o l'app se non ne usi uno.",
+        "permPendingGrant": "Concesso ma non ancora attivo: sailjail applica il profilo all'avvio del processo. Riavvia il servizio in background (o l'app, se non ne usi uno).",
+        "permPendingRevoke": "Revocato, ma il processo in esecuzione ha ancora accesso: sailjail applica il profilo all'avvio. Resta finché il servizio in background non viene riavviato (o l'app, se non ne usi uno).",
+        "restartServiceNow": "Riavvia ora il servizio in background",
+        "daemonRestarting": "Il servizio in background si sta riavviando: il permesso sarà attivo tra pochi secondi.",
+        "daemonRestartFailed": "Non è stato possibile riavviare il servizio in background. Usa Impostazioni, servizio in background, riavvia."
     },
     "pt": {
         "language": "Idioma",
@@ -2965,7 +3015,7 @@ var catalogs = {
         "sendBlockedHint": "O WhatsApp rejeitou a primeira mensagem para este contacto. Saia da conversa e abra-a novamente para outra tentativa - ou comece a conversa no telemóvel.",
         "tapToCopy": "(tocar para copiar)",
         "copiedToClipboard": "Copiado para a área de transferência",
-        "daemonDownNotice": "O serviço em segundo plano não está a correr - não vai receber notificações. Definições, serviço em segundo plano, reiniciar.",
+        "daemonDownNotice": "O serviço em segundo plano não está a correr - não vai receber notificações. Inicie-o no Terminal: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Seletor de ficheiros",
         "attachPickerDesc": "Que seletor abre ao tocar no clipe. A biblioteca multimédia ordena por tipo (imagens, vídeos, música, documentos); o explorador percorre as pastas.",
         "attachPickerAsk": "Perguntar sempre",
@@ -2975,7 +3025,12 @@ var catalogs = {
         "sendPermissionDenied": "O ficheiro está fora da caixa de areia da aplicação (cartão SD ou outra pasta). Conceda acesso ao armazenamento em Definições, Sailjail permissions, GRANT storage - depois reinicie a aplicação e o serviço em segundo plano.",
         "sendPermissionInactiveDaemon": "O acesso ao armazenamento foi concedido mas não está ativo no serviço em segundo plano em execução - o sailjail aplica o perfil no arranque. Reinicie-o em Definições, serviço em segundo plano, reiniciar. Reiniciar só a aplicação não ajuda: ela liga-se ao serviço em execução e o ficheiro é aberto lá.",
         "sendPermissionInactiveApp": "O acesso ao armazenamento foi concedido mas não está ativo no processo em execução - o sailjail aplica o perfil no arranque. Feche a aplicação por completo (deslize a miniatura) e abra-a de novo.",
-        "sendPermissionPartial": "O acesso ao armazenamento só foi concedido em parte - falta: %1. RemovableMedia é a do cartão SD. Execute novamente o comando GRANT storage em Definições, Sailjail permissions; só acrescenta o que falta, por isso repetir é inofensivo. Depois reinicie o serviço em segundo plano, ou a aplicação se não usar nenhum."
+        "sendPermissionPartial": "O acesso ao armazenamento só foi concedido em parte - falta: %1. RemovableMedia é a do cartão SD. Execute novamente o comando GRANT storage em Definições, Sailjail permissions; só acrescenta o que falta, por isso repetir é inofensivo. Depois reinicie o serviço em segundo plano, ou a aplicação se não usar nenhum.",
+        "permPendingGrant": "Concedido mas ainda não ativo: o sailjail aplica o perfil no arranque do processo. Reinicie o serviço em segundo plano (ou a aplicação, se não usar nenhum).",
+        "permPendingRevoke": "Revogado, mas o processo em execução ainda tem acesso - o sailjail aplica o perfil no arranque. Mantém-se até o serviço em segundo plano ser reiniciado (ou a aplicação, se não usar nenhum).",
+        "restartServiceNow": "Reiniciar o serviço agora",
+        "daemonRestarting": "O serviço em segundo plano está a reiniciar - a permissão fica ativa em poucos segundos.",
+        "daemonRestartFailed": "Não foi possível reiniciar o serviço em segundo plano. Use Definições, serviço em segundo plano, reiniciar."
     },
     "nl": {
         "language": "Taal",
@@ -3226,7 +3281,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp heeft het eerste bericht aan dit contact geweigerd. Verlaat de chat en open hem opnieuw voor nog een poging - of begin het gesprek op de telefoon.",
         "tapToCopy": "(tik om te kopiëren)",
         "copiedToClipboard": "Gekopieerd naar klembord",
-        "daemonDownNotice": "De achtergronddienst draait niet - je krijgt geen meldingen. Instellingen, achtergronddienst, opnieuw starten.",
+        "daemonDownNotice": "De achtergronddienst draait niet - je krijgt geen meldingen. Start hem in Terminal: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Bestandskiezer",
         "attachPickerDesc": "Welke kiezer opent bij het tikken op de paperclip. De mediabibliotheek sorteert op type (afbeeldingen, video's, muziek, documenten), de bestandsbrowser loopt door de mappen.",
         "attachPickerAsk": "Elke keer vragen",
@@ -3236,7 +3291,12 @@ var catalogs = {
         "sendPermissionDenied": "Het bestand ligt buiten de sandbox van de app (SD-kaart of een andere map). Geef opslagtoegang via Instellingen, Sailjail permissions, GRANT storage - start daarna de app en de achtergronddienst opnieuw.",
         "sendPermissionInactiveDaemon": "Opslagtoegang is verleend maar niet actief in de draaiende achtergronddienst - sailjail past een profiel toe bij de start. Start hem opnieuw via Instellingen, achtergronddienst, opnieuw starten. Alleen de app herstarten helpt niet: de app koppelt aan de draaiende dienst en daar wordt het bestand geopend.",
         "sendPermissionInactiveApp": "Opslagtoegang is verleend maar niet actief in het draaiende proces - sailjail past een profiel toe bij de start. Sluit de app volledig (veeg de cover weg) en open hem opnieuw.",
-        "sendPermissionPartial": "Opslagtoegang is maar deels verleend - ontbreekt: %1. RemovableMedia is die voor de SD-kaart. Voer het GRANT storage-commando onder Instellingen, Sailjail permissions opnieuw uit; het voegt alleen het ontbrekende toe, een tweede keer kan geen kwaad. Start daarna de achtergronddienst opnieuw, of de app als je er geen gebruikt."
+        "sendPermissionPartial": "Opslagtoegang is maar deels verleend - ontbreekt: %1. RemovableMedia is die voor de SD-kaart. Voer het GRANT storage-commando onder Instellingen, Sailjail permissions opnieuw uit; het voegt alleen het ontbrekende toe, een tweede keer kan geen kwaad. Start daarna de achtergronddienst opnieuw, of de app als je er geen gebruikt.",
+        "permPendingGrant": "Verleend maar nog niet actief: sailjail past een profiel toe bij de start van het proces. Start de achtergronddienst opnieuw (of de app als je er geen gebruikt).",
+        "permPendingRevoke": "Ingetrokken, maar het draaiende proces heeft nog toegang - sailjail past een profiel toe bij de start. Die blijft tot de achtergronddienst opnieuw start (of de app als je er geen gebruikt).",
+        "restartServiceNow": "Achtergronddienst nu opnieuw starten",
+        "daemonRestarting": "De achtergronddienst start opnieuw - de rechten gelden over enkele seconden.",
+        "daemonRestartFailed": "Kon de achtergronddienst niet opnieuw starten. Gebruik Instellingen, achtergronddienst, opnieuw starten."
     },
     "pl": {
         "language": "Język",
@@ -3487,7 +3547,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp odrzucił pierwszą wiadomość do tego kontaktu. Wyjdź z czatu i otwórz go ponownie, aby spróbować jeszcze raz - albo rozpocznij rozmowę na telefonie.",
         "tapToCopy": "(dotknij, aby skopiować)",
         "copiedToClipboard": "Skopiowano do schowka",
-        "daemonDownNotice": "Usługa w tle nie działa - nie otrzymasz powiadomień. Ustawienia, usługa w tle, uruchom ponownie.",
+        "daemonDownNotice": "Usługa w tle nie działa - nie otrzymasz powiadomień. Uruchom ją w Terminalu: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Wybór plików",
         "attachPickerDesc": "Który wybór otwiera się po dotknięciu spinacza. Biblioteka multimediów sortuje według typu (zdjęcia, filmy, muzyka, dokumenty), przeglądarka plików przechodzi przez foldery.",
         "attachPickerAsk": "Pytaj za każdym razem",
@@ -3497,7 +3557,12 @@ var catalogs = {
         "sendPermissionDenied": "Plik znajduje się poza piaskownicą aplikacji (karta SD lub inny folder). Przyznaj dostęp do pamięci w Ustawieniach, Sailjail permissions, GRANT storage - następnie uruchom ponownie aplikację i usługę w tle.",
         "sendPermissionInactiveDaemon": "Dostęp do pamięci jest przyznany, ale nie działa w uruchomionej usłudze w tle - sailjail stosuje profil przy starcie. Uruchom ją ponownie: Ustawienia, usługa w tle, uruchom ponownie. Restart samej aplikacji nie pomoże: łączy się ona z działającą usługą i tam otwierany jest plik.",
         "sendPermissionInactiveApp": "Dostęp do pamięci jest przyznany, ale nie działa w uruchomionym procesie - sailjail stosuje profil przy starcie. Zamknij aplikację całkowicie (przesuń kafelek) i otwórz ją ponownie.",
-        "sendPermissionPartial": "Dostęp do pamięci przyznano tylko częściowo - brakuje: %1. RemovableMedia odpowiada za kartę SD. Uruchom polecenie GRANT storage w Ustawieniach, Sailjail permissions ponownie; dodaje tylko brakujące, więc powtórzenie nie szkodzi. Następnie uruchom ponownie usługę w tle albo aplikację, jeśli usługi nie używasz."
+        "sendPermissionPartial": "Dostęp do pamięci przyznano tylko częściowo - brakuje: %1. RemovableMedia odpowiada za kartę SD. Uruchom polecenie GRANT storage w Ustawieniach, Sailjail permissions ponownie; dodaje tylko brakujące, więc powtórzenie nie szkodzi. Następnie uruchom ponownie usługę w tle albo aplikację, jeśli usługi nie używasz.",
+        "permPendingGrant": "Przyznane, ale jeszcze nie działa: sailjail stosuje profil przy starcie procesu. Uruchom ponownie usługę w tle (albo aplikację, jeśli usługi nie używasz).",
+        "permPendingRevoke": "Cofnięte, ale działający proces nadal ma dostęp - sailjail stosuje profil przy starcie. Utrzyma się do ponownego uruchomienia usługi w tle (albo aplikacji, jeśli usługi nie używasz).",
+        "restartServiceNow": "Uruchom teraz usługę w tle ponownie",
+        "daemonRestarting": "Usługa w tle uruchamia się ponownie - uprawnienie zadziała za kilka sekund.",
+        "daemonRestartFailed": "Nie udało się uruchomić ponownie usługi w tle. Użyj Ustawienia, usługa w tle, uruchom ponownie."
     },
     "tr": {
         "language": "Dil",
@@ -3748,7 +3813,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp bu kişiye giden ilk mesajı reddetti. Sohbetten çıkıp yeniden açarak bir kez daha deneyebilirsiniz - ya da sohbeti telefonda başlatın.",
         "tapToCopy": "(kopyalamak için dokunun)",
         "copiedToClipboard": "Panoya kopyalandı",
-        "daemonDownNotice": "Arka plan hizmeti çalışmıyor - bildirim almayacaksınız. Ayarlar, arka plan hizmeti, yeniden başlat.",
+        "daemonDownNotice": "Arka plan hizmeti çalışmıyor - bildirim almayacaksınız. Terminal'de başlatın: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Dosya seçici",
         "attachPickerDesc": "Ataça dokununca hangi seçicinin açılacağı. Medya kitaplığı türe göre sıralar (resimler, videolar, müzik, belgeler), dosya tarayıcısı klasörleri gezer.",
         "attachPickerAsk": "Her seferinde sor",
@@ -3758,7 +3823,12 @@ var catalogs = {
         "sendPermissionDenied": "Dosya uygulamanın korumalı alanının dışında (SD kart veya başka bir klasör). Depolama erişimini Ayarlar, Sailjail permissions, GRANT storage üzerinden verin - ardından uygulamayı ve arka plan hizmetini yeniden başlatın.",
         "sendPermissionInactiveDaemon": "Depolama erişimi verildi ancak çalışan arka plan hizmetinde etkin değil - sailjail profili başlangıçta uygular. Ayarlar, arka plan hizmeti, yeniden başlat üzerinden yeniden başlatın. Yalnızca uygulamayı yeniden başlatmak işe yaramaz: uygulama çalışan hizmete bağlanır ve dosya orada açılır.",
         "sendPermissionInactiveApp": "Depolama erişimi verildi ancak çalışan süreçte etkin değil - sailjail profili başlangıçta uygular. Uygulamayı tamamen kapatın (kapağı kaydırın) ve yeniden açın.",
-        "sendPermissionPartial": "Depolama erişimi yalnızca kısmen verilmiş - eksik: %1. RemovableMedia, SD kart için olanıdır. Ayarlar, Sailjail permissions altındaki GRANT storage komutunu yeniden çalıştırın; yalnızca eksik olanı ekler, ikinci kez çalıştırmak zararsızdır. Ardından arka plan hizmetini, hizmet kullanmıyorsanız uygulamayı yeniden başlatın."
+        "sendPermissionPartial": "Depolama erişimi yalnızca kısmen verilmiş - eksik: %1. RemovableMedia, SD kart için olanıdır. Ayarlar, Sailjail permissions altındaki GRANT storage komutunu yeniden çalıştırın; yalnızca eksik olanı ekler, ikinci kez çalıştırmak zararsızdır. Ardından arka plan hizmetini, hizmet kullanmıyorsanız uygulamayı yeniden başlatın.",
+        "permPendingGrant": "Verildi ancak henüz etkin değil: sailjail profili süreç başlangıcında uygular. Arka plan hizmetini yeniden başlatın (hizmet kullanmıyorsanız uygulamayı).",
+        "permPendingRevoke": "Geri alındı ancak çalışan sürecin erişimi sürüyor - sailjail profili başlangıçta uygular. Arka plan hizmeti yeniden başlatılana kadar geçerli kalır (hizmet kullanmıyorsanız uygulama).",
+        "restartServiceNow": "Arka plan hizmetini şimdi yeniden başlat",
+        "daemonRestarting": "Arka plan hizmeti yeniden başlıyor - izin birkaç saniye içinde etkin olacak.",
+        "daemonRestartFailed": "Arka plan hizmeti yeniden başlatılamadı. Ayarlar, arka plan hizmeti, yeniden başlat yolunu kullanın."
     },
     "da": {
         "language": "Sprog",
@@ -4009,7 +4079,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp afviste den første besked til denne kontakt. Forlad chatten og åbn den igen for endnu et forsøg - eller start samtalen på telefonen.",
         "tapToCopy": "(tryk for at kopiere)",
         "copiedToClipboard": "Kopieret til udklipsholder",
-        "daemonDownNotice": "Baggrundstjenesten kører ikke - du får ingen notifikationer. Indstillinger, baggrundstjeneste, genstart.",
+        "daemonDownNotice": "Baggrundstjenesten kører ikke - du får ingen notifikationer. Start den i Terminal: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Filvælger",
         "attachPickerDesc": "Hvilken vælger der åbnes ved tryk på clipsen. Mediebiblioteket sorterer efter type (billeder, videoer, musik, dokumenter), filbrowseren gennemgår mapperne.",
         "attachPickerAsk": "Spørg hver gang",
@@ -4019,7 +4089,12 @@ var catalogs = {
         "sendPermissionDenied": "Filen ligger uden for appens sandkasse (SD-kort eller en anden mappe). Giv lageradgang under Indstillinger, Sailjail permissions, GRANT storage - genstart derefter appen og baggrundstjenesten.",
         "sendPermissionInactiveDaemon": "Lageradgang er givet, men ikke aktiv i den kørende baggrundstjeneste - sailjail anvender profilen ved start. Genstart den under Indstillinger, baggrundstjeneste, genstart. Det hjælper ikke kun at genstarte appen: den kobler sig til den kørende tjeneste, og filen åbnes dér.",
         "sendPermissionInactiveApp": "Lageradgang er givet, men ikke aktiv i den kørende proces - sailjail anvender profilen ved start. Luk appen helt (stryg coveret væk), og åbn den igen.",
-        "sendPermissionPartial": "Lageradgang er kun delvist givet - mangler: %1. RemovableMedia er den til SD-kortet. Kør GRANT storage-kommandoen under Indstillinger, Sailjail permissions igen; den tilføjer kun det manglende, så en ekstra kørsel skader ikke. Genstart derefter baggrundstjenesten, eller appen hvis du ikke bruger en."
+        "sendPermissionPartial": "Lageradgang er kun delvist givet - mangler: %1. RemovableMedia er den til SD-kortet. Kør GRANT storage-kommandoen under Indstillinger, Sailjail permissions igen; den tilføjer kun det manglende, så en ekstra kørsel skader ikke. Genstart derefter baggrundstjenesten, eller appen hvis du ikke bruger en.",
+        "permPendingGrant": "Givet, men endnu ikke aktiv: sailjail anvender profilen ved processtart. Genstart baggrundstjenesten (eller appen, hvis du ikke bruger en).",
+        "permPendingRevoke": "Tilbagekaldt, men den kørende proces har stadig adgang - sailjail anvender profilen ved start. Den består, indtil baggrundstjenesten genstartes (eller appen, hvis du ikke bruger en).",
+        "restartServiceNow": "Genstart baggrundstjenesten nu",
+        "daemonRestarting": "Baggrundstjenesten genstarter - tilladelsen træder i kraft om få sekunder.",
+        "daemonRestartFailed": "Kunne ikke genstarte baggrundstjenesten. Brug Indstillinger, baggrundstjeneste, genstart."
     },
     "nb": {
         "language": "Språk",
@@ -4270,7 +4345,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp avviste den første meldingen til denne kontakten. Forlat samtalen og åpne den på nytt for et nytt forsøk - eller start samtalen på telefonen.",
         "tapToCopy": "(trykk for å kopiere)",
         "copiedToClipboard": "Kopiert til utklippstavlen",
-        "daemonDownNotice": "Bakgrunnstjenesten kjører ikke - du får ingen varsler. Innstillinger, bakgrunnstjeneste, start på nytt.",
+        "daemonDownNotice": "Bakgrunnstjenesten kjører ikke - du får ingen varsler. Start den i Terminal: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Filvelger",
         "attachPickerDesc": "Hvilken velger som åpnes når du trykker på bindersen. Mediebiblioteket sorterer etter type (bilder, videoer, musikk, dokumenter), filutforskeren går gjennom mappene.",
         "attachPickerAsk": "Spør hver gang",
@@ -4280,7 +4355,12 @@ var catalogs = {
         "sendPermissionDenied": "Filen ligger utenfor appens sandkasse (SD-kort eller en annen mappe). Gi lagringstilgang under Innstillinger, Sailjail permissions, GRANT storage - start deretter appen og bakgrunnstjenesten på nytt.",
         "sendPermissionInactiveDaemon": "Lagringstilgang er gitt, men ikke aktiv i bakgrunnstjenesten som kjører - sailjail bruker profilen ved oppstart. Start den på nytt under Innstillinger, bakgrunnstjeneste, start på nytt. Det hjelper ikke å bare starte appen på nytt: den kobler seg til tjenesten som kjører, og filen åpnes der.",
         "sendPermissionInactiveApp": "Lagringstilgang er gitt, men ikke aktiv i prosessen som kjører - sailjail bruker profilen ved oppstart. Lukk appen helt (sveip bort omslaget) og åpne den igjen.",
-        "sendPermissionPartial": "Lagringstilgang er bare delvis gitt - mangler: %1. RemovableMedia er den for SD-kortet. Kjør GRANT storage-kommandoen under Innstillinger, Sailjail permissions på nytt; den legger bare til det som mangler, så en ekstra kjøring skader ikke. Start deretter bakgrunnstjenesten på nytt, eller appen hvis du ikke bruker en."
+        "sendPermissionPartial": "Lagringstilgang er bare delvis gitt - mangler: %1. RemovableMedia er den for SD-kortet. Kjør GRANT storage-kommandoen under Innstillinger, Sailjail permissions på nytt; den legger bare til det som mangler, så en ekstra kjøring skader ikke. Start deretter bakgrunnstjenesten på nytt, eller appen hvis du ikke bruker en.",
+        "permPendingGrant": "Gitt, men ikke aktiv ennå: sailjail bruker profilen ved prosessoppstart. Start bakgrunnstjenesten på nytt (eller appen hvis du ikke bruker en).",
+        "permPendingRevoke": "Trukket tilbake, men prosessen som kjører har fortsatt tilgang - sailjail bruker profilen ved oppstart. Den varer til bakgrunnstjenesten startes på nytt (eller appen hvis du ikke bruker en).",
+        "restartServiceNow": "Start bakgrunnstjenesten på nytt nå",
+        "daemonRestarting": "Bakgrunnstjenesten starter på nytt - tillatelsen gjelder om noen sekunder.",
+        "daemonRestartFailed": "Kunne ikke starte bakgrunnstjenesten på nytt. Bruk Innstillinger, bakgrunnstjeneste, start på nytt."
     },
     "cs": {
         "language": "Jazyk",
@@ -4531,7 +4611,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp odmítl první zprávu tomuto kontaktu. Opusťte konverzaci a otevřete ji znovu pro další pokus - nebo ji začněte v telefonu.",
         "tapToCopy": "(klepnutím zkopírujete)",
         "copiedToClipboard": "Zkopírováno do schránky",
-        "daemonDownNotice": "Služba na pozadí neběží - nebudete dostávat oznámení. Nastavení, služba na pozadí, restartovat.",
+        "daemonDownNotice": "Služba na pozadí neběží - nebudete dostávat oznámení. Spusťte ji v Terminálu: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Výběr souborů",
         "attachPickerDesc": "Který výběr se otevře po klepnutí na sponku. Knihovna médií řadí podle typu (obrázky, videa, hudba, dokumenty), prohlížeč souborů prochází složky.",
         "attachPickerAsk": "Ptát se pokaždé",
@@ -4541,7 +4621,12 @@ var catalogs = {
         "sendPermissionDenied": "Soubor leží mimo izolovaný prostor aplikace (SD karta nebo jiná složka). Udělte přístup k úložišti v Nastavení, Sailjail permissions, GRANT storage - poté restartujte aplikaci i službu na pozadí.",
         "sendPermissionInactiveDaemon": "Přístup k úložišti je udělen, ale v běžící službě na pozadí neplatí - sailjail použije profil při startu. Restartujte ji v Nastavení, služba na pozadí, restartovat. Restart samotné aplikace nepomůže: připojuje se k běžící službě a soubor se otevírá tam.",
         "sendPermissionInactiveApp": "Přístup k úložišti je udělen, ale v běžícím procesu neplatí - sailjail použije profil při startu. Zavřete aplikaci úplně (odsuňte dlaždici) a otevřete ji znovu.",
-        "sendPermissionPartial": "Přístup k úložišti je udělen jen částečně - chybí: %1. RemovableMedia je ta pro SD kartu. Spusťte příkaz GRANT storage v Nastavení, Sailjail permissions znovu; přidá jen chybějící, takže druhé spuštění neuškodí. Poté restartujte službu na pozadí, nebo aplikaci, pokud žádnou nepoužíváte."
+        "sendPermissionPartial": "Přístup k úložišti je udělen jen částečně - chybí: %1. RemovableMedia je ta pro SD kartu. Spusťte příkaz GRANT storage v Nastavení, Sailjail permissions znovu; přidá jen chybějící, takže druhé spuštění neuškodí. Poté restartujte službu na pozadí, nebo aplikaci, pokud žádnou nepoužíváte.",
+        "permPendingGrant": "Uděleno, ale zatím neplatí: sailjail použije profil při startu procesu. Restartujte službu na pozadí (nebo aplikaci, pokud žádnou nepoužíváte).",
+        "permPendingRevoke": "Odebráno, ale běžící proces má stále přístup - sailjail použije profil při startu. Zůstane, dokud se nerestartuje služba na pozadí (nebo aplikace, pokud žádnou nepoužíváte).",
+        "restartServiceNow": "Restartovat službu na pozadí",
+        "daemonRestarting": "Služba na pozadí se restartuje - oprávnění začne platit za pár sekund.",
+        "daemonRestartFailed": "Službu na pozadí se nepodařilo restartovat. Použijte Nastavení, služba na pozadí, restartovat."
     },
     "el": {
         "language": "Γλώσσα",
@@ -4792,7 +4877,7 @@ var catalogs = {
         "sendBlockedHint": "Το WhatsApp απέρριψε το πρώτο μήνυμα προς αυτή την επαφή. Βγείτε από τη συνομιλία και ανοίξτε την ξανά για άλλη μια προσπάθεια - ή ξεκινήστε τη συνομιλία στο τηλέφωνο.",
         "tapToCopy": "(πατήστε για αντιγραφή)",
         "copiedToClipboard": "Αντιγράφηκε στο πρόχειρο",
-        "daemonDownNotice": "Η υπηρεσία παρασκηνίου δεν εκτελείται - δεν θα λαμβάνετε ειδοποιήσεις. Ρυθμίσεις, υπηρεσία παρασκηνίου, επανεκκίνηση.",
+        "daemonDownNotice": "Η υπηρεσία παρασκηνίου δεν εκτελείται - δεν θα λαμβάνετε ειδοποιήσεις. Ξεκινήστε την στο Terminal: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Επιλογέας αρχείων",
         "attachPickerDesc": "Ποιος επιλογέας ανοίγει όταν πατάτε τον συνδετήρα. Η βιβλιοθήκη πολυμέσων ταξινομεί κατά τύπο (εικόνες, βίντεο, μουσική, έγγραφα), ο περιηγητής αρχείων διατρέχει τους φακέλους.",
         "attachPickerAsk": "Ερώτηση κάθε φορά",
@@ -4802,7 +4887,12 @@ var catalogs = {
         "sendPermissionDenied": "Το αρχείο βρίσκεται εκτός του απομονωμένου χώρου της εφαρμογής (κάρτα SD ή άλλος φάκελος). Δώστε πρόσβαση αποθήκευσης από Ρυθμίσεις, Sailjail permissions, GRANT storage - και μετά επανεκκινήστε την εφαρμογή και την υπηρεσία παρασκηνίου.",
         "sendPermissionInactiveDaemon": "Η πρόσβαση αποθήκευσης έχει δοθεί αλλά δεν ισχύει στην υπηρεσία παρασκηνίου που εκτελείται - το sailjail εφαρμόζει το προφίλ κατά την εκκίνηση. Επανεκκινήστε την από Ρυθμίσεις, υπηρεσία παρασκηνίου, επανεκκίνηση. Η επανεκκίνηση μόνο της εφαρμογής δεν βοηθά: συνδέεται στην υπηρεσία που εκτελείται και εκεί ανοίγει το αρχείο.",
         "sendPermissionInactiveApp": "Η πρόσβαση αποθήκευσης έχει δοθεί αλλά δεν ισχύει στη διεργασία που τρέχει - το sailjail εφαρμόζει το προφίλ κατά την εκκίνηση. Κλείστε εντελώς την εφαρμογή (σύρετε το εξώφυλλο) και ανοίξτε την ξανά.",
-        "sendPermissionPartial": "Η πρόσβαση αποθήκευσης δόθηκε μόνο εν μέρει - λείπει: %1. Το RemovableMedia αφορά την κάρτα SD. Εκτελέστε ξανά την εντολή GRANT storage στις Ρυθμίσεις, Sailjail permissions· προσθέτει μόνο ό,τι λείπει, οπότε μια δεύτερη εκτέλεση δεν βλάπτει. Μετά επανεκκινήστε την υπηρεσία παρασκηνίου, ή την εφαρμογή αν δεν χρησιμοποιείτε υπηρεσία."
+        "sendPermissionPartial": "Η πρόσβαση αποθήκευσης δόθηκε μόνο εν μέρει - λείπει: %1. Το RemovableMedia αφορά την κάρτα SD. Εκτελέστε ξανά την εντολή GRANT storage στις Ρυθμίσεις, Sailjail permissions· προσθέτει μόνο ό,τι λείπει, οπότε μια δεύτερη εκτέλεση δεν βλάπτει. Μετά επανεκκινήστε την υπηρεσία παρασκηνίου, ή την εφαρμογή αν δεν χρησιμοποιείτε υπηρεσία.",
+        "permPendingGrant": "Δόθηκε αλλά δεν ισχύει ακόμη: το sailjail εφαρμόζει το προφίλ στην εκκίνηση της διεργασίας. Επανεκκινήστε την υπηρεσία παρασκηνίου (ή την εφαρμογή αν δεν χρησιμοποιείτε υπηρεσία).",
+        "permPendingRevoke": "Ανακλήθηκε, αλλά η διεργασία που εκτελείται έχει ακόμη πρόσβαση - το sailjail εφαρμόζει το προφίλ κατά την εκκίνηση. Παραμένει μέχρι να επανεκκινηθεί η υπηρεσία παρασκηνίου (ή η εφαρμογή αν δεν χρησιμοποιείτε υπηρεσία).",
+        "restartServiceNow": "Επανεκκίνηση υπηρεσίας τώρα",
+        "daemonRestarting": "Η υπηρεσία παρασκηνίου επανεκκινείται - η άδεια ισχύει σε λίγα δευτερόλεπτα.",
+        "daemonRestartFailed": "Δεν ήταν δυνατή η επανεκκίνηση της υπηρεσίας παρασκηνίου. Χρησιμοποιήστε Ρυθμίσεις, υπηρεσία παρασκηνίου, επανεκκίνηση."
     },
     "et": {
         "language": "Keel",
@@ -5053,7 +5143,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp lükkas esimese sõnumi sellele kontaktile tagasi. Lahku vestlusest ja ava see uuesti veel üheks katseks - või alusta vestlust telefonis.",
         "tapToCopy": "(koputa kopeerimiseks)",
         "copiedToClipboard": "Kopeeritud lõikelauale",
-        "daemonDownNotice": "Taustateenus ei tööta - sa ei saa teavitusi. Seaded, taustateenus, taaskäivita.",
+        "daemonDownNotice": "Taustateenus ei tööta - sa ei saa teavitusi. Käivita see Terminalis: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Failivalija",
         "attachPickerDesc": "Milline valija avaneb kirjaklambrit puudutades. Meediakogu sorteerib tüübi järgi (pildid, videod, muusika, dokumendid), failisirvija käib kaustad läbi.",
         "attachPickerAsk": "Küsi iga kord",
@@ -5063,7 +5153,12 @@ var catalogs = {
         "sendPermissionDenied": "Fail asub rakenduse liivakastist väljaspool (SD-kaart või muu kaust). Anna salvestusruumi juurdepääs: Seaded, Sailjail permissions, GRANT storage - seejärel taaskäivita rakendus ja taustateenus.",
         "sendPermissionInactiveDaemon": "Salvestusruumi juurdepääs on antud, kuid töötavas taustateenuses ei kehti - sailjail rakendab profiili käivitumisel. Taaskäivita see: Seaded, taustateenus, taaskäivita. Ainult rakenduse taaskäivitamine ei aita: see haakub töötava teenusega ja fail avatakse seal.",
         "sendPermissionInactiveApp": "Salvestusruumi juurdepääs on antud, kuid töötavas protsessis ei kehti - sailjail rakendab profiili käivitumisel. Sulge rakendus täielikult (pühi kaan eemale) ja ava uuesti.",
-        "sendPermissionPartial": "Salvestusruumi juurdepääs on antud ainult osaliselt - puudub: %1. RemovableMedia on SD-kaardi jaoks. Käivita GRANT storage käsk Seaded, Sailjail permissions all uuesti; see lisab ainult puuduva, seega teine kord ei tee halba. Seejärel taaskäivita taustateenus või rakendus, kui teenust ei kasuta."
+        "sendPermissionPartial": "Salvestusruumi juurdepääs on antud ainult osaliselt - puudub: %1. RemovableMedia on SD-kaardi jaoks. Käivita GRANT storage käsk Seaded, Sailjail permissions all uuesti; see lisab ainult puuduva, seega teine kord ei tee halba. Seejärel taaskäivita taustateenus või rakendus, kui teenust ei kasuta.",
+        "permPendingGrant": "Antud, kuid veel ei kehti: sailjail rakendab profiili protsessi käivitumisel. Taaskäivita taustateenus (või rakendus, kui teenust ei kasuta).",
+        "permPendingRevoke": "Tühistatud, kuid töötaval protsessil on endiselt juurdepääs - sailjail rakendab profiili käivitumisel. See püsib, kuni taustateenus taaskäivitatakse (või rakendus, kui teenust ei kasuta).",
+        "restartServiceNow": "Taaskäivita taustateenus kohe",
+        "daemonRestarting": "Taustateenus taaskäivitub - õigus jõustub mõne sekundi pärast.",
+        "daemonRestartFailed": "Taustateenust ei õnnestunud taaskäivitada. Kasuta Seaded, taustateenus, taaskäivita."
     },
     "lv": {
         "language": "Valoda",
@@ -5314,7 +5409,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp noraidīja pirmo ziņu šim kontaktam. Izej no sarakstes un atver to vēlreiz vēl vienam mēģinājumam - vai sāc sarunu telefonā.",
         "tapToCopy": "(pieskaries, lai kopētu)",
         "copiedToClipboard": "Nokopēts starpliktuvē",
-        "daemonDownNotice": "Fona pakalpojums nedarbojas - tu nesaņemsi paziņojumus. Iestatījumi, fona pakalpojums, restartēt.",
+        "daemonDownNotice": "Fona pakalpojums nedarbojas - tu nesaņemsi paziņojumus. Palaid to Terminālī: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Failu atlasītājs",
         "attachPickerDesc": "Kurš atlasītājs atveras, pieskaroties saspraudei. Multivides bibliotēka kārto pēc veida (attēli, video, mūzika, dokumenti), failu pārlūks iet cauri mapēm.",
         "attachPickerAsk": "Jautāt katru reizi",
@@ -5324,7 +5419,12 @@ var catalogs = {
         "sendPermissionDenied": "Fails atrodas ārpus lietotnes smilšu kastes (SD karte vai cita mape). Piešķir krātuves piekļuvi: Iestatījumi, Sailjail permissions, GRANT storage - pēc tam restartē lietotni un fona pakalpojumu.",
         "sendPermissionInactiveDaemon": "Krātuves piekļuve ir piešķirta, bet strādājošajā fona pakalpojumā nedarbojas - sailjail piemēro profilu startējot. Restartē to: Iestatījumi, fona pakalpojums, restartēt. Tikai lietotnes restarts nelīdz: tā pieslēdzas strādājošajam pakalpojumam, un fails tiek atvērts tur.",
         "sendPermissionInactiveApp": "Krātuves piekļuve ir piešķirta, bet strādājošajā procesā nedarbojas - sailjail piemēro profilu startējot. Aizver lietotni pilnībā (aizslauki elementu) un atver no jauna.",
-        "sendPermissionPartial": "Krātuves piekļuve piešķirta tikai daļēji - trūkst: %1. RemovableMedia ir tā, kas atbild par SD karti. Palaid GRANT storage komandu sadaļā Iestatījumi, Sailjail permissions vēlreiz; tā pievieno tikai trūkstošo, tāpēc otrreiz palaist ir droši. Pēc tam restartē fona pakalpojumu vai lietotni, ja pakalpojumu nelieto."
+        "sendPermissionPartial": "Krātuves piekļuve piešķirta tikai daļēji - trūkst: %1. RemovableMedia ir tā, kas atbild par SD karti. Palaid GRANT storage komandu sadaļā Iestatījumi, Sailjail permissions vēlreiz; tā pievieno tikai trūkstošo, tāpēc otrreiz palaist ir droši. Pēc tam restartē fona pakalpojumu vai lietotni, ja pakalpojumu nelieto.",
+        "permPendingGrant": "Piešķirts, bet vēl nedarbojas: sailjail piemēro profilu procesa startā. Restartē fona pakalpojumu (vai lietotni, ja pakalpojumu nelieto).",
+        "permPendingRevoke": "Atsaukts, bet strādājošajam procesam joprojām ir piekļuve - sailjail piemēro profilu startā. Tā saglabājas, līdz fona pakalpojums tiek restartēts (vai lietotne, ja pakalpojumu nelieto).",
+        "restartServiceNow": "Restartēt fona pakalpojumu tagad",
+        "daemonRestarting": "Fona pakalpojums restartējas - atļauja stāsies spēkā pēc dažām sekundēm.",
+        "daemonRestartFailed": "Neizdevās restartēt fona pakalpojumu. Izmanto Iestatījumi, fona pakalpojums, restartēt."
     },
     "lt": {
         "language": "Kalba",
@@ -5575,7 +5675,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp atmetė pirmą žinutę šiam kontaktui. Išeik iš pokalbio ir atidaryk jį vėl dar vienam bandymui - arba pradėk pokalbį telefone.",
         "tapToCopy": "(bakstelėk, kad nukopijuotum)",
         "copiedToClipboard": "Nukopijuota į iškarpinę",
-        "daemonDownNotice": "Fono tarnyba neveikia - negausi pranešimų. Nustatymai, fono tarnyba, paleisti iš naujo.",
+        "daemonDownNotice": "Fono tarnyba neveikia - negausi pranešimų. Paleisk ją Terminale: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Failų parinkiklis",
         "attachPickerDesc": "Kuris parinkiklis atsidaro bakstelėjus sąvaržėlę. Medijos biblioteka rikiuoja pagal tipą (paveikslėliai, vaizdo įrašai, muzika, dokumentai), failų naršyklė eina per aplankus.",
         "attachPickerAsk": "Klausti kiekvieną kartą",
@@ -5585,7 +5685,12 @@ var catalogs = {
         "sendPermissionDenied": "Failas yra už programos smėlio dėžės ribų (SD kortelė ar kitas aplankas). Suteik prieigą prie saugyklos: Nustatymai, Sailjail permissions, GRANT storage - tada iš naujo paleisk programą ir fono tarnybą.",
         "sendPermissionInactiveDaemon": "Prieiga prie saugyklos suteikta, bet veikiančioje fono tarnyboje negalioja - sailjail profilį pritaiko paleidimo metu. Paleisk ją iš naujo: Nustatymai, fono tarnyba, paleisti iš naujo. Vien programos perkrovimas nepadės: ji prisijungia prie veikiančios tarnybos, ten failas ir atidaromas.",
         "sendPermissionInactiveApp": "Prieiga prie saugyklos suteikta, bet veikiančiame procese negalioja - sailjail profilį pritaiko paleidimo metu. Visiškai uždaryk programą (nubrauk kortelę) ir atidaryk iš naujo.",
-        "sendPermissionPartial": "Prieiga prie saugyklos suteikta tik iš dalies - trūksta: %1. RemovableMedia yra skirta SD kortelei. Paleisk GRANT storage komandą Nustatymai, Sailjail permissions dar kartą; ji prideda tik tai, ko trūksta, tad antras kartas nekenkia. Tada iš naujo paleisk fono tarnybą arba programą, jei tarnybos nenaudoji."
+        "sendPermissionPartial": "Prieiga prie saugyklos suteikta tik iš dalies - trūksta: %1. RemovableMedia yra skirta SD kortelei. Paleisk GRANT storage komandą Nustatymai, Sailjail permissions dar kartą; ji prideda tik tai, ko trūksta, tad antras kartas nekenkia. Tada iš naujo paleisk fono tarnybą arba programą, jei tarnybos nenaudoji.",
+        "permPendingGrant": "Suteikta, bet dar negalioja: sailjail profilį pritaiko proceso paleidimo metu. Iš naujo paleisk fono tarnybą (arba programą, jei tarnybos nenaudoji).",
+        "permPendingRevoke": "Atšaukta, bet veikiantis procesas vis dar turi prieigą - sailjail profilį pritaiko paleidimo metu. Ji išliks, kol fono tarnyba bus paleista iš naujo (arba programa, jei tarnybos nenaudoji).",
+        "restartServiceNow": "Paleisti fono tarnybą iš naujo",
+        "daemonRestarting": "Fono tarnyba paleidžiama iš naujo - leidimas įsigalios po kelių sekundžių.",
+        "daemonRestartFailed": "Nepavyko paleisti fono tarnybos iš naujo. Naudok Nustatymai, fono tarnyba, paleisti iš naujo."
     },
     "sl": {
         "language": "Jezik",
@@ -5836,7 +5941,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp je zavrnil prvo sporočilo temu stiku. Zapusti pogovor in ga znova odpri za nov poskus - ali pa pogovor začni na telefonu.",
         "tapToCopy": "(tapni za kopiranje)",
         "copiedToClipboard": "Kopirano v odložišče",
-        "daemonDownNotice": "Storitev v ozadju ne teče - obvestil ne boš prejemal. Nastavitve, storitev v ozadju, ponovni zagon.",
+        "daemonDownNotice": "Storitev v ozadju ne teče - obvestil ne boš prejemal. Zaženi jo v Terminalu: systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "Izbirnik datotek",
         "attachPickerDesc": "Kateri izbirnik se odpre ob dotiku sponke. Predstavnostna knjižnica razvršča po vrsti (slike, videoposnetki, glasba, dokumenti), brskalnik datotek gre skozi mape.",
         "attachPickerAsk": "Vprašaj vsakič",
@@ -5846,7 +5951,12 @@ var catalogs = {
         "sendPermissionDenied": "Datoteka je zunaj peskovnika aplikacije (kartica SD ali druga mapa). Dodeli dostop do shrambe v Nastavitvah, Sailjail permissions, GRANT storage - nato znova zaženi aplikacijo in storitev v ozadju.",
         "sendPermissionInactiveDaemon": "Dostop do shrambe je dodeljen, a v tekoči storitvi v ozadju ne velja - sailjail profil uveljavi ob zagonu. Znova jo zaženi: Nastavitve, storitev v ozadju, ponovni zagon. Sam ponovni zagon aplikacije ne pomaga: poveže se s tekočo storitvijo in datoteka se odpre tam.",
         "sendPermissionInactiveApp": "Dostop do shrambe je dodeljen, a v tekočem procesu ne velja - sailjail profil uveljavi ob zagonu. Aplikacijo popolnoma zapri (odrini ploščico) in jo znova odpri.",
-        "sendPermissionPartial": "Dostop do shrambe je dodeljen le delno - manjka: %1. RemovableMedia je tista za kartico SD. Ukaz GRANT storage v Nastavitvah, Sailjail permissions zaženi znova; doda samo manjkajoče, zato drugi zagon ne škodi. Nato znova zaženi storitev v ozadju ali aplikacijo, če je ne uporabljaš."
+        "sendPermissionPartial": "Dostop do shrambe je dodeljen le delno - manjka: %1. RemovableMedia je tista za kartico SD. Ukaz GRANT storage v Nastavitvah, Sailjail permissions zaženi znova; doda samo manjkajoče, zato drugi zagon ne škodi. Nato znova zaženi storitev v ozadju ali aplikacijo, če je ne uporabljaš.",
+        "permPendingGrant": "Dodeljeno, a še ne velja: sailjail profil uveljavi ob zagonu procesa. Znova zaženi storitev v ozadju (ali aplikacijo, če je ne uporabljaš).",
+        "permPendingRevoke": "Preklicano, a tekoči proces ima še vedno dostop - sailjail profil uveljavi ob zagonu. Ostane, dokler se storitev v ozadju znova ne zažene (ali aplikacija, če je ne uporabljaš).",
+        "restartServiceNow": "Znova zaženi storitev zdaj",
+        "daemonRestarting": "Storitev v ozadju se znova zaganja - dovoljenje bo veljalo čez nekaj sekund.",
+        "daemonRestartFailed": "Storitve v ozadju ni bilo mogoče znova zagnati. Uporabi Nastavitve, storitev v ozadju, ponovni zagon."
     },
     "zh": {
         "language": "语言",
@@ -6097,7 +6207,7 @@ var catalogs = {
         "sendBlockedHint": "WhatsApp 拒绝了发给该联系人的第一条消息。退出聊天再重新打开可再试一次，或先在手机上发起对话。",
         "tapToCopy": "（点按以复制）",
         "copiedToClipboard": "已复制到剪贴板",
-        "daemonDownNotice": "后台服务未运行——你将收不到通知。设置、后台服务、重新启动。",
+        "daemonDownNotice": "后台服务未运行——你将收不到通知。请在终端中启动：systemctl --user start harbour-whatsapp-daemon",
         "attachPicker": "附件选择器",
         "attachPickerDesc": "点按回形针时打开哪个选择器。媒体库按类型分类（图片、视频、音乐、文档），文件浏览器则逐层浏览文件夹。",
         "attachPickerAsk": "每次询问",
@@ -6107,7 +6217,12 @@ var catalogs = {
         "sendPermissionDenied": "该文件位于应用沙箱之外（SD 卡或其他文件夹）。请在设置、Sailjail permissions、GRANT storage 中授予存储访问权限，然后重启应用和后台服务。",
         "sendPermissionInactiveDaemon": "已授予存储访问权限，但在正在运行的后台服务中尚未生效——sailjail 在启动时应用配置。请在设置、后台服务、重新启动中重启它。只重启应用没有用：应用会接入正在运行的服务，文件是在那里打开的。",
         "sendPermissionInactiveApp": "已授予存储访问权限，但在正在运行的进程中尚未生效——sailjail 在启动时应用配置。请完全关闭应用（滑走封面卡片）后重新打开。",
-        "sendPermissionPartial": "存储访问权限只授予了一部分——缺少：%1。RemovableMedia 是对应 SD 卡的那一项。请在设置、Sailjail permissions 中再次运行 GRANT storage 命令；它只会补上缺少的部分，重复运行无害。之后重启后台服务；若未使用后台服务，则重启应用。"
+        "sendPermissionPartial": "存储访问权限只授予了一部分——缺少：%1。RemovableMedia 是对应 SD 卡的那一项。请在设置、Sailjail permissions 中再次运行 GRANT storage 命令；它只会补上缺少的部分，重复运行无害。之后重启后台服务；若未使用后台服务，则重启应用。",
+        "permPendingGrant": "已授予，但尚未生效：sailjail 在进程启动时应用配置。请重启后台服务（若未使用服务，则重启应用）。",
+        "permPendingRevoke": "已撤销，但正在运行的进程仍可访问——sailjail 在启动时应用配置。该访问会保留到后台服务重启为止（若未使用服务，则为应用）。",
+        "restartServiceNow": "立即重启后台服务",
+        "daemonRestarting": "后台服务正在重启——权限将在几秒内生效。",
+        "daemonRestartFailed": "无法重启后台服务。请使用设置、后台服务、重新启动。"
     }
 }
 

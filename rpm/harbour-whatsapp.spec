@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.196
+Version:    0.9.198
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -124,6 +124,35 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.198-1
+- The "background service is not running" warning was itself the bug. It
+  checked once, twenty seconds after start, and then stopped the timer -
+  and twenty seconds after start is exactly when the service is coming
+  back up from a package update. The warning was true at the instant it
+  was made and wrong for the rest of the session, with no way to clear it
+  short of restarting the app, which is what made it look like the daemon
+  had really died. The check keeps running now, waits for two consecutive
+  misses before saying anything, and withdraws its own warning when the
+  service reappears - and may warn again later if it really goes away.
+  The message also carries the start command, since the app cannot start
+  a systemd unit from inside the sandbox and pointing at a settings entry
+  that has no button was no help. Six test cases for the state machine,
+  cross-checked against the old one-shot logic, where three of them fail
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.197-1
+- Revoking a permission now says the truth about when it takes hold. The
+  grant and revoke commands already edit both desktop files, so the
+  daemon profile is written immediately - but sailjail applies a profile
+  at process START, and a background service is by design one that keeps
+  running. Revoke storage and the file says no while the running daemon
+  goes on reading, possibly for days. 0.9.195 caught the granted-but-not
+  yet-effective direction; this catches the other, which is the more
+  uncomfortable one, since nobody expects a permission they just removed
+  to still be in force. The Sailjail page compares what the file says
+  with what the process can actually do and, when they disagree, names
+  the direction and offers to restart the service right there. Five new
+  strings in all 22 languages
+
 * Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.196-1
 - A partial storage grant is now named as such. permcheck reported the
   three media tokens as one yes-or-no, so having UserDirs and

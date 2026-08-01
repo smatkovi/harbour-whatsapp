@@ -768,17 +768,36 @@ ApplicationWindow {
     }
     property bool daemonAutostart: false
     property bool daemonDownWarned: false
+    property int daemonMissCount: 0
     Timer {
         id: daemonWatch
         interval: 20000
         repeat: true
         running: true
         onTriggered: {
-            // Erst urteilen, wenn die Prefs da sind und der Daemon Zeit zum
-            // Hochlaufen hatte - sonst warnt es beim Kaltstart grundlos
+            // Erst urteilen, wenn die Prefs da sind
             if (!prefsLoaded) return
-            stop()
-            if (daemonAutostart && !daemonRunning && !daemonDownWarned) {
+            if (!daemonAutostart) return
+
+            if (daemonRunning) {
+                // Wieder da: Zaehler zuruecksetzen, eigene Warnung
+                // zuruecknehmen und kuenftig wieder warnen duerfen
+                daemonMissCount = 0
+                if (daemonDownWarned) {
+                    daemonDownWarned = false
+                    if (globalNotice === loc.daemonDownNotice) globalNotice = ""
+                }
+                return
+            }
+
+            // Frueher wurde EINMAL nach 20 s geprueft und dann gestoppt -
+            // ausgerechnet in dem Moment, in dem der Daemon nach einem
+            // Update gerade neu startet. Die Warnung stimmte im Augenblick
+            // der Pruefung und blieb danach fuer immer falsch stehen.
+            // Jetzt laeuft der Wecker weiter und urteilt erst nach zwei
+            // Fehlversuchen in Folge, also nach etwa 40 Sekunden
+            daemonMissCount++
+            if (daemonMissCount >= 2 && !daemonDownWarned) {
                 daemonDownWarned = true
                 globalNotice = loc.daemonDownNotice
                 noticeIsError = true
@@ -2485,6 +2504,10 @@ Label {
                         property bool micGranted: false
                         property bool sensorsGranted: false
                         property bool audioGranted: false
+                        // Was der LAUFENDE Prozess darf - sailjail wendet
+                        // ein Profil beim Start an, Datei und Wirklichkeit
+                        // fallen zwischen Erteilen und Neustart auseinander
+                        property bool mediaEffective: false
                         text: loc.permIntro + "\n\n"
                               + loc.contactsPerm + ": " + (granted ? loc.granted : loc.notGranted)
                               + "\n" + loc.mediaPerm + ": " + (mediaGranted ? loc.granted : loc.notGranted)
@@ -2512,9 +2535,53 @@ Label {
                                     micGranted = p.micPermission === true
                                     sensorsGranted = p.sensorsPermission === true
                                     audioGranted = p.audioPermission === true
+                                    mediaEffective = p.mediaAccessEffective === true
+                                    // App-weite Kopien mitziehen, damit die
+                                    // Sendefehler-Meldung denselben Stand hat
+                                    mediaPermConfigured = mediaGranted
+                                    mediaPermEffective = mediaEffective
+                                    mediaPermMissing = (p.mediaMissing || []).join(", ")
                                 }
                             }
                             xhr.send()
+                        }
+                    }
+
+                    // Datei und laufender Prozess auseinander: beim Erteilen
+                    // fehlt der Zugriff noch, beim Entziehen besteht er noch
+                    // fort - letzteres ist der unangenehmere Fall, weil man
+                    // annimmt, das Recht sei weg
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        visible: permStatus.mediaGranted !== permStatus.mediaEffective
+                        text: permStatus.mediaGranted
+                              ? loc.permPendingGrant : loc.permPendingRevoke
+                        color: Theme.errorColor
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        wrapMode: Text.Wrap
+                    }
+
+                    BackgroundItem {
+                        visible: permStatus.mediaGranted !== permStatus.mediaEffective
+                                 && daemonRunning
+                        width: parent.width
+                        onClicked: {
+                            var x = new XMLHttpRequest()
+                            x.open("GET", "http://127.0.0.1:" + backendPort + "/daemon/restart")
+                            x.onreadystatechange = function() {
+                                if (x.readyState !== 4) return
+                                globalNotice = (x.status === 200) ? loc.daemonRestarting
+                                                                  : loc.daemonRestartFailed
+                                if (x.status !== 200) noticeIsError = true
+                            }
+                            x.send()
+                        }
+                        Label {
+                            x: Theme.horizontalPageMargin
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: loc.restartServiceNow
+                            color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
                         }
                     }
 

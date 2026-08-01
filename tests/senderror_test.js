@@ -99,5 +99,44 @@ for (const l of langs) {
 }
 check('Platzhalter in allen Sprachen', bad, v => v.length === 0, 'Probleme: ' + bad.join(', '));
 
+
+// --- Daemon-Waechter: Zustandsautomat ---
+// Nachbau der Logik aus dem Timer. Der alte Wecker prüfte EINMAL nach 20 s
+// und stoppte dann - lief der Daemon in diesem Moment gerade neu an (etwa
+// direkt nach einem Update), blieb die Warnung fuer immer falsch stehen.
+console.log('--- Daemon-Waechter ---');
+function makeWatch() {
+  const st = { autostart: true, warned: false, misses: 0, notice: '' };
+  st.tick = function(daemonRunning) {
+    if (!st.autostart) return;
+    if (daemonRunning) {
+      st.misses = 0;
+      if (st.warned) { st.warned = false; if (st.notice === 'DOWN') st.notice = ''; }
+      return;
+    }
+    st.misses++;
+    if (st.misses >= 2 && !st.warned) { st.warned = true; st.notice = 'DOWN'; }
+  };
+  return st;
+}
+
+let w = makeWatch();
+w.tick(false);
+check('ein Fehlversuch warnt noch nicht', w.notice, v => v === '', 'erwartet Stille nach 20 s');
+w.tick(true);
+check('Daemon kam hoch -> keine Warnung', w.notice, v => v === '', 'Neustart darf keine Warnung ausloesen');
+
+w = makeWatch();
+w.tick(false); w.tick(false);
+check('zwei Fehlversuche warnen',    w.notice, v => v === 'DOWN', 'erwartet Warnung nach ~40 s');
+w.tick(true);
+check('Warnung wird zurueckgenommen', w.notice, v => v === '', 'stehengebliebene Warnung war der gemeldete Fehler');
+w.tick(false); w.tick(false);
+check('warnt spaeter erneut',        w.notice, v => v === 'DOWN', 'nach echter Erholung muss erneut gewarnt werden koennen');
+
+w = makeWatch(); w.autostart = false;
+w.tick(false); w.tick(false); w.tick(false);
+check('ohne Autostart nie warnen',   w.notice, v => v === '', 'wer keinen Dienst nutzt, darf keine Warnung sehen');
+
 console.log(fails === 0 ? '\nAlle Faelle bestanden.' : '\n' + fails + ' Fall/Faelle fehlgeschlagen.');
 process.exit(fails === 0 ? 0 : 1);
