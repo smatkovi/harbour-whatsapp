@@ -290,7 +290,10 @@ var en = {
     "orientationDynamic": "Follow device",
     "orientationPortrait": "Portrait only",
     "orientationLandscape": "Landscape only",
-    "allActions": "All actions"
+    "allActions": "All actions",
+    "colorEmoji": "Colour emoji",
+    "colorEmojiDesc": "Off by default. Sailfish ships no colour emoji font, so switching this on draws emoji from bundled images instead of the system font's plain glyphs.",
+    "unknownSender": "Unknown contact"
 }
 
 var catalogs = {
@@ -576,7 +579,10 @@ var catalogs = {
         "orientationDynamic": "Der Lage folgen",
         "orientationPortrait": "Nur Hochformat",
         "orientationLandscape": "Nur Querformat",
-        "allActions": "Alle Aktionen"
+        "allActions": "Alle Aktionen",
+        "colorEmoji": "Farbige Emojis",
+        "colorEmojiDesc": "Standardmäßig aus. Sailfish bringt keine Farb-Emoji-Schrift mit; eingeschaltet werden Emojis aus mitgelieferten Bildern gezeichnet statt als schlichte Zeichen der Systemschrift.",
+        "unknownSender": "Unbekannter Kontakt"
     },
     "fi": {
         "language": "Kieli",
@@ -860,7 +866,10 @@ var catalogs = {
         "orientationDynamic": "Seuraa laitetta",
         "orientationPortrait": "Vain pysty",
         "orientationLandscape": "Vain vaaka",
-        "allActions": "Kaikki toiminnot"
+        "allActions": "Kaikki toiminnot",
+        "colorEmoji": "Väri-emojit",
+        "colorEmojiDesc": "Oletuksena pois. Sailfish ei sisällä väri-emoji-fonttia; päälle kytkettynä emojit piirretään mukana tulevista kuvista järjestelmäfontin merkkien sijaan.",
+        "unknownSender": "Tuntematon yhteystieto"
     },
     "sv": {
         "language": "Språk",
@@ -1144,7 +1153,10 @@ var catalogs = {
         "orientationDynamic": "Följ enheten",
         "orientationPortrait": "Endast stående",
         "orientationLandscape": "Endast liggande",
-        "allActions": "Alla åtgärder"
+        "allActions": "Alla åtgärder",
+        "colorEmoji": "Färgemojier",
+        "colorEmojiDesc": "Av som standard. Sailfish levererar inget färgemoji-typsnitt; påslaget ritas emojier från medföljande bilder i stället för systemtypsnittets tecken.",
+        "unknownSender": "Okänd kontakt"
     },
     "hu": {
         "language": "Nyelv",
@@ -1428,7 +1440,10 @@ var catalogs = {
         "orientationDynamic": "Kövesse a készüléket",
         "orientationPortrait": "Csak álló",
         "orientationLandscape": "Csak fekvő",
-        "allActions": "Összes művelet"
+        "allActions": "Összes művelet",
+        "colorEmoji": "Színes emodzsik",
+        "colorEmojiDesc": "Alapértelmezés szerint ki. A Sailfish nem tartalmaz színes emodzsi betűtípust; bekapcsolva az emodzsik mellékelt képekből készülnek a rendszerbetűtípus jelei helyett.",
+        "unknownSender": "Ismeretlen névjegy"
     },
     "ru": {
         "language": "Язык",
@@ -1712,7 +1727,10 @@ var catalogs = {
         "orientationDynamic": "Следовать устройству",
         "orientationPortrait": "Только портрет",
         "orientationLandscape": "Только альбом",
-        "allActions": "Все действия"
+        "allActions": "Все действия",
+        "colorEmoji": "Цветные эмодзи",
+        "colorEmojiDesc": "По умолчанию выключено. В Sailfish нет цветного шрифта эмодзи; при включении они рисуются из вложенных изображений вместо знаков системного шрифта.",
+        "unknownSender": "Неизвестный контакт"
     },
     "fr": {
         "language": "Langue",
@@ -1996,7 +2014,10 @@ var catalogs = {
         "orientationDynamic": "Suivre l'appareil",
         "orientationPortrait": "Portrait uniquement",
         "orientationLandscape": "Paysage uniquement",
-        "allActions": "Toutes les actions"
+        "allActions": "Toutes les actions",
+        "colorEmoji": "Émojis en couleur",
+        "colorEmojiDesc": "Désactivé par défaut. Sailfish ne fournit pas de police d'émojis en couleur ; activé, les émojis sont dessinés à partir d'images incluses plutôt qu'avec la police système.",
+        "unknownSender": "Contact inconnu"
     },
     "la": {
         "language": "Lingua",
@@ -2280,7 +2301,10 @@ var catalogs = {
         "orientationDynamic": "Instrumentum sequi",
         "orientationPortrait": "Tantum erectum",
         "orientationLandscape": "Tantum iacens",
-        "allActions": "Omnes actiones"
+        "allActions": "Omnes actiones",
+        "colorEmoji": "Imagunculae coloratae",
+        "colorEmojiDesc": "Ex more exstinctum. Sailfish nullam scripturam imaguncularum coloratarum affert; accensum, imagunculae ex imaginibus inclusis pinguntur pro notis scripturae systematis.",
+        "unknownSender": "Familiaris ignotus"
     },
     "es": {
         "language": "Idioma",
@@ -2552,7 +2576,10 @@ var catalogs = {
         "orientationDynamic": "Seguir al dispositivo",
         "orientationPortrait": "Solo vertical",
         "orientationLandscape": "Solo horizontal",
-        "allActions": "Todas las acciones"
+        "allActions": "Todas las acciones",
+        "colorEmoji": "Emojis en color",
+        "colorEmojiDesc": "Desactivado por defecto. Sailfish no incluye una fuente de emojis en color; al activarlo se dibujan desde imágenes incluidas en lugar de los glifos del sistema.",
+        "unknownSender": "Contacto desconocido"
     },
     "it": {
         "language": "Lingua",
@@ -2824,7 +2851,10 @@ var catalogs = {
         "orientationDynamic": "Segui il dispositivo",
         "orientationPortrait": "Solo verticale",
         "orientationLandscape": "Solo orizzontale",
-        "allActions": "Tutte le azioni"
+        "allActions": "Tutte le azioni",
+        "colorEmoji": "Emoji a colori",
+        "colorEmojiDesc": "Disattivato per impostazione predefinita. Sailfish non include un font di emoji a colori; attivandolo vengono disegnate da immagini incluse anziché con il font di sistema.",
+        "unknownSender": "Contatto sconosciuto"
     },
     "pt": {
         "language": "Idioma",
@@ -3096,7 +3126,10 @@ var catalogs = {
         "orientationDynamic": "Seguir o dispositivo",
         "orientationPortrait": "Apenas vertical",
         "orientationLandscape": "Apenas horizontal",
-        "allActions": "Todas as ações"
+        "allActions": "Todas as ações",
+        "colorEmoji": "Emojis a cores",
+        "colorEmojiDesc": "Desligado por predefinição. O Sailfish não inclui um tipo de letra de emojis a cores; ligado, são desenhados a partir de imagens incluídas em vez dos glifos do sistema.",
+        "unknownSender": "Contacto desconhecido"
     },
     "nl": {
         "language": "Taal",
@@ -3368,7 +3401,10 @@ var catalogs = {
         "orientationDynamic": "Apparaat volgen",
         "orientationPortrait": "Alleen staand",
         "orientationLandscape": "Alleen liggend",
-        "allActions": "Alle acties"
+        "allActions": "Alle acties",
+        "colorEmoji": "Emoji in kleur",
+        "colorEmojiDesc": "Standaard uit. Sailfish levert geen kleuren-emojilettertype; ingeschakeld worden emoji uit meegeleverde afbeeldingen getekend in plaats van met het systeemlettertype.",
+        "unknownSender": "Onbekend contact"
     },
     "pl": {
         "language": "Język",
@@ -3640,7 +3676,10 @@ var catalogs = {
         "orientationDynamic": "Podążaj za urządzeniem",
         "orientationPortrait": "Tylko pionowo",
         "orientationLandscape": "Tylko poziomo",
-        "allActions": "Wszystkie akcje"
+        "allActions": "Wszystkie akcje",
+        "colorEmoji": "Kolorowe emoji",
+        "colorEmojiDesc": "Domyślnie wyłączone. Sailfish nie zawiera kolorowej czcionki emoji; po włączeniu są rysowane z dołączonych obrazów zamiast znaków czcionki systemowej.",
+        "unknownSender": "Nieznany kontakt"
     },
     "tr": {
         "language": "Dil",
@@ -3912,7 +3951,10 @@ var catalogs = {
         "orientationDynamic": "Cihazı izle",
         "orientationPortrait": "Yalnızca dikey",
         "orientationLandscape": "Yalnızca yatay",
-        "allActions": "Tüm eylemler"
+        "allActions": "Tüm eylemler",
+        "colorEmoji": "Renkli emoji",
+        "colorEmojiDesc": "Varsayılan olarak kapalı. Sailfish renkli emoji yazı tipi içermez; açıldığında emojiler sistem yazı tipi yerine pakete dahil görsellerden çizilir.",
+        "unknownSender": "Bilinmeyen kişi"
     },
     "da": {
         "language": "Sprog",
@@ -4184,7 +4226,10 @@ var catalogs = {
         "orientationDynamic": "Følg enheden",
         "orientationPortrait": "Kun stående",
         "orientationLandscape": "Kun liggende",
-        "allActions": "Alle handlinger"
+        "allActions": "Alle handlinger",
+        "colorEmoji": "Farvede emojis",
+        "colorEmojiDesc": "Slået fra som standard. Sailfish leverer ingen farveemoji-skrifttype; slået til tegnes emojis fra medfølgende billeder i stedet for systemskriftens tegn.",
+        "unknownSender": "Ukendt kontakt"
     },
     "nb": {
         "language": "Språk",
@@ -4456,7 +4501,10 @@ var catalogs = {
         "orientationDynamic": "Følg enheten",
         "orientationPortrait": "Bare stående",
         "orientationLandscape": "Bare liggende",
-        "allActions": "Alle handlinger"
+        "allActions": "Alle handlinger",
+        "colorEmoji": "Fargede emojier",
+        "colorEmojiDesc": "Av som standard. Sailfish leverer ingen fargeemoji-skrift; slått på tegnes emojier fra medfølgende bilder i stedet for systemskriftens tegn.",
+        "unknownSender": "Ukjent kontakt"
     },
     "cs": {
         "language": "Jazyk",
@@ -4728,7 +4776,10 @@ var catalogs = {
         "orientationDynamic": "Podle zařízení",
         "orientationPortrait": "Jen na výšku",
         "orientationLandscape": "Jen na šířku",
-        "allActions": "Všechny akce"
+        "allActions": "Všechny akce",
+        "colorEmoji": "Barevná emodži",
+        "colorEmojiDesc": "Ve výchozím stavu vypnuto. Sailfish neobsahuje barevné emodži písmo; po zapnutí se kreslí z přiložených obrázků místo znaků systémového písma.",
+        "unknownSender": "Neznámý kontakt"
     },
     "el": {
         "language": "Γλώσσα",
@@ -5000,7 +5051,10 @@ var catalogs = {
         "orientationDynamic": "Ακολούθηση συσκευής",
         "orientationPortrait": "Μόνο κατακόρυφα",
         "orientationLandscape": "Μόνο οριζόντια",
-        "allActions": "Όλες οι ενέργειες"
+        "allActions": "Όλες οι ενέργειες",
+        "colorEmoji": "Έγχρωμα emoji",
+        "colorEmojiDesc": "Απενεργοποιημένο από προεπιλογή. Το Sailfish δεν περιλαμβάνει έγχρωμη γραμματοσειρά emoji· ενεργοποιημένο, σχεδιάζονται από ενσωματωμένες εικόνες.",
+        "unknownSender": "Άγνωστη επαφή"
     },
     "et": {
         "language": "Keel",
@@ -5272,7 +5326,10 @@ var catalogs = {
         "orientationDynamic": "Järgi seadet",
         "orientationPortrait": "Ainult püstpaigutus",
         "orientationLandscape": "Ainult rõhtpaigutus",
-        "allActions": "Kõik toimingud"
+        "allActions": "Kõik toimingud",
+        "colorEmoji": "Värvilised emojid",
+        "colorEmojiDesc": "Vaikimisi väljas. Sailfish ei sisalda värvilist emoji-fonti; sisselülitatuna joonistatakse need kaasasolevatest piltidest süsteemifondi märkide asemel.",
+        "unknownSender": "Tundmatu kontakt"
     },
     "lv": {
         "language": "Valoda",
@@ -5544,7 +5601,10 @@ var catalogs = {
         "orientationDynamic": "Sekot ierīcei",
         "orientationPortrait": "Tikai portrets",
         "orientationLandscape": "Tikai ainava",
-        "allActions": "Visas darbības"
+        "allActions": "Visas darbības",
+        "colorEmoji": "Krāsainas emocijzīmes",
+        "colorEmojiDesc": "Pēc noklusējuma izslēgts. Sailfish nesatur krāsainu emocijzīmju fontu; ieslēgts tās tiek zīmētas no komplektā iekļautajiem attēliem, nevis sistēmas fonta zīmēm.",
+        "unknownSender": "Nezināms kontakts"
     },
     "lt": {
         "language": "Kalba",
@@ -5816,7 +5876,10 @@ var catalogs = {
         "orientationDynamic": "Sekti įrenginį",
         "orientationPortrait": "Tik stačias",
         "orientationLandscape": "Tik gulsčias",
-        "allActions": "Visi veiksmai"
+        "allActions": "Visi veiksmai",
+        "colorEmoji": "Spalvoti jaustukai",
+        "colorEmojiDesc": "Pagal numatymą išjungta. Sailfish neturi spalvoto jaustukų šrifto; įjungus jie piešiami iš pridėtų paveikslėlių, o ne sistemos šrifto ženklais.",
+        "unknownSender": "Nežinomas kontaktas"
     },
     "sl": {
         "language": "Jezik",
@@ -6088,7 +6151,10 @@ var catalogs = {
         "orientationDynamic": "Sledi napravi",
         "orientationPortrait": "Samo pokončno",
         "orientationLandscape": "Samo ležeče",
-        "allActions": "Vsa dejanja"
+        "allActions": "Vsa dejanja",
+        "colorEmoji": "Barvni emodžiji",
+        "colorEmojiDesc": "Privzeto izklopljeno. Sailfish ne vključuje barvne pisave za emodžije; vklopljeno jih izriše iz priloženih slik namesto z znaki sistemske pisave.",
+        "unknownSender": "Neznan stik"
     },
     "zh": {
         "language": "语言",
@@ -6360,7 +6426,10 @@ var catalogs = {
         "orientationDynamic": "跟随设备",
         "orientationPortrait": "仅竖屏",
         "orientationLandscape": "仅横屏",
-        "allActions": "全部操作"
+        "allActions": "全部操作",
+        "colorEmoji": "彩色表情符号",
+        "colorEmojiDesc": "默认关闭。Sailfish 未内置彩色表情字体；开启后表情符号将由随附图片绘制，而非系统字体的单色字形。",
+        "unknownSender": "未知联系人"
     }
 }
 

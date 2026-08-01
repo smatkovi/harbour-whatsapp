@@ -8,6 +8,7 @@ import Nemo.Notifications 1.0
 import Sailfish.Silica 1.0
 import QtPositioning 5.2
 import Sailfish.Pickers 1.0
+import "js/twemoji.js" as Twemoji
 import org.nemomobile.contacts 1.0
 import io.thp.pyotherside 1.5
 
@@ -339,6 +340,16 @@ ApplicationWindow {
                         onSliderValueChanged: {
                             tileGap = value
                             setPref("tile_gap", String(value))
+                        }
+                    }
+
+                    TextSwitch {
+                        text: loc.colorEmoji
+                        description: loc.colorEmojiDesc
+                        checked: emojiEnabled
+                        onClicked: {
+                            emojiEnabled = checked
+                            setPref("emoji", checked ? "1" : "0")
                         }
                     }
 
@@ -873,6 +884,8 @@ ApplicationWindow {
                 refreshPermState()
                 attachPicker = p.attach_picker || "ask"
                 orientationPref = p.orientation || "dynamic"
+                emojiEnabled = p.emoji !== "0"
+                statusLastSeen = parseFloat(p.status_last_seen || "0") || 0
                 prefsLoaded = true
                 // Auch fuer Bestandsinstallationen und Systemsprache setzen
                 if (p.notif_reply_label !== loc.reply)
@@ -1130,7 +1143,25 @@ ApplicationWindow {
         xhr.send()
     }
 
+    // Der Zaehler muss auch dann stimmen, wenn die Statusseite geschlossen
+    // ist - sonst sieht man ihn nie. Laeuft im selben Takt wie die Chatliste.
+    function loadStatusUnread() {
+        var x = new XMLHttpRequest()
+        x.open("GET", "http://127.0.0.1:" + backendPort + "/messages?jid=status")
+        x.onreadystatechange = function() {
+            if (x.readyState !== 4 || x.status !== 200) return
+            try {
+                var list = (JSON.parse(x.responseText) || []).filter(function(m) {
+                    return !m.revoked
+                })
+                recomputeStatusUnread(list)
+            } catch (e) {}
+        }
+        x.send()
+    }
+
     function loadChats() {
+        loadStatusUnread()
         var xhr = new XMLHttpRequest()
         xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chats")
         xhr.onreadystatechange = function() {
@@ -1285,7 +1316,41 @@ ApplicationWindow {
             var href = (u.indexOf("http") === 0) ? u : ("http://" + u)
             return "<a href=\"" + href + "\">" + u + "</a>" + tail
         })
-        return t.replace(/\n/g, "<br>")
+        t = t.replace(/\n/g, "<br>")
+        // Farbige Emojis: Sailfish bringt keine Farb-Emoji-Schrift mit,
+        // deshalb wie Fernschreiber ueber Twemoji-SVGs. Erst HIER, nach dem
+        // Maskieren von < und >, sonst wuerden die erzeugten img-Tags selbst
+        // maskiert. StyledText versteht <img> - ein Wechsel auf RichText
+        // waere nicht noetig. Wunsch von rdomschk.
+        return emojiEnabled ? Twemoji.emojify(t, Theme.fontSizeMedium) : t
+    }
+
+    // Standardmaessig an - auf dem Geraet zeigte sich kein spuerbarer
+    // Unterschied beim Scrollen. Abschaltbar bleibt es trotzdem.
+    property bool emojiEnabled: true
+
+    // Ungelesene Statusmeldungen: gemerkt wird nur der Zeitstempel des
+    // zuletzt Angesehenen, nicht jede einzelne Kennung - das waechst nicht
+    // ins Unendliche und uebersteht einen Neustart.
+    property double statusLastSeen: 0
+    property int statusUnread: 0
+    function recomputeStatusUnread(list) {
+        var n = 0
+        for (var i = 0; i < list.length; i++) {
+            if (!list[i].fromMe && list[i].timestamp > statusLastSeen) n++
+        }
+        statusUnread = n
+    }
+    function markStatusSeen(list) {
+        var newest = statusLastSeen
+        for (var i = 0; i < list.length; i++) {
+            if (!list[i].fromMe && list[i].timestamp > newest) newest = list[i].timestamp
+        }
+        if (newest > statusLastSeen) {
+            statusLastSeen = newest
+            setPref("status_last_seen", String(newest))
+        }
+        statusUnread = 0
     }
 
     function navGo(from, to) {
@@ -1316,11 +1381,19 @@ ApplicationWindow {
                     enabled: index !== bar.activeIndex
                     onClicked: navGo(bar.activeIndex, index)
                     Label {
+                        id: barLabel
                         anchors.centerIn: parent
-                        text: modelData
+                        // Ungelesene Statusmeldungen anzeigen - ohne Zahl
+                        // weiss niemand, ob sich etwas getan hat. Wunsch von
+                        // rdomschk.
+                        text: (index === 3 && statusUnread > 0)
+                              ? modelData + " (" + statusUnread + ")" : modelData
                         font.pixelSize: Theme.fontSizeExtraSmall
-                        color: index === bar.activeIndex ? Theme.highlightColor
-                             : (highlighted ? Theme.highlightColor : Theme.primaryColor)
+                        font.bold: index === 3 && statusUnread > 0
+                        color: (index === 3 && statusUnread > 0 && index !== bar.activeIndex)
+                             ? Theme.highlightColor
+                             : (index === bar.activeIndex ? Theme.highlightColor
+                                : (highlighted ? Theme.highlightColor : Theme.primaryColor))
                     }
                 }
             }
@@ -4134,6 +4207,10 @@ Label {
                         list = list.filter(function(m) { return !m.revoked })
                         list.sort(function(a, b) { return b.timestamp - a.timestamp })
                         statuses = list
+                        // Wer die Seite gerade offen hat, sieht sie ja - sonst
+                        // nur zaehlen, damit die Kachel es anzeigen kann
+                        if (status === PageStatus.Active) markStatusSeen(list)
+                        else recomputeStatusUnread(list)
                     }
                 }
                 xhr.send()
@@ -4211,7 +4288,12 @@ Label {
                 }
             }
 
-            onStatusChanged: if (status === PageStatus.Active) loadStatuses()
+            onStatusChanged: {
+                if (status === PageStatus.Active) {
+                    loadStatuses()
+                    markStatusSeen(statuses)
+                }
+            }
             Component.onCompleted: loadStatuses()
 
             Loader {
@@ -4263,7 +4345,14 @@ Label {
                         x: Theme.horizontalPageMargin
                         spacing: Theme.paddingMedium
                         Label {
-                            text: getDisplayName(modelData.sender, "")
+                            // Bei unaufgeloester LID zeigte hier eine
+                            // Ziffernfolge, die wie eine auslaendische
+                            // Rufnummer aussieht und keine ist - schlimmer
+                            // als gar keine Angabe, weil sie eine falsche
+                            // Sicherheit vortaeuscht
+                            text: modelData.senderIsLid === true
+                                  ? loc.unknownSender
+                                  : getDisplayName(modelData.sender, "")
                             color: Theme.highlightColor
                             font.bold: true
                         }
@@ -4272,6 +4361,30 @@ Label {
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
                             anchors.verticalCenter: parent.verticalCenter
+                        }
+                        IconButton {
+                            // Auf einen Status antworten: das wird eine
+                            // normale Nachricht an den Verfasser, die den
+                            // Status zitiert - genau wie in WhatsApp selbst.
+                            // Wunsch von rdomschk.
+                            // Nur wenn wir die Person benennen koennen. Ueber
+                            // die Vorwahl allein sind 13-stellige LIDs nicht
+                            // von echten Nummern zu trennen - eine Antwort ins
+                            // Blaue erreicht einen Fremden.
+                            visible: modelData.fromMe !== true
+                                     && modelData.senderKnown === true
+                            icon.source: "image://theme/icon-m-message-reply"
+                            onClicked: {
+                                pageStack.push(chatPage, {
+                                    chatJid: modelData.sender,
+                                    chatName: getDisplayName(modelData.sender, ""),
+                                    pendingQuoteId: modelData.id,
+                                    pendingQuoteText: modelData.text
+                                          || (modelData.mediaType === "image" ? loc.images
+                                              : (modelData.mediaType === "video" ? loc.videos : "")),
+                                    pendingQuoteSender: modelData.sender
+                                })
+                            }
                         }
                         IconButton {
                             visible: modelData.fromMe === true
@@ -4295,7 +4408,13 @@ Label {
                         visible: modelData.text && modelData.text !== "" && modelData.mediaType !== "poll"
                         x: Theme.horizontalPageMargin
                         width: parent.width - 2*Theme.horizontalPageMargin
-                        text: modelData.text
+                        // Statusmeldungen enthalten oft Links, waren hier aber
+                        // roher Text - nicht antippbar und ohne Emojis. Dieselbe
+                        // Aufbereitung wie im Chat.
+                        text: linkify(modelData.text)
+                        textFormat: Text.StyledText
+                        linkColor: Theme.highlightColor
+                        onLinkActivated: Qt.openUrlExternally(link)
                         wrapMode: Text.Wrap
                     }
 
@@ -5044,6 +5163,15 @@ Label {
             property string replyToText: ""
             property string replyToSender: ""
 
+            // Beim Oeffnen aus der Statusliste heraus vorbelegtes Zitat: die
+            // Chatseite entsteht erst beim Druck, deshalb kann das Zitat nicht
+            // direkt in replyTo* gesetzt werden - es wird uebergeben und hier
+            // uebernommen, sobald die Seite steht
+            property string pendingQuoteId: ""
+            property string pendingQuoteText: ""
+            property string pendingQuoteSender: ""
+
+
             property string editingId: ""
             property string highlightMsgId: ""
             property string downloadingId: ""
@@ -5656,7 +5784,17 @@ Label {
                 // Sicherheitsnetz - der Normalweg ist der /events-Long-Poll
                 interval: 30000; running: true; repeat: true; onTriggered: load()
             }
-            Component.onCompleted: { load(); markOpened() }
+            Component.onCompleted: {
+                load()
+                markOpened()
+                // Aus der Statusliste heraus geoeffnet: das Zitat steht schon
+                // bereit, sobald die Seite existiert
+                if (pendingQuoteId !== "") {
+                    replyToId = pendingQuoteId
+                    replyToText = pendingQuoteText
+                    replyToSender = pendingQuoteSender
+                }
+            }
             // Beim Verlassen (Medium oeffnen) merken, ob die Liste am Ende
             // stand; beim Zurueckkommen genau dorthin. Ohne das landet man
             // nach dem Schliessen eines Bildes/Videos/Audios in der Chatmitte,

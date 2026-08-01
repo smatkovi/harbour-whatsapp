@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.207
+Version:    0.9.213
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -124,6 +124,84 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.213-1
+- Links in status updates are tappable. The text there was rendered raw
+  while the chat has run everything through linkify for ages, so a link in
+  someone's status could only be read, not followed - and emoji stayed
+  monochrome there as well. Same treatment as in chat now, escaping
+  included
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.212-1
+- The status list resolves its senders properly. 0.9.211 only flagged
+  messages as they arrived, which left every stored one - that is, every
+  one actually on screen - unmarked. Resolution happens when the list is
+  served now: each sender is looked up in the LID store first, and where
+  that succeeds the real number replaces the hidden one, which also
+  restores the name. Failing that, obvious cases are recognised by length
+  and country code. The heuristic has a limit worth naming: 5184193331367
+  and 6098937458744 are LIDs too, but 518 starts with 51 (Peru) and 609
+  with 60 (Malaysia), and the length passes for real - no prefix rule can
+  tell those apart. So the reply button does not hang on the guess at all;
+  it appears only where the sender can actually be named from the
+  contacts. Replying into the dark would reach whoever really owns that
+  number. Seventeen test cases, using the numbers from the affected device
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.211-1
+- Status updates were showing numbers that belong to nobody. What appears
+  there is often a LID - WhatsApp's hidden addressing - and a LID looks
+  exactly like a phone number with an unfamiliar country code while being
+  nothing of the sort: no name can be found for it, and it must not be
+  treated as a number to dial or message. resolvePN already tries to turn
+  it into a real number but falls back to the LID when the mapping is
+  missing, which for status broadcasts is the common case. Messages now
+  carry a flag saying the sender could not be resolved, and where that is
+  set the entry reads "Unknown contact" instead of a plausible-looking
+  string of digits - a wrong number is worse than none, because it invites
+  belief. The reply button added in 0.9.210 is hidden for those entries:
+  replying would have addressed whoever really owns that number. Caught by
+  smatkovi before the button was ever used in anger
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.210-1
+- The remaining two of rdomschk's three wishes, and colour emoji goes back
+  to being on by default: tested on the device, scrolling showed no
+  noticeable difference, and the switch to turn it off stays.
+- Replying to a status. Each entry that is not your own now carries a reply
+  button, which opens the chat with its author and puts the status in the
+  quote box - which is what the official client does too, a status reply
+  being an ordinary message that quotes the status. The send path already
+  understood quotes, so nothing new was needed there; the quote is handed
+  to the chat page and picked up once it exists, since the page is built
+  only at the moment of pushing.
+- Unread status updates are counted, shown next to Status in the bottom bar
+  and cleared when the page is opened. What gets remembered is the
+  timestamp of the newest one seen, not every individual id: that cannot
+  grow without bound and survives a restart. The count is refreshed on the
+  same beat as the chat list, because a counter only visible while its own
+  page is open would be seen by nobody. Six test cases, including that your
+  own posts never count and that an older entry cannot push the mark back
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.209-1
+- Colour emoji is opt-in. It touches every message text and puts images
+  where glyphs used to be, which is not a change to make on someone's
+  behalf: whoever wants it turns it on under More settings, and whoever
+  does nothing keeps the app exactly as it was. The description says so
+  too, in all 22 languages
+
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.208-1
+- Colour emoji, as suggested by rdomschk, who pointed at Fernschreiber.
+  Reading its source settled how: Sailfish ships no colour emoji font at
+  all, so Fernschreiber substitutes each emoji with a bundled Twemoji SVG
+  (MIT, Twitter and contributors) via an img tag. The same approach works
+  here without changing how text is rendered - message labels already use
+  StyledText, which understands img. The substitution sits at the end of
+  linkify, deliberately after the escaping of angle brackets, since doing
+  it earlier would escape the very tags it produces. 4010 files sound
+  heavy but compress to about a megabyte in the package. There is a switch
+  under More settings for anyone who prefers the system font's plain
+  glyphs. Seven test cases cover the ordering trap: escaped text stays
+  escaped, links survive alongside emoji, and multi-codepoint sequences
+  such as flags resolve to the right file
+
 * Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.207-1
 - Notifications make a sound again, and the LED blinks. Reported by
   rdomschk, who had the sound switch on and heard nothing, and noticed the

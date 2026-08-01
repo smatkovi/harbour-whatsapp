@@ -185,5 +185,58 @@ console.log('--- Absendername in Gruppen ---');
   check('leerer Absender -> nichts', disp('', {}), v => v === '', 'ohne Absender keine Zeile');
 }
 
+// --- Emoji-Ersetzung ---
+// Twemoji ersetzt Emojis durch <img>-Tags. Heikel ist die Reihenfolge:
+// erst maskieren, dann ersetzen - sonst werden die eigenen Tags maskiert.
+console.log('--- Emoji-Ersetzung ---');
+{
+  const twSrc = fs.readFileSync(__dirname + '/../qml/js/twemoji.js', 'utf8')
+      .replace('.pragma library', '')
+      .replace('Qt.resolvedUrl("./emoji/")', '"./emoji/"');
+  const tw = (new Function(twSrc + '; return {emojify: emojify, toCodePoint: toCodePoint};'))();
+
+  const smile = tw.emojify('Hallo \u{1F600}', 32);
+  check('Emoji wird zu img',        smile, v => v.indexOf('<img') >= 0 && v.indexOf('1f600.svg') >= 0,
+        'erwartet img-Tag mit Codepoint-Dateinamen');
+  check('Text bleibt erhalten',     smile, v => v.indexOf('Hallo') === 0, 'Text darf nicht verloren gehen');
+  check('ohne Emoji unveraendert',  tw.emojify('nur Text', 32), v => v === 'nur Text', 'erwartet Original');
+  check('maskiertes < bleibt',      tw.emojify('a &lt; b', 32), v => v === 'a &lt; b', 'Maskierung darf nicht angetastet werden');
+  check('Link ueberlebt',           tw.emojify('<a href="http://x">x</a> \u{1F600}', 32),
+        v => v.indexOf('<a href="http://x">') >= 0 && v.indexOf('<img') >= 0, 'Links und Emojis nebeneinander');
+  check('Zusammensetzung',          tw.emojify('\u{1F1E9}\u{1F1EA}', 32),
+        v => v.indexOf('1f1e9-1f1ea.svg') >= 0, 'Flaggen bestehen aus zwei Codepoints');
+  check('Codepoint korrekt',        tw.toCodePoint('\u{1F602}'), v => v === '1f602', 'erwartet 1f602');
+}
+
+// --- Ungelesene Statusmeldungen ---
+// Gemerkt wird nur der Zeitstempel des zuletzt Gesehenen, nicht jede Kennung.
+console.log('--- Ungelesene Statusmeldungen ---');
+{
+  function unread(list, lastSeen) {
+    var n = 0;
+    for (var i = 0; i < list.length; i++)
+      if (!list[i].fromMe && list[i].timestamp > lastSeen) n++;
+    return n;
+  }
+  function newSeen(list, lastSeen) {
+    var newest = lastSeen;
+    for (var i = 0; i < list.length; i++)
+      if (!list[i].fromMe && list[i].timestamp > newest) newest = list[i].timestamp;
+    return newest;
+  }
+  const l = [
+    { timestamp: 100, fromMe: false },
+    { timestamp: 200, fromMe: false },
+    { timestamp: 300, fromMe: true  },
+  ];
+  check('alles neu',              unread(l, 0),   v => v === 2, 'eigene zaehlen nicht mit');
+  check('eigene zaehlen nicht',   unread(l, 200), v => v === 0, 'der eigene Status von 300 darf nicht zaehlen');
+  check('teilweise gesehen',      unread(l, 100), v => v === 1, 'erwartet 1');
+  check('nach dem Ansehen null',  unread(l, newSeen(l, 0)), v => v === 0, 'erwartet 0');
+  check('Marke steigt nur',       newSeen([{timestamp: 50, fromMe: false}], 200), v => v === 200,
+        'eine aeltere Meldung darf die Marke nicht zuruecksetzen');
+  check('leere Liste',            unread([], 0),  v => v === 0, 'erwartet 0');
+}
+
 console.log(fails === 0 ? '\nAlle Faelle bestanden.' : '\n' + fails + ' Fall/Faelle fehlgeschlagen.');
 process.exit(fails === 0 ? 0 : 1);
