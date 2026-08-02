@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.214
+Version:    0.9.215
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -13,6 +13,15 @@ Group:      Applications/Communications
 Requires:   sailfishsilica-qt5
 Requires:   nemo-qml-plugin-contacts-qt5
 Requires:   pyotherside-qml-plugin-python3-qt5
+# Fuenf QML-Module werden importiert, aber nur drei Pakete waren genannt.
+# Dass es ueberall lief, hiess nur, dass die uebrigen zufaellig
+# mitinstalliert waren - fehlt eines, laedt die QML-Datei nicht und die App
+# startet ueberhaupt nicht. Paketnamen auf einem laufenden Geraet mit
+# "rpm -qf" ermittelt, nicht geraten.
+Requires:   libkeepalive
+Requires:   nemo-qml-plugin-dbus-qt5
+Requires:   nemo-qml-plugin-notifications-qt5
+Requires:   sailfish-components-pickers-qt5
 # Voice-Aufnahme: der Rekorder wird bei der Installation an einen
 # exec-erlaubten Ort gebuendelt - ohne dieses Paket lief %post ins Leere
 # und die Aufnahme scheiterte mit einem irrefuehrenden Errno 13.
@@ -124,6 +133,18 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.215-1
+- Declares the QML modules it actually imports. Five were being used while
+  only three packages were listed as required: Nemo.KeepAlive,
+  Nemo.DBus, Nemo.Notifications and Sailfish.Pickers went unmentioned. That
+  it worked everywhere only meant those happened to be installed anyway -
+  where one is missing the QML file does not load and the app does not
+  start at all, with no error the user can see. Reported by a user on a
+  OnePlus 6T community port at 5.0.0.67 where it would not launch; whether
+  this is their cause is not yet confirmed, but the gap is real either way.
+  Package names were read off a running device with rpm -qf rather than
+  guessed, since a wrong Requires would break installation for everyone
+
 * Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.214-1
 - Channels show their names. The names were being fetched all along -
   GetSubscribedNewsletters returns them - but they went straight to the
