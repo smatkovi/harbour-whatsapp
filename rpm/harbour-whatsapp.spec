@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.215
+Version:    0.9.217
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -22,6 +22,12 @@ Requires:   libkeepalive
 Requires:   nemo-qml-plugin-dbus-qt5
 Requires:   nemo-qml-plugin-notifications-qt5
 Requires:   sailfish-components-pickers-qt5
+# Stellt /usr/bin/sailfish-qml bereit, also genau das Programm aus unserer
+# Exec-Zeile. Auf offiziell unterstuetzten Geraeten ist es immer vorhanden,
+# weil zahllose Apps es mitziehen - auf einem frisch geflashten
+# Community-Port nicht zwingend. Fehlt es, gibt es kein Programm, das
+# starten koennte, und die App reagiert auf das Antippen mit gar nichts.
+Requires:   libsailfishapp-launcher
 # Voice-Aufnahme: der Rekorder wird bei der Installation an einen
 # exec-erlaubten Ort gebuendelt - ohne dieses Paket lief %post ins Leere
 # und die Aufnahme scheiterte mit einem irrefuehrenden Errno 13.
@@ -133,6 +139,28 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Mon Aug 03 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.217-1
+- Two of Ralf's three suggestions. The bottom bar was hard to read: the
+  labels are a size larger now, inactive entries carry the full secondary
+  colour instead of a dimmed one, and the active one is bold. Unread counts
+  appear beside Chats as well, not only Status, and either makes its label
+  bold and highlighted - the point of a bar like that is to tell you where
+  something is waiting without opening anything.
+- A status reply quoted "[image]" or "[video]" when the status had no
+  caption, so the recipient could not tell which one was meant - Ralf's
+  daughter had to ask. The quote now names the status by time and date when
+  there is no caption to quote instead
+
+* Sun Aug 02 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.216-1
+- Requires libsailfishapp-launcher, which provides the /usr/bin/sailfish-qml
+  named in the Exec line. Found by danovium, who installed that package
+  himself and had the app running - a user diagnosing it faster than three
+  rounds of guessing here. On supported devices it is always present because
+  countless apps pull it in; on a freshly flashed community port it need not
+  be, and without it there is simply no binary to launch, so tapping the icon
+  does nothing at all and leaves no trace. 0.9.215 added four missing module
+  dependencies and this was the fifth and most fundamental one
+
 * Sat Aug 01 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.215-1
 - Declares the QML modules it actually imports. Five were being used while
   only three packages were listed as required: Nemo.KeepAlive,

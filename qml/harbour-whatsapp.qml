@@ -1168,9 +1168,11 @@ ApplicationWindow {
             if (xhr.readyState === 4 && xhr.status === 200) {
                 chats = JSON.parse(xhr.responseText) || []
                 var nu = {}
+                var chatsUnreadNow = 0
                 for (var i = 0; i < chats.length; i++) {
                     var c = chats[i]
                     nu[c.jid] = c.unread || 0
+                    if ((c.unread || 0) > 0 && !c.archived) chatsUnreadNow++
                     // Benachrichtigungen kommen ausschliesslich vom Backend
                     // (mit Reply-Aktion, Dedup und Muted-Logik) - die alte
                     // QML-Publikation hier erzeugte eine zweite, pfeillose
@@ -1178,6 +1180,7 @@ ApplicationWindow {
                 }
                 prevUnread = nu
                 prevUnreadInit = true
+                chatsUnread = chatsUnreadNow
             }
         }
         xhr.send()
@@ -1334,6 +1337,8 @@ ApplicationWindow {
     // ins Unendliche und uebersteht einen Neustart.
     property double statusLastSeen: 0
     property int statusUnread: 0
+    // Ungelesene Chats, damit die Leiste es auch dort zeigen kann
+    property int chatsUnread: 0
     function recomputeStatusUnread(list) {
         var n = 0
         for (var i = 0; i < list.length; i++) {
@@ -1383,17 +1388,20 @@ ApplicationWindow {
                     Label {
                         id: barLabel
                         anchors.centerIn: parent
-                        // Ungelesene Statusmeldungen anzeigen - ohne Zahl
-                        // weiss niemand, ob sich etwas getan hat. Wunsch von
-                        // rdomschk.
-                        text: (index === 3 && statusUnread > 0)
-                              ? modelData + " (" + statusUnread + ")" : modelData
-                        font.pixelSize: Theme.fontSizeExtraSmall
-                        font.bold: index === 3 && statusUnread > 0
-                        color: (index === 3 && statusUnread > 0 && index !== bar.activeIndex)
+                        // Zahl daneben, wo etwas ungelesen ist - ohne sie
+                        // weiss niemand, ob sich etwas getan hat
+                        property int badge: index === 2 ? chatsUnread
+                                          : (index === 3 ? statusUnread : 0)
+                        text: badge > 0 ? modelData + " (" + badge + ")" : modelData
+                        // Kleiner und blass war auf hellen Ambiences kaum zu
+                        // entziffern: eine Stufe groesser, und die inaktiven
+                        // Eintraege tragen die volle Sekundaerfarbe statt
+                        // einer abgeblendeten. Wunsch von rdomschk.
+                        font.pixelSize: Theme.fontSizeSmall
+                        font.bold: badge > 0 || index === bar.activeIndex
+                        color: index === bar.activeIndex || highlighted
                              ? Theme.highlightColor
-                             : (index === bar.activeIndex ? Theme.highlightColor
-                                : (highlighted ? Theme.highlightColor : Theme.primaryColor))
+                             : (badge > 0 ? Theme.highlightColor : Theme.primaryColor)
                     }
                 }
             }
@@ -4379,9 +4387,18 @@ Label {
                                     chatJid: modelData.sender,
                                     chatName: getDisplayName(modelData.sender, ""),
                                     pendingQuoteId: modelData.id,
-                                    pendingQuoteText: modelData.text
-                                          || (modelData.mediaType === "image" ? loc.images
-                                              : (modelData.mediaType === "video" ? loc.videos : "")),
+                                    // Ohne Bildunterschrift stand im Zitat nur
+                                    // "Bilder" - der Empfaenger konnte nicht
+                                    // erkennen, welcher Status gemeint war.
+                                    // Jetzt Uhrzeit und Datum dazu, das
+                                    // benennt ihn eindeutig. Wunsch von
+                                    // rdomschk.
+                                    pendingQuoteText: modelData.text && modelData.text !== ""
+                                          ? modelData.text
+                                          : (loc.status + " "
+                                             + Qt.formatDateTime(
+                                                   new Date(modelData.timestamp * 1000),
+                                                   "dd.MM. HH:mm")),
                                     pendingQuoteSender: modelData.sender
                                 })
                             }
