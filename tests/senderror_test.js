@@ -238,5 +238,72 @@ console.log('--- Ungelesene Statusmeldungen ---');
   check('leere Liste',            unread([], 0),  v => v === 0, 'erwartet 0');
 }
 
+// --- Statusliste nach Person gruppieren ---
+console.log('--- Statusgruppierung ---');
+{
+  function group(list) {
+    var order = [], byUser = {};
+    for (var i = 0; i < list.length; i++) {
+      var k = list[i].sender || "?";
+      if (!byUser[k]) { byUser[k] = []; order.push(k); }
+      byUser[k].push(list[i]);
+    }
+    var out = [];
+    for (var j = 0; j < order.length; j++) {
+      var g = byUser[order[j]];
+      for (var n = 0; n < g.length; n++) {
+        g[n].groupHead = (n === 0); g[n].groupCount = g.length; g[n].groupIndex = n + 1;
+        out.push(g[n]);
+      }
+    }
+    return out;
+  }
+  const l = group([
+    { sender: "A", timestamp: 500 },
+    { sender: "B", timestamp: 400 },
+    { sender: "A", timestamp: 300 },
+    { sender: "A", timestamp: 200 },
+  ]);
+  check('Person zusammen',       l.map(function(x){return x.sender}).join(""), v => v === "AAAB",
+        'A-Beitraege muessen beisammenstehen');
+  check('neueste Person zuerst', l[0].sender, v => v === "A", 'A hat die neueste Meldung');
+  check('nur erster mit Kopf',   l.filter(function(x){return x.groupHead}).length, v => v === 2,
+        'je Person genau eine Ueberschrift');
+  check('Zaehler stimmt',        l[0].groupIndex + "/" + l[0].groupCount, v => v === "1/3", 'erwartet 1/3');
+  check('Einzelbeitrag ohne Zaehler', l[3].groupCount, v => v === 1, 'B hat nur einen');
+  check('Reihenfolge in der Gruppe', l[1].timestamp, v => v === 300, 'innerhalb der Person zeitlich');
+}
+
+// --- Weiterleiten: kein Doppelversand ---
+// Ohne Rueckmeldung tippt man nach, und jeder Tipp schickte erneut. Ein
+// Empfaenger darf pro Weiterleitung genau einmal drankommen.
+console.log('--- Weiterleiten, Doppelversand ---');
+{
+  function recipient() {
+    const st = { sent: false, busy: false, calls: 0 };
+    st.tap = function () {
+      if (st.sent || st.busy) return;
+      st.busy = true; st.calls++;
+    };
+    st.finish = function (ok) { st.busy = false; if (ok) st.sent = true; };
+    return st;
+  }
+  let r = recipient();
+  r.tap(); r.tap(); r.tap();
+  check('Tippen waehrend des Sendens', r.calls, v => v === 1, 'nur ein Aufruf trotz drei Tipps');
+  r.finish(true);
+  r.tap(); r.tap();
+  check('nach Erfolg gesperrt',        r.calls, v => v === 1, 'erledigter Empfaenger bleibt gesperrt');
+
+  let f = recipient();
+  f.tap(); f.finish(false);
+  check('nach Fehlschlag wieder frei', (f.tap(), f.calls), v => v === 2,
+        'ein Fehlschlag darf einen zweiten Versuch erlauben');
+
+  // Neue Weiterleitung = neue Seite = neuer Zustand
+  let n = recipient();
+  check('neue Weiterleitung erlaubt',  (n.tap(), n.calls), v => v === 1, 'frischer Zustand sendet wieder');
+}
+
 console.log(fails === 0 ? '\nAlle Faelle bestanden.' : '\n' + fails + ' Fall/Faelle fehlgeschlagen.');
 process.exit(fails === 0 ? 0 : 1);

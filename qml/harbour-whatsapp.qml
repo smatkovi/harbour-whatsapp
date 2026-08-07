@@ -344,6 +344,57 @@ ApplicationWindow {
                     }
 
                     TextSwitch {
+                        text: loc.statusGrouping
+                        description: loc.statusGroupingDesc
+                        checked: statusGrouping
+                        onClicked: {
+                            statusGrouping = checked
+                            setPref("status_grouping", checked ? "1" : "0")
+                        }
+                    }
+
+                    ComboBox {
+                        id: navBarBox
+                        width: parent.width
+                        label: loc.navBarSize
+                        description: loc.navBarSizeDesc
+                        property bool synced: false
+                        function syncFromPrefs() {
+                            currentIndex = navBarSize === "small" ? 0
+                                         : (navBarSize === "medium" ? 1 : 2)
+                            synced = true
+                        }
+                        Component.onCompleted: syncFromPrefs()
+                        onCurrentIndexChanged: {
+                            // Erst nach dem Abgleich schreiben - sonst setzt
+                            // schon das Oeffnen der Seite den Wert auf den
+                            // ersten Eintrag der Liste
+                            if (!prefsLoaded || !synced) return
+                            var v = currentIndex === 0 ? "small"
+                                  : (currentIndex === 1 ? "medium" : "large")
+                            if (navBarSize !== v) {
+                                navBarSize = v
+                                setPref("navbar_size", v)
+                            }
+                        }
+                        menu: ContextMenu {
+                            MenuItem { text: loc.navBarSmall }
+                            MenuItem { text: loc.navBarMedium }
+                            MenuItem { text: loc.navBarLarge }
+                        }
+                    }
+
+                    TextSwitch {
+                        text: loc.forwardStay
+                        description: loc.forwardStayDesc
+                        checked: forwardStay
+                        onClicked: {
+                            forwardStay = checked
+                            setPref("forward_stay", checked ? "1" : "0")
+                        }
+                    }
+
+                    TextSwitch {
                         text: loc.colorEmoji
                         description: loc.colorEmojiDesc
                         checked: emojiEnabled
@@ -362,9 +413,10 @@ ApplicationWindow {
                             currentIndex = orientationPref === "portrait" ? 1
                                          : (orientationPref === "landscape" ? 2 : 0)
                         }
-                        Component.onCompleted: syncFromPrefs()
+                        property bool synced: false
+                        Component.onCompleted: { syncFromPrefs(); synced = true }
                         onCurrentIndexChanged: {
-                            if (!prefsLoaded) return
+                            if (!prefsLoaded || !synced) return
                             var v = currentIndex === 1 ? "portrait"
                                   : (currentIndex === 2 ? "landscape" : "dynamic")
                             if (orientationPref !== v) {
@@ -392,9 +444,10 @@ ApplicationWindow {
                             currentIndex = attachPicker === "content" ? 1
                                          : (attachPicker === "file" ? 2 : 0)
                         }
-                        Component.onCompleted: syncFromPrefs()
+                        property bool synced: false
+                        Component.onCompleted: { syncFromPrefs(); synced = true }
                         onCurrentIndexChanged: {
-                            if (!prefsLoaded) return
+                            if (!prefsLoaded || !synced) return
                             var v = currentIndex === 1 ? "content"
                                   : (currentIndex === 2 ? "file" : "ask")
                             if (attachPicker !== v) {
@@ -885,6 +938,9 @@ ApplicationWindow {
                 attachPicker = p.attach_picker || "ask"
                 orientationPref = p.orientation || "dynamic"
                 emojiEnabled = p.emoji !== "0"
+                forwardStay = p.forward_stay === "1"
+                navBarSize = p.navbar_size || "large"
+                statusGrouping = p.status_grouping !== "0"
                 statusLastSeen = parseFloat(p.status_last_seen || "0") || 0
                 prefsLoaded = true
                 // Auch fuer Bestandsinstallationen und Systemsprache setzen
@@ -1331,6 +1387,25 @@ ApplicationWindow {
     // Standardmaessig an - auf dem Geraet zeigte sich kein spuerbarer
     // Unterschied beim Scrollen. Abschaltbar bleibt es trotzdem.
     property bool emojiEnabled: true
+    // Nach dem Weiterleiten in der Empfaengerliste bleiben, um dieselbe
+    // Nachricht mehreren zu schicken. Aus, weil der Rueckweg in den Chat
+    // das ist, was man ueblicherweise erwartet.
+    property bool forwardStay: false
+
+    // Hoehe der Bodenleiste. Feste Werte trafen es nie fuer alle: zu niedrig
+    // erwischt man den letzten Listeneintrag statt der Leiste, zu hoch frisst
+    // sie den Schirm. Vorgabe ist hoch, weil Danebentippen aergerlicher ist
+    // als ein paar Pixel weniger Liste.
+    // Statusliste nach Person gruppieren. Optional, weil manche die rein
+    // zeitliche Reihenfolge wollen - dort steht das Neueste immer oben,
+    // egal von wem.
+    property bool statusGrouping: true
+    property string navBarSize: "large"
+    function navBarHeight() {
+        if (navBarSize === "small") return Theme.itemSizeSmall
+        if (navBarSize === "medium") return Theme.itemSizeMedium
+        return Theme.itemSizeLarge
+    }
 
     // Ungelesene Statusmeldungen: gemerkt wird nur der Zeitstempel des
     // zuletzt Angesehenen, nicht jede einzelne Kennung - das waechst nicht
@@ -1362,6 +1437,10 @@ ApplicationWindow {
         if (to === from) return
         if (to < from) {
             navJumpTarget = -1
+            // navigateBack in einer Schleife machte die Leiste UNBRAUCHBAR:
+            // ein Fehler darin bricht den Klick-Handler ab, und dann
+            // reagiert kein einziger Eintrag mehr. Zurueck zum bewaehrten
+            // pop() - der Weg vom Status aus wird gesondert behandelt.
             if (to === 0) pageStack.pop(archPageItem)
             else if (to === 1) pageStack.pop(favPageItem)
             else pageStack.pop(mainPage)
@@ -1374,6 +1453,29 @@ ApplicationWindow {
 
     Component {
         id: navBarComp
+        Item {
+            anchors.fill: parent
+            // Seit der Row in diesem Item steckt, ist "item" des Loaders
+            // dieses Item und nicht mehr die Row - onLoaded setzte
+            // activeIndex damit ins Leere, und ueberall blieb "Chats"
+            // hervorgehoben. Der Alias reicht es an die Row durch.
+            property alias activeIndex: bar.activeIndex
+
+            // Eigener Hintergrund und Trennlinie: bisher war die Leiste
+            // optisch nicht von der Liste zu unterscheiden, und wo man
+            // hintippt, ist bei einem unsichtbaren Streifen Glueckssache.
+            // Zugleich zeigt der Hintergrund beim Testen, wo die Leiste
+            // wirklich sitzt und wie hoch sie ist.
+            Rectangle {
+                anchors.fill: parent
+                color: Theme.rgba(Theme.highlightBackgroundColor, 0.12)
+            }
+            Rectangle {
+                anchors { left: parent.left; right: parent.right; top: parent.top }
+                height: 1
+                color: Theme.rgba(Theme.primaryColor, 0.2)
+            }
+
         Row {
             id: bar
             property int activeIndex: 2
@@ -1406,6 +1508,7 @@ ApplicationWindow {
                 }
             }
         }
+        }
     }
 
     Page {
@@ -1436,7 +1539,11 @@ ApplicationWindow {
         Loader {
             id: navBar
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-            height: (connected && showNavBar) ? Theme.itemSizeExtraSmall : 0
+            z: 10   // vor der Liste, falls doch etwas darueber hinausragt
+            // itemSizeExtraSmall war als Tippziel zu knapp - man trifft daneben
+            // und landet in der Liste darueber (rdomschk). Die Beschriftung
+            // ist seit 0.9.217 groesser, die Flaeche war es noch nicht
+            height: (connected && showNavBar) ? navBarHeight() : 0
             visible: connected && showNavBar
             sourceComponent: navBarComp   // activeIndex 2 = Chats ist Standard
         }
@@ -1446,6 +1553,11 @@ ApplicationWindow {
         // nach cellHeight - ListItem-Delegates wachsen und schieben)
         SilicaListView {
             id: chatGrid
+            // OHNE clip zeichnet eine ListView ihre Eintraege ueber die
+            // eigenen Grenzen hinaus - und diese Eintraege nehmen auch
+            // Beruehrungen entgegen. Der letzte Chat lag damit HINTER der
+            // Bodenleiste und fing den Tipp ab, egal wie hoch sie war.
+            clip: true
             anchors { left: parent.left; right: parent.right; top: parent.top; bottom: navBar.top }
             visible: chatGridView && connected
             model: (connected && chatGridView) ? Math.ceil(chats.length / gridColumns) : 0
@@ -1663,6 +1775,11 @@ ApplicationWindow {
         }
 
         SilicaListView {
+            // OHNE clip zeichnet eine ListView ihre Eintraege ueber die
+            // eigenen Grenzen hinaus - und diese Eintraege nehmen auch
+            // Beruehrungen entgegen. Der letzte Chat lag damit HINTER der
+            // Bodenleiste und fing den Tipp ab, egal wie hoch sie war.
+            clip: true
             anchors { left: parent.left; right: parent.right; top: parent.top; bottom: navBar.top }
             visible: !chatGridView || !connected
             model: connected ? chats : null
@@ -3601,13 +3718,22 @@ Label {
         Loader {
             id: favNav
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-            height: (connected && showNavBar) ? Theme.itemSizeExtraSmall : 0
+            z: 10   // vor der Liste, falls doch etwas darueber hinausragt
+            // itemSizeExtraSmall war als Tippziel zu knapp - man trifft daneben
+            // und landet in der Liste darueber (rdomschk). Die Beschriftung
+            // ist seit 0.9.217 groesser, die Flaeche war es noch nicht
+            height: (connected && showNavBar) ? navBarHeight() : 0
             visible: connected && showNavBar
             sourceComponent: navBarComp
             onLoaded: item.activeIndex = 1
         }
 
         SilicaListView {
+            // OHNE clip zeichnet eine ListView ihre Eintraege ueber die
+            // eigenen Grenzen hinaus - und diese Eintraege nehmen auch
+            // Beruehrungen entgegen. Der letzte Chat lag damit HINTER der
+            // Bodenleiste und fing den Tipp ab, egal wie hoch sie war.
+            clip: true
             anchors { left: parent.left; right: parent.right; top: parent.top; bottom: favNav.top }
             header: PageHeader { title: loc.favorites }
             model: chats.filter(function(c) { return c.pinned === true })
@@ -3715,7 +3841,11 @@ Label {
         Loader {
             id: archNav
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-            height: (connected && showNavBar) ? Theme.itemSizeExtraSmall : 0
+            z: 10   // vor der Liste, falls doch etwas darueber hinausragt
+            // itemSizeExtraSmall war als Tippziel zu knapp - man trifft daneben
+            // und landet in der Liste darueber (rdomschk). Die Beschriftung
+            // ist seit 0.9.217 groesser, die Flaeche war es noch nicht
+            height: (connected && showNavBar) ? navBarHeight() : 0
             visible: connected && showNavBar
             sourceComponent: navBarComp
             onLoaded: item.activeIndex = 0
@@ -4214,6 +4344,36 @@ Label {
                         var list = JSON.parse(xhr.responseText) || []
                         list = list.filter(function(m) { return !m.revoked })
                         list.sort(function(a, b) { return b.timestamp - a.timestamp })
+                        // Nach Person gruppieren: wer ein ganzes Fotoalbum
+                        // postet, schob sonst alle anderen aus der Liste.
+                        // Innerhalb einer Person bleibt es zeitlich sortiert,
+                        // die Personen selbst nach ihrer neuesten Meldung.
+                        var order = [], byUser = {}
+                        if (!statusGrouping) {
+                            for (var q = 0; q < list.length; q++) {
+                                list[q].groupHead = true
+                                list[q].groupCount = 1
+                                list[q].groupIndex = 1
+                            }
+                        }
+                        for (var i = 0; i < list.length; i++) {
+                            var k = list[i].sender || "?"
+                            if (!byUser[k]) { byUser[k] = []; order.push(k) }
+                            byUser[k].push(list[i])
+                        }
+                        var grouped = []
+                        for (var j = 0; j < order.length; j++) {
+                            var g = byUser[order[j]]
+                            for (var n = 0; n < g.length; n++) {
+                                // Erster Eintrag einer Person traegt die
+                                // Ueberschrift, die uebrigen zaehlen mit
+                                g[n].groupHead = (n === 0)
+                                g[n].groupCount = g.length
+                                g[n].groupIndex = n + 1
+                                grouped.push(g[n])
+                            }
+                        }
+                        if (statusGrouping) list = grouped
                         statuses = list
                         // Wer die Seite gerade offen hat, sieht sie ja - sonst
                         // nur zaehlen, damit die Kachel es anzeigen kann
@@ -4307,13 +4467,22 @@ Label {
             Loader {
                 id: stNav
                 anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-                height: (connected && showNavBar) ? Theme.itemSizeExtraSmall : 0
+            z: 10   // vor der Liste, falls doch etwas darueber hinausragt
+                // itemSizeExtraSmall war als Tippziel zu knapp - man trifft daneben
+            // und landet in der Liste darueber (rdomschk). Die Beschriftung
+            // ist seit 0.9.217 groesser, die Flaeche war es noch nicht
+            height: (connected && showNavBar) ? navBarHeight() : 0
                 visible: connected && showNavBar
                 sourceComponent: navBarComp
                 onLoaded: item.activeIndex = 3
             }
 
             SilicaListView {
+                // OHNE clip zeichnet eine ListView ihre Eintraege ueber die
+                // eigenen Grenzen hinaus - und diese Eintraege nehmen auch
+                // Beruehrungen entgegen. Der letzte Chat lag damit HINTER der
+                // Bodenleiste und fing den Tipp ab, egal wie hoch sie war.
+                clip: true
                 anchors { left: parent.left; right: parent.right; top: parent.top; bottom: stNav.top }
                 model: statuses
 
@@ -4358,11 +4527,24 @@ Label {
                             // Rufnummer aussieht und keine ist - schlimmer
                             // als gar keine Angabe, weil sie eine falsche
                             // Sicherheit vortaeuscht
-                            text: modelData.senderIsLid === true
-                                  ? loc.unknownSender
-                                  : getDisplayName(modelData.sender, "")
+                            // Name nur beim ersten Beitrag einer Person, die
+                            // weiteren zaehlen mit (2/7). Bei einem Fotoalbum
+                            // stand der Name sonst sieben Mal untereinander
+                            text: modelData.groupHead
+                                  ? (modelData.senderIsLid === true
+                                     ? loc.unknownSender
+                                     : getDisplayName(modelData.sender, ""))
+                                  : ""
+                            visible: text !== ""
                             color: Theme.highlightColor
                             font.bold: true
+                        }
+                        Label {
+                            visible: modelData.groupCount > 1
+                            text: modelData.groupIndex + "/" + modelData.groupCount
+                            color: Theme.secondaryHighlightColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            anchors.verticalCenter: parent.verticalCenter
                         }
                         Label {
                             text: formatTime(modelData.timestamp)
@@ -4505,21 +4687,50 @@ Label {
             allowedOrientations: Orientation.All
             backgroundColor: "black"
 
+            // Zoombar: aufziehen mit zwei Fingern, Doppeltipp schaltet
+            // zwischen eingepasst und zweifach um. Der Flickable schiebt das
+            // vergroesserte Bild, deshalb waechst sein Inhalt mit dem Faktor.
             SilicaFlickable {
+                id: zoomFlick
                 anchors.fill: parent
-                contentWidth: width
-                contentHeight: height
+                contentWidth: Math.max(width, zoomImg.width * zoomImg.scale)
+                contentHeight: Math.max(height, zoomImg.height * zoomImg.scale)
+                clip: true
 
-                Image {
-                    anchors.fill: parent
-                    fillMode: Image.PreserveAspectFit
-                    asynchronous: true
-                    source: "file://" + imagePath
-                }
+                PinchArea {
+                    width: Math.max(zoomFlick.contentWidth, zoomFlick.width)
+                    height: Math.max(zoomFlick.contentHeight, zoomFlick.height)
+                    pinch.target: zoomImg
+                    pinch.minimumScale: 1.0
+                    pinch.maximumScale: 6.0
+                    pinch.dragAxis: Pinch.XAndYAxis
 
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: pageStack.pop()
+                    Image {
+                        id: zoomImg
+                        width: zoomFlick.width
+                        height: zoomFlick.height
+                        anchors.centerIn: parent
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        // Beim Zoomen die volle Aufloesung anfordern, sonst
+                        // vergroessert man nur die Bildschirmpunkte
+                        sourceSize.width: zoomImg.scale > 1 ? 0 : zoomFlick.width
+                        source: "file://" + imagePath
+                        Behavior on scale { NumberAnimation { duration: 150 } }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onDoubleClicked: {
+                            zoomImg.scale = (zoomImg.scale > 1.05) ? 1.0 : 2.0
+                            if (zoomImg.scale === 1.0) {
+                                zoomFlick.contentX = 0; zoomFlick.contentY = 0
+                            }
+                        }
+                        // Nur bei unveraendertem Bild schliessen - sonst
+                        // faellt man beim Verschieben aus dem Betrachter
+                        onClicked: if (zoomImg.scale <= 1.05) pageStack.pop()
+                    }
                 }
             }
 
@@ -5184,6 +5395,21 @@ Label {
             // Chatseite entsteht erst beim Druck, deshalb kann das Zitat nicht
             // direkt in replyTo* gesetzt werden - es wird uebergeben und hier
             // uebernommen, sobald die Seite steht
+            // Mehrere Nachrichten auswaehlen und gemeinsam weiterleiten.
+            // Der Modus wird ueber "Auswaehlen" im Langdruck-Menue betreten;
+            // danach waehlt ein Tipp aus statt zu oeffnen.
+            property bool selectMode: false
+            property var selectedIds: []
+            function toggleSelect(id) {
+                var a = selectedIds.slice()
+                var i = a.indexOf(id)
+                if (i >= 0) a.splice(i, 1); else a.push(id)
+                selectedIds = a
+                if (a.length === 0) selectMode = false
+            }
+            function isSelected(id) { return selectedIds.indexOf(id) >= 0 }
+            function endSelect() { selectedIds = []; selectMode = false }
+
             property string pendingQuoteId: ""
             property string pendingQuoteText: ""
             property string pendingQuoteSender: ""
@@ -5749,6 +5975,30 @@ Label {
                 }
             }
 
+            // Mehrere Dateien nacheinander senden. Nicht alle auf einmal:
+            // ein Schwall gleichzeitiger Uploads ist genau das Muster, das
+            // beim Erstkontakt schon zur Kontosperre gefuehrt hat.
+            property var pendingFiles: []
+            Timer {
+                id: fileQueue
+                interval: 1200
+                repeat: true
+                onTriggered: {
+                    if (pendingFiles.length === 0) { stop(); return }
+                    var next = pendingFiles.shift()
+                    pendingFiles = pendingFiles
+                    sendFile(next)
+                }
+            }
+            function sendFileQueue(paths) {
+                if (!paths || paths.length === 0) return
+                sendFile(paths[0])
+                if (paths.length > 1) {
+                    pendingFiles = paths.slice(1)
+                    fileQueue.restart()
+                }
+            }
+
             function sendFile(path) {
                 console.log("WASEND sendFile path=" + path + " chat=" + chatJid
                             + " port=" + backendPort)
@@ -5833,6 +6083,25 @@ Label {
 
             Component {
                 id: imagePicker
+                // Die Mehrfachauswahl gibt es nur als DIALOG, nicht als Page -
+                // MultiImagePickerPage existiert nicht und liess die ganze
+                // QML-Datei scheitern (weisse Flaeche in 0.9.220). Die Auswahl
+                // steht erst mit onAccepted fest, nicht bei jeder Aenderung.
+                MultiImagePickerDialog {
+                    onAccepted: {
+                        if (!selectedContent || selectedContent.count === 0) return
+                        var paths = []
+                        for (var i = 0; i < selectedContent.count; i++) {
+                            var it = selectedContent.get(i)
+                            if (it && it.filePath) paths.push(it.filePath)
+                        }
+                        chatPageItem.sendFileQueue(paths)
+                    }
+                }
+            }
+
+            Component {
+                id: imagePickerSingle
                 ImagePickerPage {
                     onSelectedContentPropertiesChanged: {
                         console.log("WASEND imagePicker fired path="
@@ -6286,6 +6555,22 @@ Label {
                     width: parent.width
                     contentHeight: msgContent.height + Theme.paddingSmall
                     highlighted: down || menuOpen || modelData.id === highlightMsgId
+                                 || (chatPageItem.selectMode && chatPageItem.isSelected(modelData.id))
+                    // Im Auswahlmodus waehlt ein Tipp aus, statt das Medium
+                    // zu oeffnen - sonst kaeme man aus dem Modus nie heraus
+                    onClicked: if (chatPageItem.selectMode) chatPageItem.toggleSelect(modelData.id)
+                    Label {
+                        visible: chatPageItem.selectMode
+                        anchors {
+                            right: parent.right
+                            rightMargin: Theme.paddingSmall
+                            top: parent.top
+                            topMargin: Theme.paddingSmall
+                        }
+                        text: chatPageItem.isSelected(modelData.id) ? "\u2611" : "\u2610"
+                        color: Theme.highlightColor
+                        font.pixelSize: Theme.fontSizeLarge
+                    }
                             property var voters: modelData.pollVoters || ({})
                     property var myVotes: voters[phone] || []
 
@@ -6399,7 +6684,15 @@ Label {
                         MenuItem {
                             text: loc.forward
                             visible: !modelData.revoked && !modelData.pollName
-                            onClicked: pageStack.push(forwardPage, { forwardId: modelData.id })
+                            onClicked: pageStack.push(forwardPage, { forwardIds: [modelData.id] })
+                        }
+                        MenuItem {
+                            text: loc.selectMessages
+                            visible: !modelData.revoked && !modelData.pollName
+                            onClicked: {
+                                chatPageItem.selectMode = true
+                                chatPageItem.toggleSelect(modelData.id)
+                            }
                         }
                         MenuItem {
                             text: modelData.pinnedInChat ? "Unpin" : "Pin"
@@ -6946,6 +7239,103 @@ Label {
                     }
                 }
 
+                // Bedienleiste des Auswahlmodus: zeigt, wie viele gewaehlt
+                // sind, und bietet Weiterleiten und Abbrechen. Ohne sie
+                // waere der Modus eine Sackgasse.
+                Row {
+                    visible: chatPageItem.selectMode
+                    width: parent.width
+                    height: visible ? Theme.itemSizeSmall : 0
+                    spacing: Theme.paddingLarge
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: Theme.horizontalPageMargin
+                        text: loc.selectedCount.replace("%1", chatPageItem.selectedIds.length)
+                        color: Theme.highlightColor
+                    }
+                    Button {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: loc.forward
+                        enabled: chatPageItem.selectedIds.length > 0
+                        onClicked: {
+                            pageStack.push(forwardPage, {
+                                forwardIds: chatPageItem.selectedIds.slice()
+                            })
+                            chatPageItem.endSelect()
+                        }
+                    }
+                    Button {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: loc.cancel
+                        onClicked: chatPageItem.endSelect()
+                    }
+                }
+
+                // Emoji-Auswahl ueber der Eingabe. Bewusst eine feste, kleine
+                // Auswahl der gebraeuchlichsten Zeichen statt aller 4010 -
+                // ein Raster mit tausenden Eintraegen waere weder schnell
+                // noch benutzbar, und fuer alles Weitere gibt es weiterhin
+                // die Tastatur.
+                Flickable {
+                    id: emojiPanel
+                    visible: false
+                    width: parent.width
+                    height: visible ? Theme.itemSizeExtraLarge * 1.6 : 0
+                    contentHeight: emojiFlow.height
+                    clip: true
+                    Flow {
+                        id: emojiFlow
+                        width: parent.width
+                        spacing: Theme.paddingSmall
+                        Repeater {
+                            model: [
+                                "\ud83d\ude00","\ud83d\ude02","\ud83d\ude0a","\ud83d\ude09","\ud83d\ude0d",
+                                "\ud83d\ude18","\ud83d\ude17","\ud83d\ude1b","\ud83d\ude1c","\ud83d\ude0e",
+                                "\ud83e\udd14","\ud83d\ude10","\ud83d\ude44","\ud83d\ude22","\ud83d\ude2d",
+                                "\ud83d\ude21","\ud83d\ude33","\ud83d\ude31","\ud83e\udd17","\ud83d\ude4f",
+                                "\ud83d\udc4d","\ud83d\udc4e","\ud83d\udc4c","\u270c\ufe0f","\ud83d\udc4f",
+                                "\ud83d\udcaa","\u2764\ufe0f","\ud83d\udc94","\ud83c\udf89","\ud83c\udf82",
+                                "\ud83c\udf81","\u2600\ufe0f","\u2601\ufe0f","\u2744\ufe0f","\ud83c\udf27\ufe0f",
+                                "\ud83c\udf55","\u2615","\ud83c\udf7a","\ud83c\udf70","\ud83c\udf4e",
+                                "\ud83d\ude97","\u2708\ufe0f","\u26bd","\ud83c\udfb5","\ud83d\udcde",
+                                "\ud83d\udcbb","\u23f0","\u2705","\u274c","\u2757"
+                            ]
+                            delegate: BackgroundItem {
+                                width: Theme.itemSizeSmall
+                                height: Theme.itemSizeSmall
+                                onClicked: {
+                                    var p0 = input.cursorPosition
+                                    input.text = input.text.substring(0, p0) + modelData
+                                                 + input.text.substring(p0)
+                                    input.cursorPosition = p0 + modelData.length
+                                }
+                                // Bei eingeschalteten Farb-Emojis dasselbe
+                                // Bild wie im Chat - sonst zeigte die Auswahl
+                                // schwarzweisse Systemzeichen und die Nachricht
+                                // danach ein farbiges, was verwirrt.
+                                // getEmojiPath entfernt FE0F nach derselben
+                                // Regel wie beim Nachrichtentext.
+                                Image {
+                                    visible: emojiEnabled
+                                    anchors.centerIn: parent
+                                    width: Theme.iconSizeSmall
+                                    height: Theme.iconSizeSmall
+                                    sourceSize.width: Theme.iconSizeSmall
+                                    sourceSize.height: Theme.iconSizeSmall
+                                    asynchronous: true
+                                    source: emojiEnabled ? Twemoji.getEmojiPath(modelData) : ""
+                                }
+                                Label {
+                                    visible: !emojiEnabled
+                                    anchors.centerIn: parent
+                                    text: modelData
+                                    font.pixelSize: Theme.fontSizeLarge
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Row {
                     width: parent.width
                     property bool recording: false
@@ -6985,9 +7375,21 @@ Label {
                         }
                     }
 
+                    IconButton {
+                        id: emojiBtn
+                        // Ohne diesen Knopf muss man fuer jedes Emoji die
+                        // Tastatur umschalten - Wunsch von rdomschk. Die
+                        // Auswahl klappt ueber der Eingabe auf.
+                        icon.source: "image://theme/icon-m-other"
+                        highlighted: emojiPanel.visible
+                        anchors.verticalCenter: parent.verticalCenter
+                        onClicked: emojiPanel.visible = !emojiPanel.visible
+                    }
+
                     TextArea {
                         id: input
                         width: parent.width - sendBtn.width - parent.children[0].width
+                               - emojiBtn.width
                         // Wachstum bei ~5 Zeilen deckeln (OpenRepos-Wunsch:
                         // lange Texte fuellten den ganzen Schirm) - darueber
                         // scrollt der Inhalt innerhalb des Felds. Zeilenhoehe
@@ -7137,6 +7539,16 @@ Label {
         id: forwardPage
         Page {
             allowedOrientations: orientationMask()
+            // Mehrere Nachrichten auf einmal. Sie gehen NACHEINANDER raus,
+            // mit Abstand - ein Schwall gleichzeitiger Weiterleitungen ist
+            // genau das Muster, das hier schon eine Kontosperre einbrachte.
+            property var forwardIds: []
+            Timer {
+                id: fwdGap
+                interval: 900
+                property var action: null
+                onTriggered: if (action) action()
+            }
             property string forwardId: ""
             SilicaListView {
                 anchors.fill: parent
@@ -7148,17 +7560,72 @@ Label {
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData.name || ("+" + modelData.jid)
                     }
-                    onClicked: {
-                        var xhr = new XMLHttpRequest()
-                        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/msg/forward?to=" + modelData.jid
-                                 + "&id=" + encodeURIComponent(forwardId))
-                        xhr.onreadystatechange = function() {
-                            if (xhr.readyState === 4) {
-                                globalNotice = xhr.status === 200 ? "Forwarded" : ("Forward failed: " + xhr.responseText)
-                                pageStack.pop()
-                            }
+                    // Wer in der Liste bleibt, um an mehrere zu schicken, sieht
+                    // sonst nicht, wen er schon erwischt hat - und tippt zweimal
+                    property bool sent: false
+                    // Waehrend des Sendens gesperrt. Ohne Rueckmeldung tippt
+                    // man nach, und jeder Tipp schickte bisher erneut - das
+                    // Bild kam mehrfach an. Ein Empfaenger ist pro
+                    // Weiterleitung genau einmal dran; die Seite wird fuer
+                    // jede neue Weiterleitung neu aufgebaut, damit setzt sich
+                    // die Sperre von selbst zurueck.
+                    property bool busy: false
+                    enabled: !sent && !busy
+                    Label {
+                        anchors {
+                            right: parent.right
+                            rightMargin: Theme.horizontalPageMargin
+                            verticalCenter: parent.verticalCenter
                         }
-                        xhr.send()
+                        visible: sent || busy
+                        // Waehrend des Sendens Punkte, danach der Haken -
+                        // ohne dieses Zeichen weiss niemand, ob etwas laeuft
+                        text: busy ? "\u2026" : "\u2713"
+                        color: Theme.highlightColor
+                    }
+                    onClicked: {
+                        if (sent || busy) return
+                        busy = true
+                        var target = modelData.name || ("+" + modelData.jid)
+                        var ids = (forwardIds && forwardIds.length > 0)
+                                  ? forwardIds.slice() : [forwardId]
+                        var done = 0, failed = false
+                        function step() {
+                            if (done >= ids.length) {
+                                busy = false
+                                if (!failed) {
+                                    sent = true
+                                    globalNotice = ids.length > 1
+                                        ? loc.forwardedCountTo.replace("%1", ids.length)
+                                                              .replace("%2", target)
+                                        : loc.forwardedTo.replace("%1", target)
+                                    if (!forwardStay) pageStack.pop()
+                                }
+                                return
+                            }
+                            var xhr = new XMLHttpRequest()
+                            xhr.open("GET", "http://127.0.0.1:" + backendPort
+                                     + "/msg/forward?to=" + modelData.jid
+                                     + "&id=" + encodeURIComponent(ids[done]))
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState !== 4) return
+                                if (xhr.status !== 200) {
+                                    failed = true
+                                    busy = false
+                                    globalNotice = loc.forwardFailed + ": " + xhr.responseText
+                                    noticeIsError = true
+                                    pageStack.pop()
+                                    return
+                                }
+                                done++
+                                // Abstand zwischen den einzelnen Nachrichten
+                                if (done < ids.length) fwdGap.restart()
+                                else step()
+                            }
+                            xhr.send()
+                        }
+                        fwdGap.action = step
+                        step()
                     }
                 }
                 VerticalScrollDecorator {}

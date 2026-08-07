@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.217
+Version:    0.9.229
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -139,6 +139,147 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.229-1
+- The emoji picker follows the colour emoji setting. It was drawing the
+  system font's monochrome glyphs regardless, so one picked a grey symbol
+  and the message then showed a coloured one - the same character looking
+  like two different things. It now uses the same Twemoji images as the
+  message text when the setting is on, via twemoji.js's own getEmojiPath so
+  that the variation selector is stripped by exactly the same rule. All
+  fifty characters in the panel were checked against the bundled files
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.228-1
+- The bar highlights the page one is actually on again. Giving it a
+  background in 0.9.225 meant wrapping the Row in an Item, so the Loader's
+  "item" became that wrapper rather than the Row - and onLoaded set
+  activeIndex on something that had no such property, leaving Chats
+  highlighted everywhere. An alias passes it through
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.227-1
+- The bottom bar can be hit now, and the reason was never its height. A
+  ListView without clip draws its delegates past its own bounds, and those
+  delegates still take touches - so the last chat sat behind the bar and
+  swallowed the tap no matter how tall the strip was made. Three rounds of
+  raising the height and a settings entry all missed it; the word that gave
+  it away was "behind". The four lists that end at the bar are clipped now,
+  and the bar carries a z of 10 as a second line of defence
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.226-1
+- A recipient can only be forwarded to once per forward. Without any sign
+  that something was happening one taps again, and every tap sent the
+  picture anew - it arrived several times. The entry is now disabled while
+  the send is in flight and stays disabled once it succeeded, showing dots
+  during and a tick after, so there is something to look at instead of
+  guessing. A failed attempt unlocks again, since one should be able to
+  retry that. Opening the recipient list for a new forward builds the page
+  afresh and clears the locks by itself. Four test cases, including that
+  three rapid taps produce exactly one request
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.225-1
+- Several messages can be forwarded at once. Long press offers Select,
+  after which a tap picks messages instead of opening them - otherwise
+  there would be no way out of the mode - and a strip above the input shows
+  the count with Forward and Cancel. The chosen messages go out one after
+  another with a pause between them, since a burst of forwards is the
+  pattern that earned an account restriction here.
+- The bottom bar has its own background and a separating line. Until now it
+  was visually indistinguishable from the list above it, and where one aims
+  at an invisible strip is guesswork - which is the likelier reason for
+  hitting the last chat instead of Status than any remaining height problem
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.225-1
+- The bottom bar has a background and a dividing line. Until now it was
+  invisible against the list, so where to aim was guesswork - hitting the
+  last chat instead of Status is the natural consequence of a strip you
+  cannot see. It also settles the open question: the tinted area shows
+  exactly where the bar sits and how tall it really is, which four rounds
+  of adjusting a number could not
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.224-1
+- The bottom bar was being set to Low behind your back. A Silica ComboBox
+  emits currentIndexChanged while it is being built, with index 0, before
+  the value from the preferences has been applied - so merely opening More
+  settings wrote "small" and saved it, which is why three rounds of raising
+  the default changed nothing on a device where the settings page had been
+  visited. The handler now waits for the sync. The same guard went on the
+  orientation and attachment pickers, where index 0 happens to be the
+  default and the bug was therefore invisible.
+- Status grouping is a switch under More settings, on by default. It was
+  already in 0.9.220 but only reorders and shows each name once, which is
+  easy to miss if you expected collapsible groups - and some people simply
+  want the plain newest-first order regardless of who posted
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.223-1
+- The bottom bar height is a setting, defaulting to tall. Three fixed
+  guesses in a row (extra small, small, medium) each turned out too low for
+  the person using it, and no single number is going to suit every thumb
+  and every screen - so it is Low, Medium or Tall under More settings, and
+  it starts Tall, because hitting the last chat instead of the bar is more
+  annoying than losing a row of list. The geometry was checked first: the
+  lists end at the bar's top edge and never overlap it, so this really is
+  about the target size
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.222-1
+- An emoji button beside the input, as rdomschk asked - switching the
+  keyboard over for every single smiley was the complaint. It opens a small
+  panel of fifty common characters above the input and inserts at the
+  cursor. Deliberately a fixed short list rather than all 4010 bundled
+  ones: a grid of thousands would be neither quick nor usable, and the
+  keyboard remains there for everything else
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.221-1
+- Fixes the white screen in 0.9.220. Multiple image selection was written
+  against MultiImagePickerPage, which does not exist - Sailfish provides the
+  multi-select variants as dialogs only (MultiImagePickerDialog), and an
+  unknown type makes the whole QML file fail to load, so nothing rendered.
+  The type name was assumed from the pattern of the single-select pages
+  instead of read off the device, which is what listing
+  /usr/lib64/qt5/qml/Sailfish/Pickers settles in one command. Selection is
+  taken on accept now rather than on every change, as a dialog requires. All
+  four picker types the app uses were checked against that listing
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.220-1
+- Reverts the navigation change from 0.9.219, which left the bottom bar
+  dead: a loop of navigateBack calls threw inside the click handler, and
+  once that happens no entry responds at all. Back to pop(); getting back
+  from Status still needs a proper fix, but a bar that does nothing is
+  worse than one route that does nothing.
+- Several pictures can be sent at once. The picker is the multi-select one
+  now, and the files go out one after another with a pause between them
+  rather than all at once - a burst of simultaneous uploads is the very
+  pattern that earned an account restriction here in the first place.
+- The status list groups by person, as rdomschk asked. Someone posting a
+  whole photo album used to push everyone else off the screen; now their
+  entries stay together, ordered newest person first, with the name shown
+  once and the rest counted (2/7) instead of repeating it seven times
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.219-1
+- Pictures zoom. Pinch to enlarge up to sixfold, double tap to switch
+  between fitted and doubled, and the flickable pans what does not fit.
+  Full resolution is requested once enlarged, otherwise one only magnifies
+  screen pixels. Tapping to close now only works at normal size, since
+  otherwise panning drops you out of the viewer. Suggested by rdomschk,
+  who pointed at Fernschreiber.
+- The bottom bar is taller again - itemSizeSmall in 0.9.218 was still too
+  small a target - and going back from Status now works. That page is
+  attached to the chat list with pushAttached, where pop(targetPage) is not
+  the intended route and quietly did nothing; navigateBack is, and it
+  carries both kinds of page
+
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.218-1
+- The bottom bar is easier to hit. 0.9.217 made its labels bigger but left
+  the strip itself at itemSizeExtraSmall, so the target stayed small and
+  taps landed in the list above it - which is what rdomschk kept running
+  into. The strip is itemSizeSmall now.
+- Forwarding says where it went and can stay put. The confirmation was the
+  untranslated word "Forwarded" and told you nothing about the recipient;
+  it now names them, in all 22 languages, and failures are worded rather
+  than pasted raw. More settings gained an option to remain in the
+  recipient list after forwarding, so the same message can go to several
+  people in a row, with a tick marking who already has it - without that
+  mark one loses track and sends twice. Off by default, since returning to
+  the chat is what one usually expects
+
 * Mon Aug 03 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.217-1
 - Two of Ralf's three suggestions. The bottom bar was hard to read: the
   labels are a size larger now, inactive entries carry the full secondary
