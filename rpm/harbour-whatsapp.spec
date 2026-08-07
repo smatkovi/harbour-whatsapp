@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.229
+Version:    0.9.230
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -139,6 +139,17 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.230-1
+- whatsmeow updated to 2026-08-06 (e277b766), ten commits on from the
+  previous build, among them proto v1044440921. Protocol updates are the
+  ones that eventually stop being optional: a client speaking an outdated
+  protocol looks like a broken one to the server, which is what draws
+  account restrictions. Dependencies were unchanged, but the API was not -
+  SetStatusMessage now takes a types.SetStatusInput rather than a string,
+  the server having gained emoji and expiry for the About text. Only the
+  text is set, through a pointer, so that clearing it stays distinguishable
+  from leaving it alone. go vet caught it before the build did
+
 * Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.229-1
 - The emoji picker follows the colour emoji setting. It was drawing the
   system font's monochrome glyphs regardless, so one picked a grey symbol

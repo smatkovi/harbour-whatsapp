@@ -4190,7 +4190,12 @@ func main() {
             client.Store.Save(ctx)
         }
         if hasAbout {
-            if err := client.SetStatusMessage(ctx, about); err != nil {
+            // Seit whatsmeow vom 06.08.2026 nimmt SetStatusMessage eine
+            // Struktur statt einer Zeichenkette - der Server versteht dort
+            // nun auch Emoji und Ablaufzeit. Wir setzen weiterhin nur den
+            // Text; Text ist ein Zeiger, damit "leer setzen" von "nicht
+            // aendern" unterscheidbar bleibt.
+            if err := client.SetStatusMessage(ctx, types.SetStatusInput{Text: &about}); err != nil {
                 http.Error(w, "about: "+err.Error(), 500)
                 return
             }
