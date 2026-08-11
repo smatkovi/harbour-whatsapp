@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.230
+Version:    0.9.245
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -139,6 +139,162 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.245-1
+- The rename command gets a copy button after all, built exactly like the
+  permission ones - and the difference turns out to have been the thing all
+  nine previous attempts had in common: a visibility condition. Those
+  buttons have none, mine always did, and whenever the condition came out
+  false or undefined the row vanished, collapsed to no height, or drew
+  without taking a tap. The condition is gone; the name is read straight
+  from the field when the button is pressed, falling back to WhatsSail if
+  it is empty. The caption stays put and the command goes to the clipboard,
+  as it does for the permissions
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.244-1
+- Drops the copy button for the rename command and puts the command itself
+  into the setting's description, where it appears as soon as a name is
+  entered and updates as it is typed. Nine attempts at that button - as a
+  BackgroundItem, as a Label with a MouseArea, moved elsewhere on the page,
+  with a derived height and then a fixed one - left it variously invisible,
+  overlapping its neighbours, or simply unresponsive, while the same
+  construction works for the permission commands further down. Plain text
+  renders reliably and can be selected, and the app cannot rename the
+  launcher icon itself in any case, since that file is read before it starts
+  and only root may write it
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.243-1
+- Gives the rename row a fixed height instead of deriving it from the label
+  inside, which came out at nothing in this column and let the neighbouring
+  entries overlap it. A single-line entry needs no arithmetic
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.242-1
+- Moves the rename button to the end of the settings page, away from the
+  name field. Sitting directly beneath it, the row was drawn but would not
+  take a tap - Silica's TextField brings its own touch area that reaches
+  past what it appears to occupy, the same shape of fault as the bottom bar
+  earlier today, where the list swallowed the taps meant for the strip. The
+  button is one of the last entries on the page now, still tied to the name
+  entered above
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.241-1
+- Found it: the two properties the rename command depends on were declared
+  after the column's children instead of at its start, and the binding to
+  the text field simply never took - which QML does not report, an empty
+  string being no error. renameSafe was therefore always false, the button
+  never rendered, and six versions of rebuilding the button were aimed at
+  the wrong thing entirely. The clipboard was never at fault; the
+  permission command copies perfectly on the same device, which is what
+  settled it. The properties now sit where properties belong
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.240-1
+- Separates the two things that could be failing about the rename command.
+  Tapping it now prints the command it built and, in brackets, what reading
+  the clipboard back gives. If the brackets are empty the write is failing;
+  if they hold something else the string is at fault; and if the command
+  itself is missing it was never assembled. Either way the command is on
+  screen and can be copied by hand, so this is useful as well as diagnostic
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.239-1
+- The rename command is built the way the permission commands further down
+  are built, which was the right question to ask: why does it work there.
+  Because those never display the command at all. They show a short caption,
+  put the long string into the clipboard, and report back through a label of
+  their own. Four attempts went into rendering the command itself, which
+  stayed blank each time without the QML engine saying a word - so this
+  stops trying and copies the pattern that demonstrably works. The temporary
+  diagnostic line is gone with it
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.238-1
+- Makes the rename command observable instead of guessing at it a fourth
+  time. Two constructions in a row rendered nothing while the QML engine
+  reported no error whatsoever, and after the last attempt the row vanished
+  entirely - which points at the visibility test rather than the layout. A
+  temporary line under the name field now prints what is actually in the
+  field, in the derived name, in the saved setting and in the safety check.
+  The command itself appears as soon as any name other than WhatsApp is
+  there, and if that name cannot go into a sed expression it says so rather
+  than disappearing without trace - silent absence is what made this take
+  four rounds. The diagnostic line comes out again once the cause is known
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.237-1
+- Another go at showing the rename command, this time built the way the
+  hint below it is built - a plain Label in the column with a MouseArea for
+  the copying - since that one demonstrably renders. The BackgroundItem
+  version stayed blank even after being given a width, and the QML engine
+  reported nothing at all about it, so rather than keep guessing at a
+  construction that produces no diagnostics, this drops the construction
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.236-1
+- The rename command is actually legible. The tappable area was there but
+  empty: a BackgroundItem inside a Column gets no width of its own, so the
+  label inside it came out at minus twice the margin and had no room for
+  anything. The same omission was sitting on the three terminal commands for
+  the background service, where it evidently did no harm - but relying on
+  that is luck rather than intent, so all four now state their width. The
+  label also no longer centres itself against a height that is derived from
+  its own, which was a binding loop waiting to matter
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.235-1
+- The rename command appears while you type rather than after leaving the
+  field. It was keyed to the saved setting, which is only written when the
+  text field loses focus - so having typed a name one saw nothing and had to
+  tap elsewhere first to find out the command existed. It follows the field
+  contents now
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.234-1
+- Lines instead of bubbles, as an optional view under More settings.
+  Suggested by kempertom after Element's bubble-free mode. Messages fill the
+  width in alternating tints - own ones lighter, others darker - since
+  without a side to sit on, the colour has to carry what the alignment used
+  to say. For the same reason the sender's name is shown in front of every
+  message, including in one-to-one chats and on your own, which read simply
+  "Me": the name would say nothing there. Reactions, timestamps and ticks
+  keep their places, and the text no longer draws a panel of its own, which
+  would only have been a box inside a box - the very bubbles being done away
+  with. Off by default and off is exactly as before, so it can be tried
+  without risk
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.233-1
+- The chat partner's name reads properly now: the backing behind the header
+  went from 0.12 to 0.6 opacity, so the text sits on a settled ground rather
+  than on the ambience showing through. Avatars beside status entries are
+  medium rather than small. And the header no longer falls back to the phone
+  number while the profile is still loading - it stays empty for that
+  moment, since flashing the number briefly is exactly what replacing it was
+  meant to avoid
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.232-1
+- Renaming the launcher icon too, without editing files by hand. Setting a
+  name in More settings now also offers a tappable command that copies to
+  the clipboard and renames the icon. That name lives in the desktop file,
+  which is read before the app starts and only root may change, so the app
+  cannot do it itself. It does survive updates, though, and this was worth
+  checking rather than assuming: the file is config(noreplace) and the
+  %%post script only ever touches X-Maemo-Service, ExecDBus and the
+  permissions line - never Name. The command only appears for names made of
+  letters, digits, spaces, dots, hyphens and underscores: the name goes
+  into a sed expression, where a slash or an apostrophe would break it
+  apart, and in the worse case run something else entirely
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.231-1
+- whatsmeow updated to 2026-08-10 (a23afe31) with proto v1044834443. No
+  dependency changes and no API breakage this time.
+- The header shows your own name instead of your phone number, as rdomschk
+  put it: anyone you hand the phone to can read a number off the screen,
+  and the name says the same thing without giving it away. Falls back to
+  the number until the profile has loaded.
+- The app name is a setting rather than something to patch by hand. He had
+  been editing the QML himself so the notification count in the switcher
+  would not collide with the official WhatsApp app - which every update
+  overwrote. It now applies to the header and to notifications; the name
+  under the launcher icon still needs the desktop file, since that is read
+  before the app starts.
+- Avatars where they help: beside every status entry, not just the first of
+  a group - with ten pictures from one person you otherwise cannot see who
+  posted them without scrolling back - and beside the chat partner's name
+  in the chat header, which also got the same faintly tinted background as
+  the bottom bar, because the transparency made it hard to read
+
 * Thu Aug 06 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.230-1
 - whatsmeow updated to 2026-08-06 (e277b766), ten commits on from the
   previous build, among them proto v1044440921. Protocol updates are the

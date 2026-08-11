@@ -108,6 +108,31 @@ ApplicationWindow {
     // Backend als beschaeftigt, nicht als verloren
     property int uploadInFlight: 0
     property string phone: ""
+    // Eigener Anzeigename und Avatar: im Kopf der Hauptseite stand bisher
+    // die eigene Telefonnummer, die jeder mitlesen kann, dem man das Geraet
+    // zeigt. Name und Bild sagen dasselbe aus, ohne die Nummer preiszugeben.
+    // Wunsch von rdomschk.
+    property string myName: ""
+    property string myAvatar: ""
+    function loadOwnProfile() {
+        var x = new XMLHttpRequest()
+        x.open("GET", "http://127.0.0.1:" + backendPort + "/profile")
+        x.onreadystatechange = function() {
+            if (x.readyState !== 4 || x.status !== 200) return
+            try {
+                var p = JSON.parse(x.responseText)
+                myName = p.name || ""
+                myAvatar = p.avatar || ""
+            } catch (e) {}
+        }
+        x.send()
+    }
+
+    // Anzeigename der App. rdomschk hat ihn sich selbst gepatcht, weil der
+    // Benachrichtigungszaehler im Fensterwechsler mit der offiziellen
+    // WhatsApp-App kollidiert. Besser als ein Patch, den jedes Update
+    // ueberschreibt: eine Einstellung.
+    property string appDisplayName: "WhatsApp"
     property var chats: []
     property var waContacts: []
 
@@ -343,6 +368,72 @@ ApplicationWindow {
                         }
                     }
 
+                    TextField {
+                        id: appNameField
+                        width: parent.width
+                        label: loc.appNameSetting
+                        placeholderText: "WhatsApp"
+                        text: appDisplayName
+                        description: loc.appNameSettingDesc
+                        EnterKey.iconSource: "image://theme/icon-m-enter-accept"
+                        EnterKey.onClicked: focus = false
+                        onActiveFocusChanged: {
+                            if (activeFocus || !prefsLoaded) return
+                            var v = text.trim() === "" ? "WhatsApp" : text.trim()
+                            if (appDisplayName !== v) {
+                                appDisplayName = v
+                                setPref("app_name", v)
+                            }
+                        }
+                    }
+
+                    // Der Name unter dem Startsymbol steht in der
+                    // Desktop-Datei und wird gelesen, bevor die App laeuft -
+                    // aendern kann ihn nur root. Die Datei ist aber
+                    // %config(noreplace) und %post fasst Name= nicht an,
+                    // deshalb ueberlebt die Aenderung jedes Update.
+                    BackgroundItem {
+                        width: parent.width
+                        height: renameCmdLabel.height + 2*Theme.paddingMedium
+                        onClicked: {
+                            var n = appNameField.text.trim()
+                            if (n === "") n = "WhatsSail"
+                            Clipboard.text = "devel-su sed -i 's/^Name=.*/Name=" + n
+                                             + "/' /usr/share/applications/harbour-whatsapp.desktop"
+                            renameHint.text = loc.commandCopied
+                        }
+                        Label {
+                            id: renameCmdLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            wrapMode: Text.Wrap
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "\u25b8 " + loc.copyRenameCmd
+                            color: Theme.highlightColor
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
+                    Label {
+                        id: renameHint
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: ""
+                        visible: text !== ""
+                        wrapMode: Text.Wrap
+                        color: Theme.highlightColor
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                        text: loc.renameIconHint
+                    }
+
                     TextSwitch {
                         text: loc.statusGrouping
                         description: loc.statusGroupingDesc
@@ -392,6 +483,17 @@ ApplicationWindow {
                             forwardStay = checked
                             setPref("forward_stay", checked ? "1" : "0")
                         }
+                    }
+
+                    TextSwitch {
+                        text: loc.lineMode
+                        description: loc.lineModeDesc
+                        checked: lineMode
+                        onClicked: {
+                            lineMode = checked
+                            setPref("line_mode", checked ? "1" : "0")
+                        }
+
                     }
 
                     TextSwitch {
@@ -678,7 +780,7 @@ ApplicationWindow {
 
     Notification {
         id: msgNotification
-        appName: "WhatsApp"
+        appName: appDisplayName
         appIcon: "harbour-whatsapp"
         category: "x-nemo.messaging.im"
     }
@@ -941,6 +1043,8 @@ ApplicationWindow {
                 forwardStay = p.forward_stay === "1"
                 navBarSize = p.navbar_size || "large"
                 statusGrouping = p.status_grouping !== "0"
+                appDisplayName = p.app_name || "WhatsApp"
+                lineMode = p.line_mode === "1"
                 statusLastSeen = parseFloat(p.status_last_seen || "0") || 0
                 prefsLoaded = true
                 // Auch fuer Bestandsinstallationen und Systemsprache setzen
@@ -1170,6 +1274,8 @@ ApplicationWindow {
                 connected = data.connected
                 pairCode = data.pairCode || ""
                 phone = data.phone || ""
+                // Eigenes Profil einmal holen, sobald die Verbindung steht
+                if (connected && myName === "") loadOwnProfile()
                 connState = data.state || ""
                 lastError = data.lastError || ""
                 paired = data.paired === true
@@ -1399,6 +1505,11 @@ ApplicationWindow {
     // Statusliste nach Person gruppieren. Optional, weil manche die rein
     // zeitliche Reihenfolge wollen - dort steht das Neueste immer oben,
     // egal von wem.
+    // Zeilen statt Sprechblasen, wie Element es anbietet: Nachrichten ueber
+    // die volle Breite, abwechselnd dezent eingefaerbt, mit dem Absender als
+    // Vorspann. Vorschlag von kempertom. Bewusst abschaltbar - ausgeschaltet
+    // bleibt alles, wie es war.
+    property bool lineMode: false
     property bool statusGrouping: true
     property string navBarSize: "large"
     function navBarHeight() {
@@ -1878,9 +1989,13 @@ ApplicationWindow {
                 }
 
                 PageHeader { 
-                    title: "WhatsApp"
+                    title: appDisplayName
                     description: {
-                        if (connected) return "+" + phone
+                        // Der eigene Name statt der Nummer. Solange er noch
+                        // nicht geladen ist, bleibt die Zeile LEER - die
+                        // Nummer kurz aufblitzen zu lassen waere genau das,
+                        // was hier vermieden werden soll.
+                        if (connected) return myName
                         switch (connState) {
                         case "starting":         return loc.stStarting
                         case "connecting":       return loc.stConnecting
@@ -2557,6 +2672,7 @@ Label {
                     }
 
                     BackgroundItem {
+                        width: parent.width
                         visible: notifySwitch.checked
                         height: enableCmdLabel.height + 2*Theme.paddingMedium
                         onClicked: {
@@ -2581,6 +2697,7 @@ Label {
                     }
 
                     BackgroundItem {
+                        width: parent.width
                         visible: daemonRunning && installedVersion !== ""
                                  && backendVersion !== "" && backendVersion !== installedVersion
                         height: restartCmdLabel.height + 2*Theme.paddingMedium
@@ -2612,6 +2729,7 @@ Label {
                     }
 
                     BackgroundItem {
+                        width: parent.width
                         // Enabled-Zustand ist aus der Sandbox nicht pruefbar
                         // (~/.config/systemd ist verborgen) - lokales Flag
                         // "je aktiviert" irrt im Zweifel Richtung Anzeigen
@@ -4521,6 +4639,23 @@ Label {
                     Row {
                         x: Theme.horizontalPageMargin
                         spacing: Theme.paddingMedium
+                                                Image {
+                            // Bild bei JEDEM Beitrag, nicht nur beim ersten: bei zehn
+                            // Bildern derselben Person sieht man sonst ab dem zweiten
+                            // nicht mehr, von wem sie stammen, ohne nach oben zu
+                            // scrollen. Wunsch von rdomschk.
+                            visible: !modelData.senderIsLid && !!modelData.sender
+                            width: Theme.iconSizeMedium
+                            height: Theme.iconSizeMedium
+                            sourceSize.width: Theme.iconSizeMedium
+                            sourceSize.height: Theme.iconSizeMedium
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            anchors.verticalCenter: parent.verticalCenter
+                            source: modelData.sender
+                                    ? "http://127.0.0.1:" + backendPort + "/avatar/" + modelData.sender
+                                    : ""
+                        }
                         Label {
                             // Bei unaufgeloester LID zeigte hier eine
                             // Ziffernfolge, die wie eine auslaendische
@@ -6726,11 +6861,26 @@ Label {
                         }
                     }
 
+                    // Im Zeilenmodus faerbt ein Streifen die ganze Zeile -
+                    // eigene Nachrichten heller, fremde dunkler. Ohne die
+                    // Seitenzuordnung muss die Farbe tragen, was sonst die
+                    // Ausrichtung leistet.
+                    Rectangle {
+                        visible: lineMode
+                        anchors.fill: parent
+                        color: modelData.fromMe
+                               ? Theme.rgba(Theme.highlightBackgroundColor, 0.18)
+                               : Theme.rgba(Theme.primaryColor, 0.06)
+                        z: -1
+                    }
+
                     Column {
                         id: msgContent
-                        width: parent.width * 0.8
-                        anchors.right: modelData.fromMe ? parent.right : undefined
-                        anchors.left: modelData.fromMe ? undefined : parent.left
+                        width: lineMode ? parent.width - 2*Theme.horizontalPageMargin
+                                        : parent.width * 0.8
+                        anchors.right: (lineMode || !modelData.fromMe) ? undefined : parent.right
+                        anchors.left: (lineMode || modelData.fromMe) ? undefined : parent.left
+                        anchors.horizontalCenter: lineMode ? parent.horizontalCenter : undefined
                         anchors.margins: Theme.horizontalPageMargin
                         spacing: Theme.paddingSmall
 
@@ -6888,12 +7038,26 @@ Label {
                             // Leeres Label nahm frueher trotzdem Platz ein und
                             // die Zeile fehlte kommentarlos - jetzt entweder
                             // ein echter Name oder gar keine Zeile
-                            visible: isGroupChat && !modelData.fromMe
-                                     && senderDisplay(modelData.sender) !== ""
-                            text: visible ? senderDisplay(modelData.sender) : ""
+                            // Im Zeilenmodus fehlt die Seitenzuordnung, also
+                            // muss der Name auch im Einzelchat und bei eigenen
+                            // Nachrichten stehen - sonst weiss man nicht mehr,
+                            // wer was geschrieben hat. Eigene heissen schlicht
+                            // "Ich", der Name waere hier ohne Aussage.
+                            visible: lineMode
+                                     ? true
+                                     : (isGroupChat && !modelData.fromMe
+                                        && senderDisplay(modelData.sender) !== "")
+                            text: {
+                                if (!visible) return ""
+                                if (modelData.fromMe) return lineMode ? loc.meSender : ""
+                                var n = senderDisplay(modelData.sender)
+                                return n !== "" ? n : (lineMode ? loc.unknownSender : "")
+                            }
                             font.pixelSize: Theme.fontSizeExtraSmall
                             font.bold: true
-                            color: visible ? senderColor(modelData.sender) : Theme.primaryColor
+                            color: modelData.fromMe
+                                   ? Theme.highlightColor
+                                   : (visible ? senderColor(modelData.sender) : Theme.primaryColor)
                         }
 
                         Rectangle {
@@ -7097,10 +7261,17 @@ Label {
 
                         Rectangle {
                             visible: modelData.text && modelData.text !== "" && modelData.mediaType !== "poll"
-                            width: Math.min(msgTxt.implicitWidth + Theme.paddingLarge * 2, parent.width)
+                            width: lineMode ? parent.width
+                                   : Math.min(msgTxt.implicitWidth + Theme.paddingLarge * 2, parent.width)
                             height: visible ? msgTxt.height + Theme.paddingMedium * 2 : 0
-                            color: modelData.fromMe ? Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity) : Theme.rgba(Theme.primaryColor, 0.1)
-                            radius: Theme.paddingMedium
+                            // Im Zeilenmodus traegt der Streifen die Farbe -
+                            // eine zweite Flaeche darauf ergaebe Kaesten in
+                            // Kaesten, also genau die Blasen, die weg sollten
+                            color: lineMode ? "transparent"
+                                   : (modelData.fromMe
+                                      ? Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
+                                      : Theme.rgba(Theme.primaryColor, 0.1))
+                            radius: lineMode ? 0 : Theme.paddingMedium
 
                             Label {
                                 id: msgTxt
@@ -7498,7 +7669,40 @@ Label {
                 }
             }
 
-            PageHeader { id: pageHead; title: chatName }
+            // Der Name des Gespraechspartners war durch die Transparenz des
+            // Kopfes schwer zu lesen. Dahinter liegt jetzt derselbe leicht
+            // abgesetzte Grund wie unter der Bodenleiste, und daneben steht
+            // das Bild - so erkennt man den Chat auch beim Ueberfliegen.
+            // Wunsch von rdomschk.
+            Rectangle {
+                anchors.fill: pageHead
+                // 0.12 war zu zart - der Name blieb schwer zu lesen. Deutlich
+                // dichter, damit die Schrift auf ruhigem Grund steht statt auf
+                // dem durchscheinenden Ambiente-Bild.
+                color: Theme.rgba(Theme.highlightBackgroundColor, 0.6)
+                z: -1
+            }
+            PageHeader {
+                id: pageHead
+                title: chatName
+                Image {
+                    visible: !!chatJid && chatJid !== "status"
+                    anchors {
+                        left: parent.left
+                        leftMargin: Theme.horizontalPageMargin
+                        verticalCenter: parent.verticalCenter
+                    }
+                    width: Theme.iconSizeMedium
+                    height: Theme.iconSizeMedium
+                    sourceSize.width: Theme.iconSizeMedium
+                    sourceSize.height: Theme.iconSizeMedium
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    source: chatJid
+                            ? "http://127.0.0.1:" + backendPort + "/avatar/" + chatJid
+                            : ""
+                }
+            }
 
             Rectangle {
                 id: pinnedBar

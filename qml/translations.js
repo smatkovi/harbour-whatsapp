@@ -308,7 +308,16 @@ var en = {
     "selectMessages": "Select",
     "selectedCount": "%1 selected",
     "forwardedCountTo": "%1 messages forwarded to %2",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "appNameSetting": "App name",
+    "appNameSettingDesc": "Shown in the header and on notifications. Renaming it keeps the notification count apart from the official WhatsApp app in the switcher. The launcher icon keeps its own name.",
+    "commandCopied": "Command copied - paste it in Terminal",
+    "renameIconHint": "Optional: this also renames the launcher icon, which is read before the app starts and only root can change. The desktop file is config(noreplace) and updates leave the name alone, so it survives them.",
+    "lineMode": "Lines instead of bubbles",
+    "lineModeDesc": "Messages fill the width in alternating tints, with the sender's name in front instead of the side telling you who wrote. Off keeps the bubbles. Suggested by kempertom, after Element's bubble-free view.",
+    "meSender": "Me",
+    "renameUnsafe": "Name contains characters that cannot go into the command (only letters, digits, spaces, dots, hyphens, underscores).",
+    "copyRenameCmd": "Copy rename command"
 }
 
 var catalogs = {
@@ -612,7 +621,16 @@ var catalogs = {
         "selectMessages": "Auswählen",
         "selectedCount": "%1 ausgewählt",
         "forwardedCountTo": "%1 Nachrichten an %2 weitergeleitet",
-        "cancel": "Abbrechen"
+        "cancel": "Abbrechen",
+        "appNameSetting": "Name der App",
+        "appNameSettingDesc": "Erscheint in der Kopfzeile und bei Benachrichtigungen. Ein anderer Name hält den Benachrichtigungszähler im Fensterwechsler von der offiziellen WhatsApp-App getrennt. Der Name unter dem Startsymbol bleibt davon unberührt.",
+        "commandCopied": "Befehl kopiert - im Terminal einfügen",
+        "renameIconHint": "Optional: benennt auch das Startsymbol um. Dessen Name wird gelesen, bevor die App läuft, und lässt sich nur als root ändern. Die Desktop-Datei ist config(noreplace) und Updates fassen den Namen nicht an — die Änderung bleibt also erhalten.",
+        "lineMode": "Zeilen statt Sprechblasen",
+        "lineModeDesc": "Nachrichten füllen die Breite in wechselnden Tönen, mit dem Absender als Vorspann statt der Seite, die verrät wer schrieb. Ausgeschaltet bleiben die Sprechblasen. Vorschlag von kempertom nach Elements blasenfreier Ansicht.",
+        "meSender": "Ich",
+        "renameUnsafe": "Der Name enthält Zeichen, die nicht in den Befehl dürfen (nur Buchstaben, Ziffern, Leerzeichen, Punkt, Bindestrich, Unterstrich).",
+        "copyRenameCmd": "Umbenennungsbefehl kopieren"
     },
     "fi": {
         "language": "Kieli",
@@ -914,7 +932,16 @@ var catalogs = {
         "selectMessages": "Valitse",
         "selectedCount": "%1 valittu",
         "forwardedCountTo": "%1 viestiä välitetty: %2",
-        "cancel": "Peruuta"
+        "cancel": "Peruuta",
+        "appNameSetting": "Sovelluksen nimi",
+        "appNameSettingDesc": "Näkyy otsikossa ja ilmoituksissa. Toinen nimi pitää ilmoituslaskurin erillään virallisesta WhatsApp-sovelluksesta. Käynnistyskuvakkeen nimi ei muutu.",
+        "commandCopied": "Komento kopioitu - liitä päätteeseen",
+        "renameIconHint": "Valinnainen: nimeää myös käynnistyskuvakkeen. Sen nimi luetaan ennen sovelluksen käynnistystä ja sitä voi muuttaa vain root. Työpöytätiedosto on config(noreplace) eivätkä päivitykset koske nimeen, joten muutos säilyy.",
+        "lineMode": "Rivit kuplien sijaan",
+        "lineModeDesc": "Viestit täyttävät leveyden vuorottelevin sävyin, lähettäjän nimi edessä sen sijaan että puoli kertoisi kirjoittajan. Pois päältä kuplat säilyvät.",
+        "meSender": "Minä",
+        "renameUnsafe": "Nimessä on merkkejä, jotka eivät sovi komentoon (vain kirjaimet, numerot, välilyönnit, pisteet, väliviivat, alaviivat).",
+        "copyRenameCmd": "Kopioi nimenmuutoskomento"
     },
     "sv": {
         "language": "Språk",
@@ -1216,7 +1243,16 @@ var catalogs = {
         "selectMessages": "Markera",
         "selectedCount": "%1 markerade",
         "forwardedCountTo": "%1 meddelanden vidarebefordrade till %2",
-        "cancel": "Avbryt"
+        "cancel": "Avbryt",
+        "appNameSetting": "Appens namn",
+        "appNameSettingDesc": "Visas i rubriken och i aviseringar. Ett annat namn håller aviseringsräknaren skild från den officiella WhatsApp-appen. Namnet under startikonen ändras inte.",
+        "commandCopied": "Kommandot kopierat - klistra in i Terminal",
+        "renameIconHint": "Valfritt: byter även namn på startikonen. Namnet läses innan appen startar och kan bara ändras som root. Skrivbordsfilen är config(noreplace) och uppdateringar rör inte namnet, så ändringen består.",
+        "lineMode": "Rader i stället för bubblor",
+        "lineModeDesc": "Meddelanden fyller bredden i växlande toner, med avsändarens namn först i stället för att sidan avslöjar vem som skrev. Avstängt behålls bubblorna.",
+        "meSender": "Jag",
+        "renameUnsafe": "Namnet innehåller tecken som inte kan stå i kommandot (endast bokstäver, siffror, mellanslag, punkter, bindestreck, understreck).",
+        "copyRenameCmd": "Kopiera namnbytskommandot"
     },
     "hu": {
         "language": "Nyelv",
@@ -1518,7 +1554,16 @@ var catalogs = {
         "selectMessages": "Kijelölés",
         "selectedCount": "%1 kijelölve",
         "forwardedCountTo": "%1 üzenet továbbítva: %2",
-        "cancel": "Mégse"
+        "cancel": "Mégse",
+        "appNameSetting": "Alkalmazás neve",
+        "appNameSettingDesc": "A fejlécben és az értesítéseknél jelenik meg. Más név elkülöníti az értesítésszámlálót a hivatalos WhatsApp alkalmazástól. Az indítóikon neve nem változik.",
+        "commandCopied": "Parancs másolva - illeszd be a Terminálba",
+        "renameIconHint": "Nem kötelező: az indítóikont is átnevezi. A nevét az alkalmazás indulása előtt olvassák be, és csak root módosíthatja. A desktop fájl config(noreplace), a frissítések nem nyúlnak a névhez, így megmarad.",
+        "lineMode": "Sorok buborékok helyett",
+        "lineModeDesc": "Az üzenetek kitöltik a szélességet váltakozó árnyalatokkal, a feladó nevével elöl ahelyett, hogy az oldal árulná el, ki írta. Kikapcsolva a buborékok maradnak.",
+        "meSender": "Én",
+        "renameUnsafe": "A név olyan karaktereket tartalmaz, amelyek nem kerülhetnek a parancsba (csak betűk, számok, szóköz, pont, kötőjel, aláhúzás).",
+        "copyRenameCmd": "Átnevezési parancs másolása"
     },
     "ru": {
         "language": "Язык",
@@ -1820,7 +1865,16 @@ var catalogs = {
         "selectMessages": "Выбрать",
         "selectedCount": "Выбрано: %1",
         "forwardedCountTo": "%1 сообщений переслано: %2",
-        "cancel": "Отмена"
+        "cancel": "Отмена",
+        "appNameSetting": "Название приложения",
+        "appNameSettingDesc": "Показывается в заголовке и в уведомлениях. Другое имя отделяет счётчик уведомлений от официального приложения WhatsApp. Подпись под значком не меняется.",
+        "commandCopied": "Команда скопирована - вставьте в Терминале",
+        "renameIconHint": "По желанию: переименует и значок запуска. Его имя читается до старта приложения и меняется только под root. Desktop-файл — config(noreplace), обновления имя не трогают, поэтому изменение сохраняется.",
+        "lineMode": "Строки вместо пузырей",
+        "lineModeDesc": "Сообщения занимают всю ширину чередующимися оттенками, имя отправителя стоит впереди вместо стороны. Выключено — остаются пузыри.",
+        "meSender": "Я",
+        "renameUnsafe": "Имя содержит символы, недопустимые в команде (только буквы, цифры, пробелы, точки, дефисы, подчёркивания).",
+        "copyRenameCmd": "Скопировать команду переименования"
     },
     "fr": {
         "language": "Langue",
@@ -2122,7 +2176,16 @@ var catalogs = {
         "selectMessages": "Sélectionner",
         "selectedCount": "%1 sélectionnés",
         "forwardedCountTo": "%1 messages transférés à %2",
-        "cancel": "Annuler"
+        "cancel": "Annuler",
+        "appNameSetting": "Nom de l'application",
+        "appNameSettingDesc": "Affiché dans l'en-tête et sur les notifications. Un autre nom sépare le compteur de notifications de l'application WhatsApp officielle. Le nom sous l'icône ne change pas.",
+        "commandCopied": "Commande copiée - collez-la dans Terminal",
+        "renameIconHint": "Facultatif : renomme aussi l'icône de lancement. Son nom est lu avant le démarrage de l'application et seul root peut le changer. Le fichier desktop est config(noreplace) et les mises à jour n'y touchent pas, donc le changement persiste.",
+        "lineMode": "Lignes plutôt que bulles",
+        "lineModeDesc": "Les messages occupent toute la largeur en teintes alternées, avec le nom de l'expéditeur devant plutôt que le côté. Désactivé, les bulles restent.",
+        "meSender": "Moi",
+        "renameUnsafe": "Le nom contient des caractères qui ne peuvent pas figurer dans la commande (lettres, chiffres, espaces, points, tirets, soulignés uniquement).",
+        "copyRenameCmd": "Copier la commande de renommage"
     },
     "la": {
         "language": "Lingua",
@@ -2424,7 +2487,16 @@ var catalogs = {
         "selectMessages": "Eligere",
         "selectedCount": "%1 electa",
         "forwardedCountTo": "%1 nuntii ad %2 transmissi",
-        "cancel": "Desistere"
+        "cancel": "Desistere",
+        "appNameSetting": "Nomen applicationis",
+        "appNameSettingDesc": "In capite et in nuntiationibus apparet. Aliud nomen numerum nuntiationum ab applicatione WhatsApp officiali seiungit. Nomen sub signo non mutatur.",
+        "commandCopied": "Mandatum exscriptum - in Terminali insere",
+        "renameIconHint": "Ad libitum: etiam signum initiale renominat. Nomen eius ante applicationem legitur et solus radix mutare potest. Lima desktop est config(noreplace) et renovationes nomen non tangunt, ergo mutatio manet.",
+        "lineMode": "Versus pro bullis",
+        "lineModeDesc": "Nuntii latitudinem implent coloribus alternis, nomine mittentis ante positum pro latere. Exstinctum bullae manent.",
+        "meSender": "Ego",
+        "renameUnsafe": "Nomen notas continet quae in mandatum ire non possunt (tantum litterae, numeri, spatia, puncta, lineolae).",
+        "copyRenameCmd": "Mandatum renominandi exscribere"
     },
     "es": {
         "language": "Idioma",
@@ -2714,7 +2786,16 @@ var catalogs = {
         "selectMessages": "Seleccionar",
         "selectedCount": "%1 seleccionados",
         "forwardedCountTo": "%1 mensajes reenviados a %2",
-        "cancel": "Cancelar"
+        "cancel": "Cancelar",
+        "appNameSetting": "Nombre de la aplicación",
+        "appNameSettingDesc": "Se muestra en la cabecera y en las notificaciones. Otro nombre separa el contador de notificaciones de la aplicación oficial de WhatsApp. El nombre bajo el icono no cambia.",
+        "commandCopied": "Comando copiado: pégalo en Terminal",
+        "renameIconHint": "Opcional: también renombra el icono de inicio. Su nombre se lee antes de que arranque la aplicación y solo root puede cambiarlo. El archivo desktop es config(noreplace) y las actualizaciones no tocan el nombre, así que el cambio se mantiene.",
+        "lineMode": "Líneas en vez de burbujas",
+        "lineModeDesc": "Los mensajes ocupan todo el ancho en tonos alternos, con el nombre del remitente delante en lugar del lado. Desactivado se mantienen las burbujas.",
+        "meSender": "Yo",
+        "renameUnsafe": "El nombre contiene caracteres que no pueden ir en el comando (solo letras, dígitos, espacios, puntos, guiones y guiones bajos).",
+        "copyRenameCmd": "Copiar el comando de renombrado"
     },
     "it": {
         "language": "Lingua",
@@ -3004,7 +3085,16 @@ var catalogs = {
         "selectMessages": "Seleziona",
         "selectedCount": "%1 selezionati",
         "forwardedCountTo": "%1 messaggi inoltrati a %2",
-        "cancel": "Annulla"
+        "cancel": "Annulla",
+        "appNameSetting": "Nome dell'app",
+        "appNameSettingDesc": "Mostrato nell'intestazione e nelle notifiche. Un nome diverso tiene il contatore separato dall'app WhatsApp ufficiale. Il nome sotto l'icona resta invariato.",
+        "commandCopied": "Comando copiato - incollalo nel Terminale",
+        "renameIconHint": "Facoltativo: rinomina anche l'icona di avvio. Il suo nome viene letto prima che l'app parta e solo root può cambiarlo. Il file desktop è config(noreplace) e gli aggiornamenti non toccano il nome, quindi la modifica resta.",
+        "lineMode": "Righe invece di fumetti",
+        "lineModeDesc": "I messaggi occupano tutta la larghezza in tinte alternate, con il nome del mittente davanti anziché il lato. Disattivato restano i fumetti.",
+        "meSender": "Io",
+        "renameUnsafe": "Il nome contiene caratteri non ammessi nel comando (solo lettere, cifre, spazi, punti, trattini, trattini bassi).",
+        "copyRenameCmd": "Copia il comando di rinomina"
     },
     "pt": {
         "language": "Idioma",
@@ -3294,7 +3384,16 @@ var catalogs = {
         "selectMessages": "Selecionar",
         "selectedCount": "%1 selecionadas",
         "forwardedCountTo": "%1 mensagens reencaminhadas para %2",
-        "cancel": "Cancelar"
+        "cancel": "Cancelar",
+        "appNameSetting": "Nome da aplicação",
+        "appNameSettingDesc": "Mostrado no cabeçalho e nas notificações. Outro nome mantém o contador separado da aplicação oficial do WhatsApp. O nome sob o ícone não muda.",
+        "commandCopied": "Comando copiado - cole no Terminal",
+        "renameIconHint": "Opcional: renomeia também o ícone de arranque. O nome é lido antes de a aplicação iniciar e só o root o pode alterar. O ficheiro desktop é config(noreplace) e as atualizações não mexem no nome, por isso a alteração mantém-se.",
+        "lineMode": "Linhas em vez de balões",
+        "lineModeDesc": "As mensagens ocupam toda a largura em tons alternados, com o nome do remetente à frente em vez do lado. Desligado mantém os balões.",
+        "meSender": "Eu",
+        "renameUnsafe": "O nome contém caracteres que não podem constar do comando (apenas letras, dígitos, espaços, pontos, hífens e sublinhados).",
+        "copyRenameCmd": "Copiar o comando de renomeação"
     },
     "nl": {
         "language": "Taal",
@@ -3584,7 +3683,16 @@ var catalogs = {
         "selectMessages": "Selecteren",
         "selectedCount": "%1 geselecteerd",
         "forwardedCountTo": "%1 berichten doorgestuurd naar %2",
-        "cancel": "Annuleren"
+        "cancel": "Annuleren",
+        "appNameSetting": "Naam van de app",
+        "appNameSettingDesc": "Verschijnt in de kop en bij meldingen. Een andere naam houdt de meldingsteller gescheiden van de officiële WhatsApp-app. De naam onder het pictogram verandert niet.",
+        "commandCopied": "Commando gekopieerd - plak het in Terminal",
+        "renameIconHint": "Optioneel: hernoemt ook het startpictogram. De naam wordt gelezen voordat de app start en alleen root kan hem wijzigen. Het desktopbestand is config(noreplace) en updates raken de naam niet aan, dus de wijziging blijft.",
+        "lineMode": "Regels in plaats van ballonnen",
+        "lineModeDesc": "Berichten vullen de breedte in wisselende tinten, met de naam van de afzender ervoor in plaats van de kant. Uit blijven de ballonnen.",
+        "meSender": "Ik",
+        "renameUnsafe": "De naam bevat tekens die niet in het commando kunnen (alleen letters, cijfers, spaties, punten, streepjes, liggende streepjes).",
+        "copyRenameCmd": "Hernoemcommando kopiëren"
     },
     "pl": {
         "language": "Język",
@@ -3874,7 +3982,16 @@ var catalogs = {
         "selectMessages": "Zaznacz",
         "selectedCount": "Zaznaczono: %1",
         "forwardedCountTo": "Przekazano %1 wiadomości do %2",
-        "cancel": "Anuluj"
+        "cancel": "Anuluj",
+        "appNameSetting": "Nazwa aplikacji",
+        "appNameSettingDesc": "Widoczna w nagłówku i w powiadomieniach. Inna nazwa oddziela licznik powiadomień od oficjalnej aplikacji WhatsApp. Nazwa pod ikoną się nie zmienia.",
+        "commandCopied": "Polecenie skopiowane - wklej je w Terminalu",
+        "renameIconHint": "Opcjonalnie: zmienia też nazwę ikony uruchamiania. Jest odczytywana przed startem aplikacji i może ją zmienić tylko root. Plik desktop jest config(noreplace), a aktualizacje nie ruszają nazwy, więc zmiana pozostaje.",
+        "lineMode": "Wiersze zamiast dymków",
+        "lineModeDesc": "Wiadomości wypełniają szerokość naprzemiennymi odcieniami, z nazwą nadawcy z przodu zamiast strony. Wyłączone zostają dymki.",
+        "meSender": "Ja",
+        "renameUnsafe": "Nazwa zawiera znaki, które nie mogą znaleźć się w poleceniu (tylko litery, cyfry, spacje, kropki, myślniki, podkreślenia).",
+        "copyRenameCmd": "Kopiuj polecenie zmiany nazwy"
     },
     "tr": {
         "language": "Dil",
@@ -4164,7 +4281,16 @@ var catalogs = {
         "selectMessages": "Seç",
         "selectedCount": "%1 seçildi",
         "forwardedCountTo": "%1 mesaj %2 kişisine iletildi",
-        "cancel": "İptal"
+        "cancel": "İptal",
+        "appNameSetting": "Uygulama adı",
+        "appNameSettingDesc": "Başlıkta ve bildirimlerde görünür. Farklı bir ad, bildirim sayacını resmi WhatsApp uygulamasından ayrı tutar. Simgenin altındaki ad değişmez.",
+        "commandCopied": "Komut kopyalandı - Terminal'e yapıştırın",
+        "renameIconHint": "İsteğe bağlı: başlatma simgesini de yeniden adlandırır. Adı uygulama başlamadan önce okunur ve yalnızca root değiştirebilir. Desktop dosyası config(noreplace) ve güncellemeler ada dokunmaz, bu yüzden değişiklik kalıcıdır.",
+        "lineMode": "Baloncuk yerine satır",
+        "lineModeDesc": "Mesajlar dönüşümlü tonlarla genişliği doldurur, gönderenin adı yanda değil önde durur. Kapalıyken baloncuklar kalır.",
+        "meSender": "Ben",
+        "renameUnsafe": "Ad, komuta giremeyecek karakterler içeriyor (yalnızca harf, rakam, boşluk, nokta, tire, alt çizgi).",
+        "copyRenameCmd": "Yeniden adlandırma komutunu kopyala"
     },
     "da": {
         "language": "Sprog",
@@ -4454,7 +4580,16 @@ var catalogs = {
         "selectMessages": "Vælg",
         "selectedCount": "%1 valgt",
         "forwardedCountTo": "%1 beskeder videresendt til %2",
-        "cancel": "Annullér"
+        "cancel": "Annullér",
+        "appNameSetting": "Appens navn",
+        "appNameSettingDesc": "Vises i overskriften og i notifikationer. Et andet navn holder notifikationstælleren adskilt fra den officielle WhatsApp-app. Navnet under ikonet ændres ikke.",
+        "commandCopied": "Kommandoen er kopieret - indsæt den i Terminal",
+        "renameIconHint": "Valgfrit: omdøber også startikonet. Navnet læses før appen starter og kan kun ændres som root. Desktop-filen er config(noreplace), og opdateringer rører ikke navnet, så ændringen består.",
+        "lineMode": "Linjer i stedet for bobler",
+        "lineModeDesc": "Beskeder fylder bredden i skiftende toner med afsenderens navn foran i stedet for siden. Slået fra beholdes boblerne.",
+        "meSender": "Mig",
+        "renameUnsafe": "Navnet indeholder tegn, der ikke kan stå i kommandoen (kun bogstaver, tal, mellemrum, punktummer, bindestreger, understreger).",
+        "copyRenameCmd": "Kopiér omdøbningskommandoen"
     },
     "nb": {
         "language": "Språk",
@@ -4744,7 +4879,16 @@ var catalogs = {
         "selectMessages": "Velg",
         "selectedCount": "%1 valgt",
         "forwardedCountTo": "%1 meldinger videresendt til %2",
-        "cancel": "Avbryt"
+        "cancel": "Avbryt",
+        "appNameSetting": "Appens navn",
+        "appNameSettingDesc": "Vises i overskriften og i varsler. Et annet navn holder varseltelleren atskilt fra den offisielle WhatsApp-appen. Navnet under ikonet endres ikke.",
+        "commandCopied": "Kommandoen er kopiert - lim den inn i Terminal",
+        "renameIconHint": "Valgfritt: gir også startikonet nytt navn. Navnet leses før appen starter og kan bare endres som root. Desktop-filen er config(noreplace), og oppdateringer rører ikke navnet, så endringen består.",
+        "lineMode": "Linjer i stedet for bobler",
+        "lineModeDesc": "Meldinger fyller bredden i vekslende toner med avsenderens navn foran i stedet for siden. Av beholdes boblene.",
+        "meSender": "Meg",
+        "renameUnsafe": "Navnet inneholder tegn som ikke kan stå i kommandoen (bare bokstaver, tall, mellomrom, punktum, bindestrek, understrek).",
+        "copyRenameCmd": "Kopier omdøpingskommandoen"
     },
     "cs": {
         "language": "Jazyk",
@@ -5034,7 +5178,16 @@ var catalogs = {
         "selectMessages": "Vybrat",
         "selectedCount": "Vybráno: %1",
         "forwardedCountTo": "%1 zpráv přeposláno: %2",
-        "cancel": "Zrušit"
+        "cancel": "Zrušit",
+        "appNameSetting": "Název aplikace",
+        "appNameSettingDesc": "Zobrazuje se v záhlaví a u oznámení. Jiný název oddělí počítadlo oznámení od oficiální aplikace WhatsApp. Název pod ikonou se nemění.",
+        "commandCopied": "Příkaz zkopírován - vložte jej v Terminálu",
+        "renameIconHint": "Volitelné: přejmenuje i ikonu spouštění. Její název se čte před startem aplikace a změnit ho může jen root. Soubor desktop je config(noreplace) a aktualizace se názvu nedotýkají, takže změna zůstane.",
+        "lineMode": "Řádky místo bublin",
+        "lineModeDesc": "Zprávy vyplní šířku ve střídavých odstínech, jméno odesílatele je vpředu místo strany. Vypnuto zůstanou bubliny.",
+        "meSender": "Já",
+        "renameUnsafe": "Název obsahuje znaky, které nemohou být v příkazu (jen písmena, číslice, mezery, tečky, pomlčky, podtržítka).",
+        "copyRenameCmd": "Kopírovat příkaz k přejmenování"
     },
     "el": {
         "language": "Γλώσσα",
@@ -5324,7 +5477,16 @@ var catalogs = {
         "selectMessages": "Επιλογή",
         "selectedCount": "%1 επιλεγμένα",
         "forwardedCountTo": "%1 μηνύματα προωθήθηκαν σε %2",
-        "cancel": "Άκυρο"
+        "cancel": "Άκυρο",
+        "appNameSetting": "Όνομα εφαρμογής",
+        "appNameSettingDesc": "Εμφανίζεται στην κεφαλίδα και στις ειδοποιήσεις. Άλλο όνομα κρατά τον μετρητή ειδοποιήσεων χωριστά από την επίσημη εφαρμογή WhatsApp. Το όνομα κάτω από το εικονίδιο δεν αλλάζει.",
+        "commandCopied": "Η εντολή αντιγράφηκε - επικολλήστε στο Terminal",
+        "renameIconHint": "Προαιρετικό: μετονομάζει και το εικονίδιο εκκίνησης. Το όνομά του διαβάζεται πριν ξεκινήσει η εφαρμογή και μόνο ο root μπορεί να το αλλάξει. Το αρχείο desktop είναι config(noreplace) και οι ενημερώσεις δεν το πειράζουν, οπότε η αλλαγή διατηρείται.",
+        "lineMode": "Γραμμές αντί για συννεφάκια",
+        "lineModeDesc": "Τα μηνύματα γεμίζουν το πλάτος με εναλλασσόμενες αποχρώσεις, με το όνομα του αποστολέα μπροστά αντί για την πλευρά. Απενεργοποιημένο μένουν τα συννεφάκια.",
+        "meSender": "Εγώ",
+        "renameUnsafe": "Το όνομα περιέχει χαρακτήρες που δεν επιτρέπονται στην εντολή (μόνο γράμματα, ψηφία, κενά, τελείες, παύλες, κάτω παύλες).",
+        "copyRenameCmd": "Αντιγραφή εντολής μετονομασίας"
     },
     "et": {
         "language": "Keel",
@@ -5614,7 +5776,16 @@ var catalogs = {
         "selectMessages": "Vali",
         "selectedCount": "%1 valitud",
         "forwardedCountTo": "%1 sõnumit edastatud: %2",
-        "cancel": "Loobu"
+        "cancel": "Loobu",
+        "appNameSetting": "Rakenduse nimi",
+        "appNameSettingDesc": "Kuvatakse päises ja teavitustes. Teine nimi hoiab teavitusloenduri ametlikust WhatsAppi rakendusest eraldi. Ikooni all olev nimi ei muutu.",
+        "commandCopied": "Käsk kopeeritud - kleebi see Terminali",
+        "renameIconHint": "Valikuline: nimetab ümber ka käivitusikooni. Selle nimi loetakse enne rakenduse käivitumist ja seda saab muuta ainult root. Desktop-fail on config(noreplace) ja uuendused nime ei puuduta, seega muudatus säilib.",
+        "lineMode": "Read mullide asemel",
+        "lineModeDesc": "Sõnumid täidavad laiuse vahelduvates toonides, saatja nimi ees selle asemel, et pool ütleks kirjutaja. Väljas jäävad mullid.",
+        "meSender": "Mina",
+        "renameUnsafe": "Nimi sisaldab märke, mis käsku ei sobi (ainult tähed, numbrid, tühikud, punktid, sidekriipsud, alakriipsud).",
+        "copyRenameCmd": "Kopeeri ümbernimetamise käsk"
     },
     "lv": {
         "language": "Valoda",
@@ -5904,7 +6075,16 @@ var catalogs = {
         "selectMessages": "Atlasīt",
         "selectedCount": "Atlasīti: %1",
         "forwardedCountTo": "%1 ziņas pārsūtītas: %2",
-        "cancel": "Atcelt"
+        "cancel": "Atcelt",
+        "appNameSetting": "Lietotnes nosaukums",
+        "appNameSettingDesc": "Redzams galvenē un paziņojumos. Cits nosaukums nošķir paziņojumu skaitītāju no oficiālās WhatsApp lietotnes. Nosaukums zem ikonas nemainās.",
+        "commandCopied": "Komanda nokopēta - ielīmē to Terminālī",
+        "renameIconHint": "Pēc izvēles: pārdēvē arī palaišanas ikonu. Tās nosaukumu nolasa pirms lietotnes startēšanas, un mainīt to var tikai root. Desktop fails ir config(noreplace), un atjauninājumi nosaukumu neskar, tāpēc izmaiņa saglabājas.",
+        "lineMode": "Rindas burbuļu vietā",
+        "lineModeDesc": "Ziņas aizpilda platumu mainīgos toņos, sūtītāja vārds priekšā, nevis puse. Izslēgts paliek burbuļi.",
+        "meSender": "Es",
+        "renameUnsafe": "Nosaukumā ir rakstzīmes, kas komandā nav pieļaujamas (tikai burti, cipari, atstarpes, punkti, defises, pasvītrojumi).",
+        "copyRenameCmd": "Kopēt pārdēvēšanas komandu"
     },
     "lt": {
         "language": "Kalba",
@@ -6194,7 +6374,16 @@ var catalogs = {
         "selectMessages": "Pasirinkti",
         "selectedCount": "Pasirinkta: %1",
         "forwardedCountTo": "%1 žinutės persiųstos: %2",
-        "cancel": "Atšaukti"
+        "cancel": "Atšaukti",
+        "appNameSetting": "Programos pavadinimas",
+        "appNameSettingDesc": "Rodoma antraštėje ir pranešimuose. Kitas pavadinimas atskiria pranešimų skaitiklį nuo oficialios WhatsApp programos. Pavadinimas po piktograma nesikeičia.",
+        "commandCopied": "Komanda nukopijuota - įklijuok Terminale",
+        "renameIconHint": "Neprivaloma: pervadina ir paleidimo piktogramą. Jos pavadinimas nuskaitomas prieš paleidžiant programą ir keisti gali tik root. Desktop failas yra config(noreplace), o atnaujinimai pavadinimo neliečia, tad pakeitimas išlieka.",
+        "lineMode": "Eilutės vietoj burbulų",
+        "lineModeDesc": "Žinutės užpildo plotį kaitaliojamais atspalviais, siuntėjo vardas priekyje, o ne pusė. Išjungus lieka burbulai.",
+        "meSender": "Aš",
+        "renameUnsafe": "Pavadinime yra ženklų, kurių komandoje būti negali (tik raidės, skaitmenys, tarpai, taškai, brūkšneliai, pabraukimai).",
+        "copyRenameCmd": "Kopijuoti pervadinimo komandą"
     },
     "sl": {
         "language": "Jezik",
@@ -6484,7 +6673,16 @@ var catalogs = {
         "selectMessages": "Izberi",
         "selectedCount": "Izbrano: %1",
         "forwardedCountTo": "%1 sporočil posredovanih: %2",
-        "cancel": "Prekliči"
+        "cancel": "Prekliči",
+        "appNameSetting": "Ime aplikacije",
+        "appNameSettingDesc": "Prikaže se v glavi in pri obvestilih. Drugo ime loči števec obvestil od uradne aplikacije WhatsApp. Ime pod ikono ostane nespremenjeno.",
+        "commandCopied": "Ukaz kopiran - prilepi ga v Terminal",
+        "renameIconHint": "Neobvezno: preimenuje tudi zagonsko ikono. Njeno ime se prebere, preden se aplikacija zažene, in ga lahko spremeni le root. Datoteka desktop je config(noreplace), posodobitve imena ne spreminjajo, zato sprememba ostane.",
+        "lineMode": "Vrstice namesto oblačkov",
+        "lineModeDesc": "Sporočila zapolnijo širino v izmeničnih odtenkih, ime pošiljatelja spredaj namesto strani. Izklopljeno ostanejo oblački.",
+        "meSender": "Jaz",
+        "renameUnsafe": "Ime vsebuje znake, ki v ukazu niso dovoljeni (samo črke, števke, presledki, pike, vezaji, podčrtaji).",
+        "copyRenameCmd": "Kopiraj ukaz za preimenovanje"
     },
     "zh": {
         "language": "语言",
@@ -6774,7 +6972,16 @@ var catalogs = {
         "selectMessages": "选择",
         "selectedCount": "已选 %1 条",
         "forwardedCountTo": "已将 %1 条消息转发给 %2",
-        "cancel": "取消"
+        "cancel": "取消",
+        "appNameSetting": "应用名称",
+        "appNameSettingDesc": "显示在标题和通知中。改名可让通知计数与官方 WhatsApp 应用区分开。启动图标下的名称不受影响。",
+        "commandCopied": "命令已复制——请在终端中粘贴",
+        "renameIconHint": "可选：同时重命名启动图标。该名称在应用启动前读取，只有 root 能修改。desktop 文件为 config(noreplace)，更新不会改动名称，因此修改会保留。",
+        "lineMode": "用行代替气泡",
+        "lineModeDesc": "消息占满整行、颜色交替，发送者姓名前置，而不是靠左右区分。关闭则保留气泡。",
+        "meSender": "我",
+        "renameUnsafe": "名称包含不能出现在命令中的字符（仅限字母、数字、空格、点、连字符、下划线）。",
+        "copyRenameCmd": "复制重命名命令"
     }
 }
 
