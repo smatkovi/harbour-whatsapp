@@ -305,5 +305,113 @@ console.log('--- Weiterleiten, Doppelversand ---');
   check('neue Weiterleitung erlaubt',  (n.tap(), n.calls), v => v === 1, 'frischer Zustand sendet wieder');
 }
 
+// --- Umbenennen mit Wurzelrechten ---
+// Der Name wandert in einen sed-Ausdruck. Als Argumentliste OHNE Shell kann
+// er keinen zweiten Befehl anhaengen - ein Schraegstrich wuerde den Ausdruck
+// aber dennoch zerlegen.
+console.log('--- Umbenennen, Namenspruefung ---');
+{
+  const ok = n => /^[A-Za-z0-9 ._-]{1,32}$/.test(n);
+  for (const n of ['WhatsSail', 'Whats Sail', 'Whats-Sail_2', 'WA.24'])
+    check('erlaubt: ' + n, ok(n), v => v === true, 'harmloser Name muss durchgehen');
+  for (const n of ['a/b', "x'y", 'a;rm -rf /', 'a$(id)', 'a`id`', '', 'ä', 'A'.repeat(33)])
+    check('abgelehnt: ' + JSON.stringify(n), ok(n), v => v === false,
+          'gefaehrlicher oder unbrauchbarer Name muss abgelehnt werden');
+
+  // Der Befehl wird als Liste gebaut, nicht als Zeichenkette
+  function argv(n) {
+    return ['pkexec', 'sed', '-i', 's/^Name=.*/Name=' + n + '/',
+            '/usr/share/applications/harbour-whatsapp.desktop'];
+  }
+  const a = argv('WhatsSail');
+  check('fuenf Argumente',    a.length, v => v === 5, 'keine Shell-Zeile');
+  check('Name im Ausdruck',   a[3], v => v === 's/^Name=.*/Name=WhatsSail/', 'sed-Ausdruck stimmt');
+  check('Pfad eigenes Argument', a[4].indexOf(' '), v => v === -1, 'Pfad wird nicht zerlegt');
+}
+
+// --- Berechtigungen: kein Ausfuehren aus der App heraus ---
+// Der Versuch mit pkexec scheiterte auf dem Geraet an der Sandbox
+// (PermissionError 13), obwohl pkexec und polkitd laufen. Der Daemon hilft
+// nicht, er wird selbst mit sailjail gestartet. Bleibt der Kopierbefehl -
+// und dieser Fall haelt fest, dass kein Rest davon zurueckbleibt.
+console.log('--- Berechtigungen, nur Kopierbefehle ---');
+{
+  const fs = require('fs');
+  const qml = fs.readFileSync(__dirname + '/../qml/harbour-whatsapp.qml', 'utf8');
+  const copies = [...qml.matchAll(/Clipboard\.text = "devel-su sed -i '(\/\^Permissions=\/[^']*)'/g)];
+  check('Kopierbefehle da', copies.length, v => v >= 10, 'alle Berechtigungen bleiben kopierbar');
+  check('kein pkexec',      /pkexec/.test(qml.replace(/\/\/[^\n]*/g, '')), v => v === false,
+        'kein Aufruf, den die Sandbox ohnehin verwehrt');
+  check('kein runAsRoot',   /runAsRoot\(/.test(qml), v => v === false, 'Hilfsfunktion entfernt');
+}
+
+// --- Status stummschalten ---
+// Ausblenden, nicht abbestellen: eigene Beitraege bleiben immer sichtbar,
+// und wer stummgeschaltet ist, muss zurueckholbar bleiben.
+console.log('--- Status stummschalten ---');
+{
+  function filter(list, muted) {
+    return list.filter(m => m.fromMe === true || muted.indexOf(m.sender) < 0);
+  }
+  const list = [
+    { sender: 'A', fromMe: false }, { sender: 'B', fromMe: false },
+    { sender: 'A', fromMe: false }, { sender: 'C', fromMe: true },
+  ];
+  check('ohne Stumm alles da', filter(list, []).length, v => v === 4, 'nichts wird grundlos entfernt');
+  check('A ausgeblendet',      filter(list, ['A']).length, v => v === 2, 'zwei Beitraege von A weg');
+  check('eigene bleiben',      filter(list, ['A','C']).some(m => m.fromMe), v => v === true,
+        'der eigene Beitrag darf nie verschwinden');
+
+  // Umschalten muss in beide Richtungen gehen
+  function toggle(muted, jid) {
+    const a = muted.slice(); const i = a.indexOf(jid);
+    if (i >= 0) a.splice(i, 1); else a.push(jid);
+    return a;
+  }
+  let m = toggle([], 'A');
+  check('stummgeschaltet',  m.join(), v => v === 'A', 'A steht auf der Liste');
+  m = toggle(m, 'A');
+  check('zurueckgenommen',  m.length, v => v === 0, 'A ist wieder frei');
+
+  // Wer nichts mehr postet, muss trotzdem auffindbar bleiben
+  function people(statuses, muted) {
+    const seen = {}, out = [];
+    for (const s of statuses) { if (s.sender && !s.fromMe && !seen[s.sender]) { seen[s.sender]=true; out.push(s.sender); } }
+    for (const j of muted) if (!seen[j]) { seen[j]=true; out.push(j); }
+    return out;
+  }
+  check('stiller Kontakt gelistet', people([{sender:'A'}], ['Z']).indexOf('Z'), v => v === 1,
+        'sonst kann man ihn nie zuruecknehmen');
+}
+
+// --- Statusseite: eine Zeile je Person ---
+console.log('--- Status nach Person ---');
+{
+  function people(statuses) {
+    const by = {}, order = [];
+    for (const m of statuses) {
+      if (m.fromMe || !m.sender) continue;
+      if (!by[m.sender]) { by[m.sender] = { sender: m.sender, count: 0, newest: 0 }; order.push(m.sender); }
+      by[m.sender].count++;
+      if (m.timestamp > by[m.sender].newest) by[m.sender].newest = m.timestamp;
+    }
+    const out = order.map(k => by[k]);
+    out.sort((a, b) => b.newest - a.newest);
+    return out;
+  }
+  const l = [
+    { sender: 'A', timestamp: 100 }, { sender: 'B', timestamp: 500 },
+    { sender: 'A', timestamp: 300 }, { sender: 'C', timestamp: 900, fromMe: true },
+  ];
+  const p = people(l);
+  check('je Person eine Zeile', p.length, v => v === 2, 'A und B, sonst niemand');
+  check('neueste Person oben',  p[0].sender, v => v === 'B', 'B hat den juengsten Beitrag');
+  check('Anzahl stimmt',        p.find(x => x.sender === 'A').count, v => v === 2, 'A hat zwei');
+  check('juengster Zeitpunkt',  p.find(x => x.sender === 'A').newest, v => v === 300, 'nicht der aelteste');
+  check('eigene nicht gelistet', p.some(x => x.sender === 'C'), v => v === false,
+        'der eigene Beitrag gehoert nicht in die Personenliste');
+  check('leere Liste',          people([]).length, v => v === 0, 'darf nicht stolpern');
+}
+
 console.log(fails === 0 ? '\nAlle Faelle bestanden.' : '\n' + fails + ' Fall/Faelle fehlgeschlagen.');
 process.exit(fails === 0 ? 0 : 1);

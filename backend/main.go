@@ -405,7 +405,10 @@ func notifyIncoming(chatJid, title, preview string) {
         "harbour.harbour-whatsapp / harbour.whatsapp.Gui openChat " + qvariantStringB64(chatJid))
     var id uint32
     call := obj.Call("org.freedesktop.Notifications.Notify", 0,
-        "WhatsApp", replaces, "harbour-whatsapp", title, body,
+        // Derselbe Name wie in der App: sonst stehen im Ereignisfeld zwei
+        // Absender nebeneinander, und die Benachrichtigungen der App
+        // ersetzen die des Dienstes nicht mehr
+        notifAppName(), replaces, "harbour-whatsapp", title, body,
         []string{"default", "", "reply", replyLabel}, hints, int32(-1))
     if call.Err != nil {
         fmt.Printf("🔔 notification failed: %v\n", call.Err)
@@ -2207,6 +2210,19 @@ func eventHandler(evt interface{}) {
             // Presence nachschieben, sonst kommen nie Status-Updates.
             for attempt := 0; attempt < 24; attempt++ {
                 if client.Store.PushName != "" {
+                    // Wer nicht online erscheinen will, meldet sich gar nicht
+                    // erst als verfuegbar. Das kostet die Statusbeitraege -
+                    // WhatsApp stellt sie nur an Geraete zu, die sich melden -
+                    // und genau das steht auch in der Einstellung.
+                    prefsMutex.RLock()
+                    // Vorgabe ist verborgen: nur ein ausdrueckliches "0"
+                    // meldet das Geraet als verfuegbar
+                    hidden := prefs["hide_online"] != "0"
+                    prefsMutex.RUnlock()
+                    if hidden {
+                        fmt.Println("🕶 Presence: verborgen (keine Status-Broadcasts)")
+                        return
+                    }
                     if err := client.SendPresence(ctx, types.PresenceAvailable); err != nil {
                         fmt.Printf("⚠️ SendPresence failed: %v\n", err)
                     } else {
@@ -2292,6 +2308,20 @@ func eventHandler(evt interface{}) {
             }
         }()
         
+    case *events.Presence:
+        // Praesenz kommt nur fuer Kontakte, die wir ausdruecklich abonniert
+        // haben - und nur, solange wir uns selbst als verfuegbar melden.
+        // Beides ist Absicht: kein Abgrasen im Hintergrund.
+        u := v.From.ToNonAD().User
+        presenceMutex.Lock()
+        presenceState[u] = presenceInfo{
+            Online:   !v.Unavailable,
+            LastSeen: v.LastSeen.Unix(),
+            Seen:     time.Now().Unix(),
+        }
+        presenceMutex.Unlock()
+        bumpEvent()
+
     case *events.Receipt:
         // Ebene 2 der Ungelesen-Logik: liest man den Chat am TELEFON,
         // verteilt WhatsApp ein Receipt an alle Geraete - read-self bei
@@ -3119,8 +3149,41 @@ func main() {
         w.Write([]byte("ok"))
     })
 
+    // Praesenz eines Kontakts abfragen. Abonniert zugleich - damit deckt
+    // dieser eine Endpunkt auch den Fall ab, dass ein NEUER Chat begonnen
+    // wird, bevor je ein /chat/opened dafuer kam.
+    http.HandleFunc("/presence", func(w http.ResponseWriter, r *http.Request) {
+        jid := r.URL.Query().Get("jid")
+        if jid == "" {
+            http.Error(w, "jid required", 400)
+            return
+        }
+        subscribePresence(jid)
+        presenceMutex.RLock()
+        info, ok := presenceState[jid]
+        presenceMutex.RUnlock()
+        prefsMutex.RLock()
+        hidden := prefs["hide_online"] != "0"
+        prefsMutex.RUnlock()
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "known":    ok,
+            "online":   ok && info.Online,
+            "lastSeen": info.LastSeen,
+            // Damit die Oberflaeche erklaeren kann, warum nichts kommt,
+            // statt dauerhaft leer zu bleiben
+            "hiddenBySetting": hidden,
+        })
+    })
+
     http.HandleFunc("/chat/opened", func(w http.ResponseWriter, r *http.Request) {
+        // Beide Namen annehmen: die Antwort aus der Benachrichtigung heraus
+        // schickte seit jeher "jid" und bekam eine 400 - die Benachrichtigung
+        // blieb danach stehen, obwohl man geantwortet hatte (rdomschk).
         chat := r.URL.Query().Get("chat")
+        if chat == "" {
+            chat = r.URL.Query().Get("jid")
+        }
         if chat == "" {
             http.Error(w, "chat required", 400)
             return
@@ -3131,6 +3194,9 @@ func main() {
         chatSettingsMutex.Unlock()
         saveChatSettings()
         clearNotification(chat)
+        // Praesenz genau hier abonnieren: eine Anfrage bei einer bewussten
+        // Handlung statt hunderter im Hintergrund
+        go subscribePresence(chat)
         // Ohne bump erfaehrt die Long-Polling-UI nicht, dass der
         // Ungelesen-Zaehler geloescht wurde - er blieb stehen, bis
         // zufaellig ein anderes Ereignis kam (oder das 60-s-Netz)
@@ -5593,4 +5659,74 @@ func refreshChannelNames() {
         }
     }
     fmt.Printf("📛 %d channel names refreshed\n", n)
+}
+
+// notifAppName liefert den eingestellten Anzeigenamen. Wer die App umbenennt,
+// damit der Zaehler im Fensterwechsler nicht mit der offiziellen kollidiert,
+// hat sonst zwei verschiedene Absender im Ereignisfeld.
+func notifAppName() string {
+    prefsMutex.RLock()
+    n := prefs["app_name"]
+    prefsMutex.RUnlock()
+    if n == "" {
+        return "WhatsApp"
+    }
+    return n
+}
+
+// ---- Praesenz (nur fuer ausdruecklich abonnierte Kontakte) ----
+//
+// WhatsApp liefert Praesenz nicht von selbst: fuer jede Person braucht es ein
+// eigenes SubscribePresence. Hunderte davon auf einmal sehen aus wie das
+// Abgrasen von Kontaktdaten - genau das Muster, das diesem Konto schon zwei
+// Sperren eingebracht hat. Deshalb wird ausschliesslich beim OEFFNEN eines
+// Chats abonniert, also einmal pro bewusster Handlung, und ein bereits
+// abonnierter Kontakt nicht erneut.
+
+type presenceInfo struct {
+    Online   bool  `json:"online"`
+    LastSeen int64 `json:"lastSeen"`
+    Seen     int64 `json:"seen"`
+}
+
+var presenceState = map[string]presenceInfo{}
+var presenceSubbed = map[string]int64{}
+var presenceMutex sync.RWMutex
+
+// subscribePresence abonniert einmalig. Rueckgabe: ob wirklich abonniert
+// wurde - fuer Gruppen, Kanaele und Wiederholungen passiert nichts.
+func subscribePresence(jid string) bool {
+    if client == nil || !client.IsConnected() || jid == "" || jid == "status" {
+        return false
+    }
+    if strings.Contains(jid, "-") || strings.Contains(jid, "@g.us") ||
+        strings.Contains(jid, "newsletter") {
+        return false // Gruppen und Kanaele haben keine Praesenz
+    }
+    // Ohne eigene Verfuegbar-Meldung liefert WhatsApp ohnehin nichts
+    prefsMutex.RLock()
+    hidden := prefs["hide_online"] != "0"
+    prefsMutex.RUnlock()
+    if hidden {
+        return false
+    }
+
+    presenceMutex.Lock()
+    last := presenceSubbed[jid]
+    now := time.Now().Unix()
+    // Hoechstens alle 10 Minuten je Kontakt erneut - ein wiederholtes
+    // Oeffnen desselben Chats darf keinen Schwall erzeugen
+    if last > 0 && now-last < 600 {
+        presenceMutex.Unlock()
+        return false
+    }
+    presenceSubbed[jid] = now
+    presenceMutex.Unlock()
+
+    target := types.JID{User: jid, Server: types.DefaultUserServer}
+    if err := client.SubscribePresence(context.Background(), target); err != nil {
+        fmt.Printf("\u26a0 SubscribePresence %s: %v\n", jid, err)
+        return false
+    }
+    return true
 }

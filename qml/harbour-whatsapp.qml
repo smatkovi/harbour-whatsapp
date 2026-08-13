@@ -137,6 +137,15 @@ ApplicationWindow {
     property var waContacts: []
 
     // Python backend starter
+    // Wurzelrechte aus der App heraus gehen NICHT: der Versuch mit pkexec
+    // (Vorschlag von rdomschk) scheitert an der Sandbox mit
+    // PermissionError(13) - nachgewiesen auf dem Geraet, obwohl pkexec,
+    // polkitd und der Sailfish-Polkit-Agent alle laufen. Sein Beispiel
+    // stammt aus einem Patchmanager-Patch, und Patches laufen ausserhalb
+    // von Sailjail. Der Daemon hilft auch nicht: er wird selbst mit
+    // sailjail gestartet, weil nur so die Secrets-Sammlung zugaenglich ist.
+    // Es bleibt beim Befehl zum Kopieren.
+
     Python {
         id: python
         
@@ -414,6 +423,7 @@ ApplicationWindow {
                         }
                     }
 
+
                     Label {
                         id: renameHint
                         x: Theme.horizontalPageMargin
@@ -432,6 +442,27 @@ ApplicationWindow {
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
                         text: loc.renameIconHint
+                    }
+
+                    TextSwitch {
+                        text: loc.hideOnline
+                        description: loc.hideOnlineDesc
+                        checked: hideOnline
+                        onClicked: {
+                            hideOnline = checked
+                            setPref("hide_online", checked ? "1" : "0")
+                            globalNotice = loc.hideOnlineRestart
+                        }
+                    }
+
+                    TextSwitch {
+                        text: loc.statusByPerson
+                        description: loc.statusByPersonDesc
+                        checked: statusByPerson
+                        onClicked: {
+                            statusByPerson = checked
+                            setPref("status_by_person", checked ? "1" : "0")
+                        }
                     }
 
                     TextSwitch {
@@ -1043,6 +1074,11 @@ ApplicationWindow {
                 forwardStay = p.forward_stay === "1"
                 navBarSize = p.navbar_size || "large"
                 statusGrouping = p.status_grouping !== "0"
+                hideOnline = p.hide_online !== "0"
+                statusByPerson = p.status_by_person === "1"
+                mutedStatus = (p.status_muted || "").split(",").filter(function(x) {
+                    return x !== ""
+                })
                 appDisplayName = p.app_name || "WhatsApp"
                 lineMode = p.line_mode === "1"
                 statusLastSeen = parseFloat(p.status_last_seen || "0") || 0
@@ -1510,6 +1546,58 @@ ApplicationWindow {
     // Vorspann. Vorschlag von kempertom. Bewusst abschaltbar - ausgeschaltet
     // bleibt alles, wie es war.
     property bool lineMode: false
+    // Im Status stummgeschaltete Personen. Wer ein halbes Fotoalbum am Tag
+    // postet, verdeckt sonst alles andere - Wunsch von kempertom, den
+    // rdomschk gleich mit oben auf seine Liste gesetzt hat. Die Beitraege
+    // werden nur ausgeblendet, nicht abbestellt: fuer WhatsApp aendert sich
+    // nichts, und ein Abbestellen waere auch nicht rueckgaengig zu machen.
+    property var mutedStatus: []
+    function isStatusMuted(jid) { return mutedStatus.indexOf(jid) >= 0 }
+
+    // Eine Zeile je Person: neueste Person zuerst, mit Anzahl und Zeitpunkt
+    // des juengsten Beitrags. Gebaut aus den ohnehin geladenen Beitraegen -
+    // keine zusaetzliche Abfrage, also auch kein zusaetzliches Sperrrisiko.
+    function statusPeople() {
+        var by = {}, order = []
+        for (var i = 0; i < statuses.length; i++) {
+            var m = statuses[i]
+            if (m.fromMe || !m.sender) continue
+            if (!by[m.sender]) {
+                by[m.sender] = { sender: m.sender, count: 0, newest: 0, isLid: m.senderIsLid === true }
+                order.push(m.sender)
+            }
+            by[m.sender].count++
+            if (m.timestamp > by[m.sender].newest) by[m.sender].newest = m.timestamp
+        }
+        var out = []
+        for (var k = 0; k < order.length; k++) out.push(by[order[k]])
+        out.sort(function(a, b) { return b.newest - a.newest })
+        return out
+    }
+    function statusesOf(jid) {
+        return statuses.filter(function(m) { return m.sender === jid && !m.fromMe })
+    }
+    function toggleStatusMute(jid) {
+        var a = mutedStatus.slice()
+        var i = a.indexOf(jid)
+        if (i >= 0) a.splice(i, 1); else a.push(jid)
+        mutedStatus = a
+        setPref("status_muted", a.join(","))
+        loadStatuses()
+    }
+
+    // Nicht als online erscheinen. Kostet die Statusbeitraege: WhatsApp
+    // stellt sie nur an Geraete zu, die sich als verfuegbar melden. Der
+    // Zielkonflikt steht deshalb im Beschreibungstext, nicht im Kleingedruckten.
+    // Vorgabe: NICHT online erscheinen. Der Preis ist, dass ohne die
+    // Verfuegbar-Meldung keine Statusbeitraege ankommen - deshalb sagt die
+    // Statusseite ausdruecklich, warum sie leer ist, statt wie kaputt
+    // auszusehen.
+    property bool hideOnline: true
+    // Eine Zeile je Person statt aller Beitraege untereinander; antippen
+    // oeffnet die Beitraege dieser Person. Vorschlag von rdomschk, optional,
+    // weil manche das durchgehende Blaettern lieber moegen.
+    property bool statusByPerson: false
     property bool statusGrouping: true
     property string navBarSize: "large"
     function navBarHeight() {
@@ -4466,6 +4554,11 @@ Label {
                         // postet, schob sonst alle anderen aus der Liste.
                         // Innerhalb einer Person bleibt es zeitlich sortiert,
                         // die Personen selbst nach ihrer neuesten Meldung.
+                        // Stummgeschaltete Personen gar nicht erst aufnehmen
+                        list = list.filter(function(m) {
+                            return m.fromMe === true || !isStatusMuted(m.sender)
+                        })
+
                         var order = [], byUser = {}
                         if (!statusGrouping) {
                             for (var q = 0; q < list.length; q++) {
@@ -4602,10 +4695,17 @@ Label {
                 // Bodenleiste und fing den Tipp ab, egal wie hoch sie war.
                 clip: true
                 anchors { left: parent.left; right: parent.right; top: parent.top; bottom: stNav.top }
-                model: statuses
+                // Je nach Einstellung eine Zeile pro Person oder alle
+                // Beitraege untereinander. Der Delegate entscheidet sich am
+                // selben Schalter, damit nur EINE Liste zu pflegen ist.
+                model: statusByPerson ? statusPeople() : statuses
 
                 PullDownMenu {
                     MenuItem { text: loc.refresh; onClicked: loadStatuses() }
+                    MenuItem {
+                        text: loc.muteStatusPeople
+                        onClicked: pageStack.push(statusMutePage)
+                    }
                     MenuItem {
                         text: loc.postImageVideo
                         onClicked: pageStack.push(statusMediaPicker)
@@ -4630,7 +4730,96 @@ Label {
 
                 header: PageHeader { title: loc.statusUpdates }
 
-                delegate: Column {
+                ViewPlaceholder {
+                    // Ohne diesen Hinweis wirkt die leere Liste wie ein Fehler
+                    enabled: statuses.length === 0 && hideOnline
+                    text: loc.statusHiddenTitle
+                    hintText: loc.statusHiddenHint
+                }
+
+                // Der Delegate war eine schlichte Column. Fuer den langen
+                // Druck braucht es ein ListItem - die Column bleibt darin
+                // unveraendert, damit am Aufbau nichts kaputtgeht. Die Hoehe
+                // muss ausdruecklich mitwachsen, ein ListItem hat sonst seine
+                // Standardhoehe und die Eintraege ueberlappen.
+                delegate: statusByPerson ? personRowDelegate : statusPostDelegate
+
+                Component {
+                    id: personRowDelegate
+                    ListItem {
+                        width: ListView.view.width
+                        contentHeight: Theme.itemSizeLarge
+                        onClicked: pageStack.push(personStatusPage, {
+                            personJid: modelData.sender
+                        })
+                        menu: Component {
+                            ContextMenu {
+                                MenuItem {
+                                    text: isStatusMuted(modelData.sender)
+                                          ? loc.unmuteStatusPerson : loc.muteStatusPerson
+                                    onClicked: toggleStatusMute(modelData.sender)
+                                }
+                            }
+                        }
+                        Row {
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2*x
+                            height: parent.height
+                            spacing: Theme.paddingMedium
+                            Image {
+                                width: Theme.iconSizeMedium
+                                height: Theme.iconSizeMedium
+                                sourceSize.width: Theme.iconSizeMedium
+                                sourceSize.height: Theme.iconSizeMedium
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                anchors.verticalCenter: parent.verticalCenter
+                                source: "http://127.0.0.1:" + backendPort
+                                        + "/avatar/" + modelData.sender
+                            }
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                Label {
+                                    text: modelData.isLid
+                                          ? loc.unknownSender
+                                          : (getDisplayName(modelData.sender, "") !== ""
+                                             ? getDisplayName(modelData.sender, "")
+                                             : "+" + modelData.sender)
+                                    color: Theme.highlightColor
+                                }
+                                Label {
+                                    text: modelData.count + " \u00b7 "
+                                          + Qt.formatDateTime(new Date(modelData.newest * 1000),
+                                                              "dd.MM. hh:mm")
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    color: Theme.secondaryColor
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Component {
+                    id: statusPostDelegate
+                    ListItem {
+                    // Nach dem Muster des Kanalverzeichnisses weiter unten,
+                    // das nachweislich funktioniert: ListView.view.width statt
+                    // parent.width und das Menue unmittelbar als Component.
+                    width: ListView.view.width
+                    contentHeight: stCol.height
+                    menu: Component {
+                        ContextMenu {
+                            MenuItem {
+                                visible: !modelData.fromMe && !!modelData.sender
+                                text: isStatusMuted(modelData.sender)
+                                      ? loc.unmuteStatusPerson : loc.muteStatusPerson
+                                onClicked: toggleStatusMute(modelData.sender)
+                            }
+                        }
+                    }
+
+                Column {
+                    id: stCol
                     width: parent.width
                     spacing: Theme.paddingSmall
 
@@ -4804,11 +4993,115 @@ Label {
                         }
                     }
                 }
+            }
+                }
 
                 ViewPlaceholder {
                     enabled: statuses.length === 0
                     text: loc.noStatus
                     hintText: loc.noStatusHint
+                }
+            }
+        }
+    }
+
+    // Die Beitraege einer Person. Bewusst schlicht gehalten: Bild oder Text
+    // je Beitrag, neueste zuerst - fuer alles Weitere gibt es die
+    // durchgehende Ansicht.
+    Component {
+        id: personStatusPage
+        Page {
+            property string personJid: ""
+            SilicaListView {
+                anchors.fill: parent
+                clip: true
+                model: statusesOf(personJid)
+                header: PageHeader {
+                    title: getDisplayName(personJid, "") !== ""
+                           ? getDisplayName(personJid, "") : ("+" + personJid)
+                }
+                delegate: Column {
+                    width: parent.width
+                    spacing: Theme.paddingSmall
+                    Item { width: 1; height: Theme.paddingMedium }
+                    Image {
+                        visible: !!modelData.mediaPath
+                        width: parent.width - 2*Theme.horizontalPageMargin
+                        x: Theme.horizontalPageMargin
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        source: modelData.mediaPath ? "file://" + modelData.mediaPath : ""
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: pageStack.push(statusFullscreen, {
+                                imagePath: modelData.mediaPath,
+                                caption: modelData.text || ""
+                            })
+                        }
+                    }
+                    Label {
+                        visible: !!modelData.text
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        text: linkify(modelData.text || "")
+                        textFormat: Text.StyledText
+                        linkColor: Theme.highlightColor
+                        onLinkActivated: Qt.openUrlExternally(link)
+                        wrapMode: Text.Wrap
+                    }
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        text: Qt.formatDateTime(new Date(modelData.timestamp * 1000),
+                                                "dd.MM. hh:mm")
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                    }
+                }
+                ViewPlaceholder {
+                    enabled: parent.model.length === 0
+                    text: loc.statusHiddenTitle
+                }
+            }
+        }
+    }
+
+    // Seite zum Stummschalten. Aufgefuehrt wird, wer zuletzt etwas gepostet
+    // hat, dazu alle bereits Stummgeschalteten - sonst koennte man jemanden
+    // nicht mehr zuruecknehmen, sobald er nichts Neues mehr schreibt.
+    Component {
+        id: statusMutePage
+        Page {
+            SilicaListView {
+                anchors.fill: parent
+                clip: true
+                header: PageHeader { title: loc.muteStatusPeople }
+                model: {
+                    var seen = {}, out = []
+                    for (var i = 0; i < statuses.length; i++) {
+                        var j = statuses[i].sender
+                        if (!j || statuses[i].fromMe || seen[j]) continue
+                        seen[j] = true
+                        out.push(j)
+                    }
+                    for (var k = 0; k < mutedStatus.length; k++) {
+                        if (!seen[mutedStatus[k]]) {
+                            seen[mutedStatus[k]] = true
+                            out.push(mutedStatus[k])
+                        }
+                    }
+                    return out
+                }
+                delegate: TextSwitch {
+                    width: parent.width
+                    text: getDisplayName(modelData, "") !== ""
+                          ? getDisplayName(modelData, "") : ("+" + modelData)
+                    description: isStatusMuted(modelData) ? loc.statusMutedDesc : ""
+                    checked: isStatusMuted(modelData)
+                    onClicked: toggleStatusMute(modelData)
+                }
+                ViewPlaceholder {
+                    enabled: parent.model.length === 0
+                    text: loc.noStatusPeople
                 }
             }
         }
@@ -4822,49 +5115,57 @@ Label {
             allowedOrientations: Orientation.All
             backgroundColor: "black"
 
-            // Zoombar: aufziehen mit zwei Fingern, Doppeltipp schaltet
-            // zwischen eingepasst und zweifach um. Der Flickable schiebt das
-            // vergroesserte Bild, deshalb waechst sein Inhalt mit dem Faktor.
+            // Zoombar. Bewusst OHNE die Eigenschaft scale: die skaliert um
+            // den Mittelpunkt und PinchArea verschiebt zusaetzlich das Ziel -
+            // diese Verschiebung blieb nach dem Aufziehen stehen, das Bild sass
+            // danach nicht mehr mittig und rutschte nach unten (rdomschk).
+            // Stattdessen waechst das Bild selbst, und der Flickable schiebt
+            // es, wie er es fuer jeden zu grossen Inhalt tut.
             SilicaFlickable {
                 id: zoomFlick
                 anchors.fill: parent
-                contentWidth: Math.max(width, zoomImg.width * zoomImg.scale)
-                contentHeight: Math.max(height, zoomImg.height * zoomImg.scale)
+                property real zoom: 1.0
+                contentWidth: zoomImg.width
+                contentHeight: zoomImg.height
                 clip: true
 
                 PinchArea {
-                    width: Math.max(zoomFlick.contentWidth, zoomFlick.width)
-                    height: Math.max(zoomFlick.contentHeight, zoomFlick.height)
-                    pinch.target: zoomImg
+                    width: Math.max(zoomFlick.width, zoomImg.width)
+                    height: Math.max(zoomFlick.height, zoomImg.height)
+                    property real startZoom: 1.0
                     pinch.minimumScale: 1.0
                     pinch.maximumScale: 6.0
-                    pinch.dragAxis: Pinch.XAndYAxis
+                    onPinchStarted: startZoom = zoomFlick.zoom
+                    onPinchUpdated: zoomFlick.zoom =
+                        Math.max(1.0, Math.min(6.0, startZoom * pinch.scale))
 
                     Image {
                         id: zoomImg
-                        width: zoomFlick.width
-                        height: zoomFlick.height
+                        width: zoomFlick.width * zoomFlick.zoom
+                        height: zoomFlick.height * zoomFlick.zoom
                         anchors.centerIn: parent
                         fillMode: Image.PreserveAspectFit
                         asynchronous: true
-                        // Beim Zoomen die volle Aufloesung anfordern, sonst
-                        // vergroessert man nur die Bildschirmpunkte
-                        sourceSize.width: zoomImg.scale > 1 ? 0 : zoomFlick.width
+                        // Beim Vergroessern die volle Aufloesung anfordern,
+                        // sonst vergroessert man nur Bildschirmpunkte
+                        sourceSize.width: zoomFlick.zoom > 1 ? 0 : zoomFlick.width
                         source: "file://" + imagePath
-                        Behavior on scale { NumberAnimation { duration: 150 } }
+                        Behavior on width { NumberAnimation { duration: 150 } }
+                        Behavior on height { NumberAnimation { duration: 150 } }
                     }
 
                     MouseArea {
                         anchors.fill: parent
                         onDoubleClicked: {
-                            zoomImg.scale = (zoomImg.scale > 1.05) ? 1.0 : 2.0
-                            if (zoomImg.scale === 1.0) {
-                                zoomFlick.contentX = 0; zoomFlick.contentY = 0
+                            zoomFlick.zoom = (zoomFlick.zoom > 1.05) ? 1.0 : 2.0
+                            if (zoomFlick.zoom === 1.0) {
+                                zoomFlick.contentX = 0
+                                zoomFlick.contentY = 0
                             }
                         }
-                        // Nur bei unveraendertem Bild schliessen - sonst
-                        // faellt man beim Verschieben aus dem Betrachter
-                        onClicked: if (zoomImg.scale <= 1.05) pageStack.pop()
+                        // Nur bei unveraendertem Bild schliessen - sonst faellt
+                        // man beim Verschieben aus dem Betrachter
+                        onClicked: if (zoomFlick.zoom <= 1.05) pageStack.pop()
                     }
                 }
             }
@@ -6322,7 +6623,13 @@ Label {
                 // JSON-Wechsel (Kanal-Viewzaehler!) und springt ans Ende
                 onMovementStarted: forceEnd = false
                 anchors.fill: parent
-                anchors.topMargin: pinnedBar.visible ? pageHead.height + pinnedBar.height : 0
+                // Der Kopf zaehlt IMMER, nicht nur wenn eine Nachricht
+                // angeheftet ist: sonst beginnt die Liste ganz oben und die
+                // Nachrichten scheinen hinter dem Kopf durch. Solange er
+                // durchsichtig war, fiel das kaum auf - mit Farbe und Avatar
+                // ueberlagern sich Text und Name sichtbar (rdomschk).
+                anchors.topMargin: pageHead.height
+                                   + (pinnedBar.visible ? pinnedBar.height : 0)
                 anchors.bottomMargin: inputCol.height
                 model: msgs
                 verticalLayoutDirection: ListView.TopToBottom
@@ -7679,12 +7986,67 @@ Label {
                 // 0.12 war zu zart - der Name blieb schwer zu lesen. Deutlich
                 // dichter, damit die Schrift auf ruhigem Grund steht statt auf
                 // dem durchscheinenden Ambiente-Bild.
-                color: Theme.rgba(Theme.highlightBackgroundColor, 0.6)
-                z: -1
+                // Durchscheinend, seit die Liste nicht mehr dahinter laeuft.
+                // Ein echter Weichzeichner braeuchte einen ShaderEffect ueber
+                // dem Ambiente-Bild, an das eine App nicht herankommt -
+                // stattdessen ein weicher Verlauf nach unten, der denselben
+                // Zweck erfuellt: oben traegt die Flaeche den Text, unten geht
+                // sie ohne Kante in die Liste ueber (rdomschk).
+                gradient: Gradient {
+                    GradientStop {
+                        position: 0.0
+                        color: Theme.rgba(Theme.highlightBackgroundColor, 0.35)
+                    }
+                    GradientStop {
+                        position: 1.0
+                        color: Theme.rgba(Theme.highlightBackgroundColor, 0.05)
+                    }
+                }
+                z: 9
             }
+            // Praesenz des Gespraechspartners. Wird beim Oeffnen des Chats
+            // abgefragt - eine Anfrage bei einer bewussten Handlung, nicht
+            // hunderte im Hintergrund. Der Abruf abonniert zugleich, damit es
+            // auch bei einem frisch begonnenen Chat sofort greift.
+            property string presenceText: ""
+            function loadPresence() {
+                if (!chatJid || chatJid === "status" || isGroupChat) return
+                var x = new XMLHttpRequest()
+                x.open("GET", "http://127.0.0.1:" + backendPort
+                       + "/presence?jid=" + encodeURIComponent(chatJid))
+                x.onreadystatechange = function() {
+                    if (x.readyState !== 4 || x.status !== 200) return
+                    try {
+                        var p = JSON.parse(x.responseText)
+                        if (p.hiddenBySetting) { presenceText = ""; return }
+                        if (!p.known) { presenceText = ""; return }
+                        if (p.online) { presenceText = loc.presenceOnline; return }
+                        presenceText = p.lastSeen > 0
+                            ? loc.presenceLastSeen.replace("%1",
+                                Qt.formatDateTime(new Date(p.lastSeen * 1000), "dd.MM. hh:mm"))
+                            : ""
+                    } catch (e) { presenceText = "" }
+                }
+                x.send()
+            }
+            Timer {
+                // Nachfassen: die Antwort des Servers trifft erst nach dem
+                // Abonnieren ein, der erste Abruf ist deshalb meist leer
+                id: presencePoll
+                interval: 4000
+                repeat: true
+                running: !!chatJid && !isGroupChat && chatJid !== "status"
+                triggeredOnStart: true
+                onTriggered: loadPresence()
+            }
+
             PageHeader {
                 id: pageHead
+                // Vor der Liste, falls doch einmal etwas darueber hinausragt -
+                // Gurt und Hosentraeger, wie bei der Bodenleiste
+                z: 10
                 title: chatName
+                description: presenceText
                 Image {
                     visible: !!chatJid && chatJid !== "status"
                     anchors {

@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.245
+Version:    0.9.255
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -139,6 +139,134 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Thu Aug 13 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.255-1
+- Presence for the chat you have open, which is kempertom's wish narrowed to
+  what can be done safely. WhatsApp sends nothing about anyone unless
+  subscribed to individually, so a page listing who is online would mean one
+  request per contact - 808 of them here - and a burst of identical requests
+  across a contact list is precisely the pattern that has already cost this
+  account two restrictions. Instead one subscription happens when a chat is
+  opened, and again when a chat is newly started, so it is one request per
+  deliberate act. The header then shows online, or when the person was last
+  seen. Reopening the same chat inside ten minutes does not ask again.
+  Groups and channels are skipped since they have no presence, and nothing
+  is asked at all while "do not appear online" is on - WhatsApp would send
+  nothing back, so the request would be pure noise. Eight test cases, under
+  the race detector, since the event handler writes what the endpoint reads
+
+* Thu Aug 13 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.254-1
+- Notifications now clear when you reply from them. Replying called
+  /chat/opened with a "jid" parameter while the endpoint reads "chat", so
+  every one of those calls came back 400 and the notification stayed put -
+  rdomschk noticed it after renaming the app, but it was never about the
+  renaming. Both names are accepted now. The daemon's notifications also
+  carry the configured app name instead of a hardcoded WhatsApp, which is
+  what put two different senders in the events view once the app was
+  renamed. Five test cases.
+- The status page can list people instead of posts, optional and off by
+  default: one row per person with a count and the time of their latest
+  post, tapping opens what they posted. Built from the entries already
+  loaded, so it costs no extra requests - which matters, given what extra
+  requests have cost this account lately. Six test cases.
+- The chat header fades out towards the list rather than ending in a line.
+  A true blur would need a shader over the ambience image, which an app
+  cannot reach; a gradient serves the same purpose - carrying the text at
+  the top, dissolving into the messages below
+
+* Thu Aug 13 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.253-1
+- Not appearing online is now the default. The app used to announce itself
+  as available on every connect, which is what made the device show as
+  online to everyone. It no longer does unless asked to. There is a cost,
+  and it is not small: WhatsApp only delivers status broadcasts to devices
+  that announce themselves, so the status page will be empty until the
+  setting is turned off. It therefore says so in as many words rather than
+  looking broken, and names the setting to change
+
+* Thu Aug 13 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.252-1
+- A setting not to appear online. The app announces itself as available on
+  every connect, and has to: WhatsApp only delivers status broadcasts to
+  devices that do. Turning this on skips that announcement, so nobody sees
+  the device online - and no status updates arrive either. That trade is
+  stated in the setting itself rather than buried, because finding out by
+  wondering where the statuses went would be worse. Off by default, since
+  that is what the app has always done, and only the exact value counts so a
+  stray entry cannot quietly hide you. Four test cases, one of them under
+  the race detector, as the preference is read from the connect handler
+  while the settings page writes it
+
+* Thu Aug 13 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.251-1
+- Status updates from individual people can be hidden - kempertom has an
+  acquaintance who posts a small photo album daily and buries everyone else,
+  and rdomschk put the same wish at the top of his list. Long press an entry
+  to hide that person, and the status pulley has a page listing everyone,
+  which also serves as the way back: someone who has stopped posting would
+  otherwise be impossible to unhide. Hidden means hidden here only, not
+  unsubscribed - WhatsApp sees no change, and nothing is done that cannot be
+  undone. Your own posts are never filtered. Nine test cases. The status
+  delegate had to become a ListItem to carry a context menu at all; it is
+  built like the channel directory's, which demonstrably works, and the
+  Column inside it is untouched.
+- Zoomed pictures stay centred. The previous version scaled the image while
+  PinchArea also dragged it, and that displacement remained afterwards, so
+  the picture sat low and off-centre once zoomed back out. The image itself
+  now grows and the flickable pans it, which is what a flickable is for
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.250-1
+- Takes the run-now buttons out again: the sandbox forbids it. pkexec,
+  polkitd and the Sailfish polkit agent are all present and running, but the
+  call from inside the app fails with PermissionError(13) - shown on the
+  device, not guessed. rdomschk's example comes from a Patchmanager patch,
+  and patches run outside Sailjail, which is the difference. Routing it
+  through the daemon would not help either, since the daemon is itself
+  started under sailjail - that is what lets it reach the secrets
+  collection. So the commands stay copyable and the reasoning is recorded in
+  the source, to save the next person from trying it again
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.249-1
+- The run-now buttons report back where the finger is. They were writing
+  into a hint label sitting hundreds of pixels further down the page, so
+  tapping one appeared to do nothing at all; the row itself now says
+  "waiting for the password", then whether it worked. And the call goes
+  through a Python helper that catches its own exceptions: calling
+  subprocess directly meant that if the command could not be started, no
+  callback ever arrived and the interface simply sat there - the very
+  silence that was reported. pkexec, polkitd and the Sailfish polkit agent
+  are all present on the device, so the mechanism itself is sound
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.248-1
+- Every permission command gets a second, indented row beneath it that runs
+  the command straight away, polkit asking for the password or fingerprint
+  itself. The copy row stays exactly where it was: anyone who would rather
+  read what is about to run than trust a button can still do that, and a
+  test now asserts that all ten buttons execute character-for-character what
+  the row above them copies - if the two ever drift apart, the build fails.
+  Commands are passed as argument lists, never through a shell, and a test
+  asserts that too. On failure the hint points back at the command above
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.247-1
+- Renaming the launcher icon can now be done from the app, using the pkexec
+  approach rdomschk sent over - polkit asks for the password or fingerprint
+  itself, so no Terminal is needed. Both ways are offered: the command to
+  copy stays above, for anyone who would rather read what is about to run
+  than trust a button, and the button sits below it. The command is passed
+  as a list of arguments with no shell involved, so a stray character in the
+  name cannot append a second command; a slash would still break the sed
+  expression, so the name is checked first. Sixteen test cases, including
+  that a name of "a;rm -rf /" is refused. If pkexec is unavailable or the
+  sandbox forbids it, the button says so and points at the command above.
+- The chat header is translucent again at 0.25, so the ambience shows
+  through as rdomschk prefers. That was only safe once 0.9.246 stopped the
+  messages running underneath it
+
+* Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.246-1
+- Messages no longer show through the chat header. The list only allowed for
+  the header's height when a message was pinned, and otherwise started at
+  the very top of the page, running underneath it - barely noticeable while
+  the header was transparent, but with the tinted backing and the avatar the
+  text and the name visibly overlap, as rdomschk's screenshot showed. The
+  header is now always accounted for, and carries a z of 10 in case anything
+  else reaches past its bounds - the same fix the bottom bar needed today
+
 * Tue Aug 11 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.245-1
 - The rename command gets a copy button after all, built exactly like the
   permission ones - and the difference turns out to have been the thing all
