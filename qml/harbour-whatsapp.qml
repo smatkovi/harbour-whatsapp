@@ -7556,7 +7556,15 @@ Label {
                                 if (!visible) return ""
                                 if (modelData.fromMe) return lineMode ? loc.meSender : ""
                                 var n = senderDisplay(modelData.sender)
-                                return n !== "" ? n : (lineMode ? loc.unknownSender : "")
+                                if (n !== "") return n
+                                if (!lineMode) return ""
+                                // senderDisplay liefert bewusst LEER, wenn der
+                                // Absender der Gespraechspartner selbst ist - im
+                                // Blasenmodus braucht es den Namen dort nicht.
+                                // Daraus "Unbekannter Absender" zu machen war
+                                // falsch: der Name steht im Kopf des Chats
+                                // (rdomschk).
+                                return chatName !== "" ? chatName : loc.unknownSender
                             }
                             font.pixelSize: Theme.fontSizeExtraSmall
                             font.bold: true

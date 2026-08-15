@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.263
+Version:    0.9.264
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -139,6 +139,15 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.264-1
+- In line mode, incoming messages in a one-to-one chat said "unknown sender"
+  instead of naming the person. Nothing to do with the length of the name,
+  as it appeared: senderDisplay deliberately returns nothing when the sender
+  is the other party in the chat, because with bubbles the side already says
+  who wrote. Line mode has no side to read, so it filled that emptiness with
+  "unknown" - when the name was sitting in the chat header all along. It now
+  uses that. Bubble mode is untouched. Reported by rdomschk
+
 * Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.263-1
 - Fixes the white screen in 0.9.262. Having just established that statuses
   belongs to the status page rather than the root, I attached an
