@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.255
+Version:    0.9.256
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -139,6 +139,26 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.256-1
+- The list of people hidden from status was empty, which made hiding
+  someone a one-way door. Muted people were appended after the ones with
+  recent posts - but their posts are filtered out at load time, so they
+  appear in neither, and the page had nothing to show. They come first now.
+  The person-per-row view was empty for the same family of reason: its model
+  called a function instead of reading the data, and the binding did not
+  refresh. Both models are computed where they are used.
+- Both status pages also asked parent.model for their emptiness check, and a
+  ListView's parent is its content item, not the list - so that test was
+  reading undefined all along. The lists are named explicitly.
+- Fifteen seconds to undo a deletion instead of Silica's default five, on
+  every irreversible action. rdomschk deleted a chat by catching the pulley
+  while scrolling and could not cancel in time; deleting here is final,
+  since the device does not fetch old messages back by itself.
+- Zooming no longer throws you into the top left corner. The size was
+  animated, and the flickable clamps the visible position against the
+  content on every step of that animation, arriving at zero. The centre is
+  now held explicitly across the zoom, and the animation is gone
+
 * Thu Aug 13 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.255-1
 - Presence for the chat you have open, which is kempertom's wish narrowed to
   what can be done safely. WhatsApp sends nothing about anyone unless

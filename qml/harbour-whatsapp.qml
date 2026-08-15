@@ -2171,7 +2171,7 @@ ApplicationWindow {
                             }
                         }
                         xhr.send()
-                    })
+                    }, 15000)
                 }
 
                 Button {
@@ -2190,7 +2190,7 @@ ApplicationWindow {
                             }
                         }
                         xhr.send()
-                    })
+                    }, 15000)
                 }
 
                 RemorsePopup { id: resetRemorse }
@@ -3705,7 +3705,7 @@ Label {
                         text: loc.leaveGroup
                         onClicked: leaveRemorse.execute("Leaving group", function() {
                             groupCall("/group/leave?chat=" + groupJid, function() { pageStack.pop(pageStack.previousPage()) })
-                        })
+                        }, 15000)
                     }
                     MenuItem {
                         text: loc.changeGroupPhoto
@@ -4696,9 +4696,32 @@ Label {
                 clip: true
                 anchors { left: parent.left; right: parent.right; top: parent.top; bottom: stNav.top }
                 // Je nach Einstellung eine Zeile pro Person oder alle
-                // Beitraege untereinander. Der Delegate entscheidet sich am
-                // selben Schalter, damit nur EINE Liste zu pflegen ist.
-                model: statusByPerson ? statusPeople() : statuses
+                // Beitraege untereinander. Die Personenliste wird HIER
+                // gerechnet statt in einer Funktion weiter oben: eine Bindung
+                // erneuert sich verlaesslich, wenn sie die Daten unmittelbar
+                // liest - beim Umweg ueber einen Funktionsaufruf blieb die
+                // Liste leer (rdomschk).
+                model: {
+                    if (!statusByPerson) return statuses
+                    var by = {}, order = []
+                    for (var i = 0; i < statuses.length; i++) {
+                        var m = statuses[i]
+                        if (m.fromMe || !m.sender) continue
+                        if (!by[m.sender]) {
+                            by[m.sender] = { sender: m.sender, count: 0, newest: 0,
+                                             isLid: m.senderIsLid === true }
+                            order.push(m.sender)
+                        }
+                        by[m.sender].count++
+                        if (m.timestamp > by[m.sender].newest) {
+                            by[m.sender].newest = m.timestamp
+                        }
+                    }
+                    var out = []
+                    for (var k = 0; k < order.length; k++) out.push(by[order[k]])
+                    out.sort(function(a, b) { return b.newest - a.newest })
+                    return out
+                }
 
                 PullDownMenu {
                     MenuItem { text: loc.refresh; onClicked: loadStatuses() }
@@ -4923,7 +4946,7 @@ Label {
                                     if (xhr.readyState === 4) loadStatuses()
                                 }
                                 xhr.send()
-                            })
+                            }, 15000)
                         }
                     }
 
@@ -5013,9 +5036,12 @@ Label {
         Page {
             property string personJid: ""
             SilicaListView {
+                id: personPosts
                 anchors.fill: parent
                 clip: true
-                model: statusesOf(personJid)
+                model: statuses.filter(function(m) {
+                    return m.sender === personJid && !m.fromMe
+                })
                 header: PageHeader {
                     title: getDisplayName(personJid, "") !== ""
                            ? getDisplayName(personJid, "") : ("+" + personJid)
@@ -5058,7 +5084,7 @@ Label {
                     }
                 }
                 ViewPlaceholder {
-                    enabled: parent.model.length === 0
+                    enabled: personPosts.model.length === 0
                     text: loc.statusHiddenTitle
                 }
             }
@@ -5072,22 +5098,28 @@ Label {
         id: statusMutePage
         Page {
             SilicaListView {
+                id: mutePeopleList
                 anchors.fill: parent
                 clip: true
                 header: PageHeader { title: loc.muteStatusPeople }
+                // Stummgeschaltete ZUERST: sie sind der Grund, diese Seite
+                // zu oeffnen, und sie kommen in statuses gar nicht mehr vor -
+                // die Beitraege werden ja beim Laden herausgefiltert. Standen
+                // sie hinten, blieb die Liste leer, sobald jemand nichts
+                // Neues mehr postete (rdomschk).
                 model: {
                     var seen = {}, out = []
+                    for (var k = 0; k < mutedStatus.length; k++) {
+                        if (mutedStatus[k] && !seen[mutedStatus[k]]) {
+                            seen[mutedStatus[k]] = true
+                            out.push(mutedStatus[k])
+                        }
+                    }
                     for (var i = 0; i < statuses.length; i++) {
                         var j = statuses[i].sender
                         if (!j || statuses[i].fromMe || seen[j]) continue
                         seen[j] = true
                         out.push(j)
-                    }
-                    for (var k = 0; k < mutedStatus.length; k++) {
-                        if (!seen[mutedStatus[k]]) {
-                            seen[mutedStatus[k]] = true
-                            out.push(mutedStatus[k])
-                        }
                     }
                     return out
                 }
@@ -5100,7 +5132,9 @@ Label {
                     onClicked: toggleStatusMute(modelData)
                 }
                 ViewPlaceholder {
-                    enabled: parent.model.length === 0
+                    // parent ist bei einer ListView die Inhaltsflaeche, nicht
+                    // die Liste - parent.model war schlicht undefiniert
+                    enabled: mutePeopleList.model.length === 0
                     text: loc.noStatusPeople
                 }
             }
@@ -5125,6 +5159,29 @@ Label {
                 id: zoomFlick
                 anchors.fill: parent
                 property real zoom: 1.0
+
+                // Beim Zoomen den sichtbaren Mittelpunkt behalten. Ohne das
+                // springt die Ansicht in die linke obere Ecke, weil der
+                // Flickable die Position an den neuen, groesseren Inhalt
+                // klammert und dabei bei null anfaengt.
+                function setZoom(z) {
+                    var nz = Math.max(1.0, Math.min(6.0, z))
+                    if (nz === zoom) return
+                    var cx = (contentX + width / 2) / Math.max(1, contentWidth)
+                    var cy = (contentY + height / 2) / Math.max(1, contentHeight)
+                    zoom = nz
+                    if (nz <= 1.0) {
+                        contentX = 0
+                        contentY = 0
+                        return
+                    }
+                    // Nach der Groessenaenderung neu setzen, sonst rechnet man
+                    // gegen den alten Inhalt
+                    contentX = Math.max(0, Math.min(cx * contentWidth - width / 2,
+                                                    contentWidth - width))
+                    contentY = Math.max(0, Math.min(cy * contentHeight - height / 2,
+                                                    contentHeight - height))
+                }
                 contentWidth: zoomImg.width
                 contentHeight: zoomImg.height
                 clip: true
@@ -5136,8 +5193,7 @@ Label {
                     pinch.minimumScale: 1.0
                     pinch.maximumScale: 6.0
                     onPinchStarted: startZoom = zoomFlick.zoom
-                    onPinchUpdated: zoomFlick.zoom =
-                        Math.max(1.0, Math.min(6.0, startZoom * pinch.scale))
+                    onPinchUpdated: zoomFlick.setZoom(startZoom * pinch.scale)
 
                     Image {
                         id: zoomImg
@@ -5150,19 +5206,18 @@ Label {
                         // sonst vergroessert man nur Bildschirmpunkte
                         sourceSize.width: zoomFlick.zoom > 1 ? 0 : zoomFlick.width
                         source: "file://" + imagePath
-                        Behavior on width { NumberAnimation { duration: 150 } }
-                        Behavior on height { NumberAnimation { duration: 150 } }
+                        // KEINE Animation auf der Groesse: waehrend sie
+                        // laeuft, aendert sich der Inhalt des Flickable
+                        // staendig, und der klammert die Position bei jedem
+                        // Schritt neu - am Ende landet man in der linken
+                        // oberen Ecke (rdomschk). Die Mitte wird stattdessen
+                        // in setZoom ausdruecklich gehalten.
                     }
 
                     MouseArea {
                         anchors.fill: parent
-                        onDoubleClicked: {
-                            zoomFlick.zoom = (zoomFlick.zoom > 1.05) ? 1.0 : 2.0
-                            if (zoomFlick.zoom === 1.0) {
-                                zoomFlick.contentX = 0
-                                zoomFlick.contentY = 0
-                            }
-                        }
+                        onDoubleClicked: zoomFlick.setZoom(
+                            zoomFlick.zoom > 1.05 ? 1.0 : 2.0)
                         // Nur bei unveraendertem Bild schliessen - sonst faellt
                         // man beim Verschieben aus dem Betrachter
                         onClicked: if (zoomFlick.zoom <= 1.05) pageStack.pop()
@@ -6685,7 +6740,7 @@ Label {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/unfollow?jid=" + chatJid)
                             xhr.send()
-                        })
+                        }, 15000)
                     }
                     MenuItem {
                         text: loc.loadHistory
@@ -6754,19 +6809,19 @@ Label {
                                 if (xhr.readyState === 4) load()
                             }
                             xhr.send()
-                        })
+                        }, 15000)
                     }
                     MenuItem {
                         text: loc.deleteChat
                         visible: !chatPageItem.isLandscape && (chatJid !== "status" && !isChannel)
-                        onClicked: blockRemorse.execute("Deleting chat", function() {
+                        onClicked: blockRemorse.execute(loc.deleteChat, function() {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chat/delete?jid=" + chatJid)
                             xhr.onreadystatechange = function() {
                                 if (xhr.readyState === 4) pageStack.pop()
                             }
                             xhr.send()
-                        })
+                        }, 15000)
                     }
                     MenuItem {
                         text: loc.loadOlder
@@ -6834,7 +6889,7 @@ Label {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/channel/unfollow?jid=" + chatJid)
                             xhr.send()
-                        })
+                        }, 15000)
                     }
                     MenuItem {
                         text: loc.loadHistory
@@ -6903,19 +6958,19 @@ Label {
                                 if (xhr.readyState === 4) load()
                             }
                             xhr.send()
-                        })
+                        }, 15000)
                     }
                     MenuItem {
                         text: loc.deleteChat
                         visible: !chatPageItem.isLandscape && (chatJid !== "status" && !isChannel)
-                        onClicked: blockRemorse.execute("Deleting chat", function() {
+                        onClicked: blockRemorse.execute(loc.deleteChat, function() {
                             var xhr = new XMLHttpRequest()
                             xhr.open("GET", "http://127.0.0.1:" + backendPort + "/chat/delete?jid=" + chatJid)
                             xhr.onreadystatechange = function() {
                                 if (xhr.readyState === 4) pageStack.pop()
                             }
                             xhr.send()
-                        })
+                        }, 15000)
                     }
                     MenuItem {
                         text: loc.loadOlder
