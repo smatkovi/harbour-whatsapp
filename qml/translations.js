@@ -339,7 +339,9 @@ var en = {
     "statusByPerson": "One row per person in status",
     "statusByPersonDesc": "The status page lists people rather than posts; tapping one opens what they posted. Off shows everything in one run, as before.",
     "presenceOnline": "online",
-    "presenceLastSeen": "last seen %1"
+    "presenceLastSeen": "last seen %1",
+    "unmuteAll": "Show all hidden people again",
+    "unmuteAllDone": "All hidden people are shown again"
 }
 
 var catalogs = {
@@ -674,7 +676,9 @@ var catalogs = {
         "statusByPerson": "Eine Zeile je Person im Status",
         "statusByPersonDesc": "Die Statusseite zeigt Personen statt einzelner Beiträge; antippen öffnet, was sie gepostet haben. Ausgeschaltet steht wie bisher alles untereinander.",
         "presenceOnline": "online",
-        "presenceLastSeen": "zuletzt online %1"
+        "presenceLastSeen": "zuletzt online %1",
+        "unmuteAll": "Alle ausgeblendeten wieder anzeigen",
+        "unmuteAllDone": "Alle ausgeblendeten werden wieder angezeigt"
     },
     "fi": {
         "language": "Kieli",
@@ -1007,7 +1011,9 @@ var catalogs = {
         "statusByPerson": "Yksi rivi henkilöä kohti",
         "statusByPersonDesc": "Tilasivu listaa henkilöt julkaisujen sijaan; napauttamalla näet heidän julkaisunsa. Pois päältä kaikki on peräkkäin kuten ennen.",
         "presenceOnline": "paikalla",
-        "presenceLastSeen": "viimeksi paikalla %1"
+        "presenceLastSeen": "viimeksi paikalla %1",
+        "unmuteAll": "Näytä kaikki piilotetut taas",
+        "unmuteAllDone": "Kaikki piilotetut näkyvät taas"
     },
     "sv": {
         "language": "Språk",
@@ -1340,7 +1346,9 @@ var catalogs = {
         "statusByPerson": "En rad per person i status",
         "statusByPersonDesc": "Statussidan listar personer i stället för inlägg; tryck för att se vad de lagt upp. Avstängt visas allt i en följd som förut.",
         "presenceOnline": "online",
-        "presenceLastSeen": "senast online %1"
+        "presenceLastSeen": "senast online %1",
+        "unmuteAll": "Visa alla dolda igen",
+        "unmuteAllDone": "Alla dolda visas igen"
     },
     "hu": {
         "language": "Nyelv",
@@ -1673,7 +1681,9 @@ var catalogs = {
         "statusByPerson": "Egy sor személyenként az állapotban",
         "statusByPersonDesc": "Az állapotoldal személyeket sorol fel bejegyzések helyett; koppintásra megnyílnak a bejegyzéseik. Kikapcsolva minden egymás után áll, mint eddig.",
         "presenceOnline": "online",
-        "presenceLastSeen": "utoljára online %1"
+        "presenceLastSeen": "utoljára online %1",
+        "unmuteAll": "Minden elrejtett újra megjelenítése",
+        "unmuteAllDone": "Minden elrejtett újra látszik"
     },
     "ru": {
         "language": "Язык",
@@ -2006,7 +2016,9 @@ var catalogs = {
         "statusByPerson": "По одной строке на человека",
         "statusByPersonDesc": "Страница статусов показывает людей, а не отдельные записи; нажатие открывает их публикации. Выключено — всё подряд, как раньше.",
         "presenceOnline": "в сети",
-        "presenceLastSeen": "был(а) в сети %1"
+        "presenceLastSeen": "был(а) в сети %1",
+        "unmuteAll": "Снова показать всех скрытых",
+        "unmuteAllDone": "Все скрытые снова показываются"
     },
     "fr": {
         "language": "Langue",
@@ -2339,7 +2351,9 @@ var catalogs = {
         "statusByPerson": "Une ligne par personne dans les statuts",
         "statusByPersonDesc": "La page des statuts liste les personnes plutôt que les publications ; toucher ouvre les leurs. Désactivé, tout défile comme avant.",
         "presenceOnline": "en ligne",
-        "presenceLastSeen": "vu pour la dernière fois %1"
+        "presenceLastSeen": "vu pour la dernière fois %1",
+        "unmuteAll": "Réafficher toutes les personnes masquées",
+        "unmuteAllDone": "Toutes les personnes masquées sont réaffichées"
     },
     "la": {
         "language": "Lingua",
@@ -2672,7 +2686,9 @@ var catalogs = {
         "statusByPerson": "Unus versus pro persona in statibus",
         "statusByPersonDesc": "Pagina statuum personas potius quam res enumerat; tacta res eorum aperit. Exstinctum omnia deinceps ut antea.",
         "presenceOnline": "praesens",
-        "presenceLastSeen": "ultimo visus %1"
+        "presenceLastSeen": "ultimo visus %1",
+        "unmuteAll": "Omnes celatos rursus ostendere",
+        "unmuteAllDone": "Omnes celati rursus ostenduntur"
     },
     "es": {
         "language": "Idioma",
@@ -2993,7 +3009,9 @@ var catalogs = {
         "statusByPerson": "Una fila por persona en los estados",
         "statusByPersonDesc": "La página de estados muestra personas en vez de publicaciones; al tocar se abren las suyas. Desactivado va todo seguido, como antes.",
         "presenceOnline": "en línea",
-        "presenceLastSeen": "últ. vez %1"
+        "presenceLastSeen": "últ. vez %1",
+        "unmuteAll": "Volver a mostrar a todos los ocultos",
+        "unmuteAllDone": "Se muestran de nuevo todos los ocultos"
     },
     "it": {
         "language": "Lingua",
@@ -3314,7 +3332,9 @@ var catalogs = {
         "statusByPerson": "Una riga per persona negli stati",
         "statusByPersonDesc": "La pagina degli stati elenca le persone invece dei singoli post; toccando si aprono i loro. Disattivato scorre tutto come prima.",
         "presenceOnline": "online",
-        "presenceLastSeen": "ultimo accesso %1"
+        "presenceLastSeen": "ultimo accesso %1",
+        "unmuteAll": "Mostra di nuovo tutti i nascosti",
+        "unmuteAllDone": "Tutti i nascosti sono di nuovo visibili"
     },
     "pt": {
         "language": "Idioma",
@@ -3635,7 +3655,9 @@ var catalogs = {
         "statusByPerson": "Uma linha por pessoa nos estados",
         "statusByPersonDesc": "A página de estados lista pessoas em vez de publicações; tocar abre as dessa pessoa. Desligado mostra tudo seguido, como antes.",
         "presenceOnline": "online",
-        "presenceLastSeen": "visto pela última vez %1"
+        "presenceLastSeen": "visto pela última vez %1",
+        "unmuteAll": "Voltar a mostrar todos os ocultos",
+        "unmuteAllDone": "Todos os ocultos são mostrados novamente"
     },
     "nl": {
         "language": "Taal",
@@ -3956,7 +3978,9 @@ var catalogs = {
         "statusByPerson": "Eén regel per persoon in status",
         "statusByPersonDesc": "De statuspagina toont personen in plaats van berichten; tikken opent die van hen. Uit staat alles achter elkaar, zoals eerder.",
         "presenceOnline": "online",
-        "presenceLastSeen": "laatst gezien %1"
+        "presenceLastSeen": "laatst gezien %1",
+        "unmuteAll": "Alle verborgen personen weer tonen",
+        "unmuteAllDone": "Alle verborgen personen worden weer getoond"
     },
     "pl": {
         "language": "Język",
@@ -4277,7 +4301,9 @@ var catalogs = {
         "statusByPerson": "Jeden wiersz na osobę w statusach",
         "statusByPersonDesc": "Strona statusów pokazuje osoby zamiast wpisów; dotknięcie otwiera ich wpisy. Wyłączone wyświetla wszystko po kolei, jak dotąd.",
         "presenceOnline": "online",
-        "presenceLastSeen": "ostatnio online %1"
+        "presenceLastSeen": "ostatnio online %1",
+        "unmuteAll": "Pokaż znowu wszystkich ukrytych",
+        "unmuteAllDone": "Wszyscy ukryci są znowu widoczni"
     },
     "tr": {
         "language": "Dil",
@@ -4598,7 +4624,9 @@ var catalogs = {
         "statusByPerson": "Durumlarda kişi başına bir satır",
         "statusByPersonDesc": "Durum sayfası gönderiler yerine kişileri listeler; dokununca o kişinin paylaşımları açılır. Kapalıyken her şey eskisi gibi arka arkaya görünür.",
         "presenceOnline": "çevrimiçi",
-        "presenceLastSeen": "son görülme %1"
+        "presenceLastSeen": "son görülme %1",
+        "unmuteAll": "Gizlenen herkesi yeniden göster",
+        "unmuteAllDone": "Gizlenen herkes yeniden görünüyor"
     },
     "da": {
         "language": "Sprog",
@@ -4919,7 +4947,9 @@ var catalogs = {
         "statusByPerson": "Én række pr. person i status",
         "statusByPersonDesc": "Statussiden viser personer i stedet for opslag; tryk åbner deres. Slået fra vises alt i forlængelse som før.",
         "presenceOnline": "online",
-        "presenceLastSeen": "sidst set %1"
+        "presenceLastSeen": "sidst set %1",
+        "unmuteAll": "Vis alle skjulte igen",
+        "unmuteAllDone": "Alle skjulte vises igen"
     },
     "nb": {
         "language": "Språk",
@@ -5240,7 +5270,9 @@ var catalogs = {
         "statusByPerson": "Én rad per person i status",
         "statusByPersonDesc": "Statussiden viser personer i stedet for innlegg; trykk åpner deres. Av vises alt etter hverandre som før.",
         "presenceOnline": "pålogget",
-        "presenceLastSeen": "sist sett %1"
+        "presenceLastSeen": "sist sett %1",
+        "unmuteAll": "Vis alle skjulte igjen",
+        "unmuteAllDone": "Alle skjulte vises igjen"
     },
     "cs": {
         "language": "Jazyk",
@@ -5561,7 +5593,9 @@ var catalogs = {
         "statusByPerson": "Jeden řádek na osobu ve stavech",
         "statusByPersonDesc": "Stránka stavů vypisuje osoby místo příspěvků; klepnutím se otevřou jejich. Vypnuto zobrazí vše za sebou jako dosud.",
         "presenceOnline": "online",
-        "presenceLastSeen": "naposledy online %1"
+        "presenceLastSeen": "naposledy online %1",
+        "unmuteAll": "Znovu zobrazit všechny skryté",
+        "unmuteAllDone": "Všichni skrytí jsou znovu vidět"
     },
     "el": {
         "language": "Γλώσσα",
@@ -5882,7 +5916,9 @@ var catalogs = {
         "statusByPerson": "Μία γραμμή ανά άτομο στις καταστάσεις",
         "statusByPersonDesc": "Η σελίδα καταστάσεων εμφανίζει άτομα αντί για δημοσιεύσεις· με πάτημα ανοίγουν οι δικές τους. Απενεργοποιημένο εμφανίζει τα πάντα στη σειρά, όπως πριν.",
         "presenceOnline": "συνδεδεμένος",
-        "presenceLastSeen": "τελευταία εμφάνιση %1"
+        "presenceLastSeen": "τελευταία εμφάνιση %1",
+        "unmuteAll": "Εμφάνιση ξανά όλων των κρυμμένων",
+        "unmuteAllDone": "Όλοι οι κρυμμένοι εμφανίζονται ξανά"
     },
     "et": {
         "language": "Keel",
@@ -6203,7 +6239,9 @@ var catalogs = {
         "statusByPerson": "Üks rida inimese kohta olekutes",
         "statusByPersonDesc": "Olekuleht loetleb inimesi postituste asemel; puudutus avab nende omad. Väljas kuvatakse kõik järjest nagu varem.",
         "presenceOnline": "võrgus",
-        "presenceLastSeen": "viimati võrgus %1"
+        "presenceLastSeen": "viimati võrgus %1",
+        "unmuteAll": "Näita kõiki peidetuid taas",
+        "unmuteAllDone": "Kõik peidetud on taas nähtaval"
     },
     "lv": {
         "language": "Valoda",
@@ -6524,7 +6562,9 @@ var catalogs = {
         "statusByPerson": "Viena rinda katrai personai statusos",
         "statusByPersonDesc": "Statusu lapa rāda personas, nevis ierakstus; pieskaroties atveras viņu ieraksti. Izslēgts rāda visu pēc kārtas kā līdz šim.",
         "presenceOnline": "tiešsaistē",
-        "presenceLastSeen": "pēdējoreiz tiešsaistē %1"
+        "presenceLastSeen": "pēdējoreiz tiešsaistē %1",
+        "unmuteAll": "Atkal rādīt visus slēptos",
+        "unmuteAllDone": "Visi slēptie atkal redzami"
     },
     "lt": {
         "language": "Kalba",
@@ -6845,7 +6885,9 @@ var catalogs = {
         "statusByPerson": "Viena eilutė kiekvienam žmogui būsenose",
         "statusByPersonDesc": "Būsenų puslapis rodo žmones, o ne įrašus; bakstelėjus atsiveria jų įrašai. Išjungus viskas rodoma iš eilės kaip anksčiau.",
         "presenceOnline": "prisijungęs",
-        "presenceLastSeen": "paskutinį kartą prisijungęs %1"
+        "presenceLastSeen": "paskutinį kartą prisijungęs %1",
+        "unmuteAll": "Vėl rodyti visus paslėptus",
+        "unmuteAllDone": "Visi paslėpti vėl rodomi"
     },
     "sl": {
         "language": "Jezik",
@@ -7166,7 +7208,9 @@ var catalogs = {
         "statusByPerson": "Ena vrstica na osebo v stanjih",
         "statusByPersonDesc": "Stran stanj našteva osebe namesto objav; dotik odpre njihove. Izklopljeno prikaže vse zapored kot doslej.",
         "presenceOnline": "na spletu",
-        "presenceLastSeen": "nazadnje na spletu %1"
+        "presenceLastSeen": "nazadnje na spletu %1",
+        "unmuteAll": "Znova prikaži vse skrite",
+        "unmuteAllDone": "Vsi skriti so spet vidni"
     },
     "zh": {
         "language": "语言",
@@ -7487,7 +7531,9 @@ var catalogs = {
         "statusByPerson": "状态中每人一行",
         "statusByPersonDesc": "状态页列出联系人而非逐条动态，点按可查看该人的动态。关闭后与以往一样依次显示全部。",
         "presenceOnline": "在线",
-        "presenceLastSeen": "最后在线 %1"
+        "presenceLastSeen": "最后在线 %1",
+        "unmuteAll": "重新显示所有已隐藏的人",
+        "unmuteAllDone": "所有隐藏的人已重新显示"
     }
 }
 

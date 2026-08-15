@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.256
+Version:    0.9.263
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -139,6 +139,86 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.263-1
+- Fixes the white screen in 0.9.262. Having just established that statuses
+  belongs to the status page rather than the root, I attached an
+  onStatusesChanged handler to the list inside that page - where it does not
+  belong either, and an invalid handler makes the whole QML file fail to
+  load. The rebuild now hangs off the one place the list is actually
+  assigned, which is where it belonged from the start
+
+* Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.262-1
+- Found it, and it was never where I was looking. The status list and
+  loadStatuses live inside the status page, three levels down; everything
+  built to work with them - the muting page, the person list, the per-person
+  page, and toggleStatusMute itself - sits at the root, where those names do
+  not exist. Every access raised, so the models stayed empty and the tap
+  handler aborted at its first line: which is precisely "the row is there
+  but does nothing", six attempts running. The QML engine had been saying so
+  all along in one line about a non-existent property, and I had been
+  filtering it out of the output I asked for.
+- The root now keeps a mirror of the status list, and reloading is requested
+  by signal rather than by calling a function across that boundary. Five
+  places crossed it; all five are corrected
+
+* Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.261-1
+- The row on the muting page can be tapped. It was drawn but took no touch,
+  the same shape of fault as the rename button - and TextSwitch was the one
+  interactive type on that page not used anywhere else in the app. It is a
+  ListItem now, which the channel directory, the chat list and the status
+  posts all rely on, with a tick drawn beside the name. The placeholder that
+  covers the whole list was also put behind the rows, since even switched
+  off it was a candidate for swallowing the taps
+
+* Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.260-1
+- A way out that does not depend on the page that keeps failing: the status
+  pulley offers "show all hidden people again", which clears the list
+  outright. Hiding someone had become a trapdoor - they vanished and the
+  page meant for bringing them back showed nobody, through four attempts at
+  fixing it.
+- That page now says why it is empty instead of just being empty. There are
+  191 status messages on the device and it still lists nobody, so it is
+  genuinely broken rather than honestly empty - something throws before the
+  model is assigned, and a failed build simply left an empty list behind.
+  Everything is wrapped now and the reason is printed where the placeholder
+  text goes, along with what was found in the stored preference, the
+  property and the message list
+
+* Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.259-1
+- The muting page reads the stored preference itself rather than trusting
+  the property in memory. Reading the preference off the device showed it
+  held the muted number correctly, and the posts from that person really are
+  hidden - so the property is right where the filtering happens, yet arrived
+  empty on this page, and three attempts at the display changed nothing. So
+  the page now asks the service what is stored, which cannot be argued with,
+  and merges in anything muted since. Whatever the property was doing, the
+  list is built from the same source that does the hiding
+
+* Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.258-1
+- Both status pages assign their model instead of binding it. The two that
+  came out blank were the only two whose model was a JavaScript block in
+  braces rather than an expression, and such a binding was evaluating to
+  nothing - which also explains why no placeholder appeared: an undefined
+  model has no length to compare, so the check silently failed and the page
+  showed neither rows nor an explanation. The preference itself was fine
+  throughout; reading it back on the device settled that and stopped a
+  fourth round of rebuilding the display. The lists are now filled in a
+  function on completion, and the muting page carries its entry count in the
+  title so that a blank page can never again be ambiguous about whether the
+  data or the drawing is at fault
+
+* Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.257-1
+- The hidden-status list was not empty, it was invisible. Its rows took
+  their width from parent, and a ListView delegate's parent is the content
+  item, which has no width yet while the list is being built - so every row
+  came out zero pixels wide. The placeholder stayed away too, correctly, the
+  model having entries all along. Both new status pages now take their width
+  from the view, which is the same mistake, and the same fix, as the rename
+  button earlier this week.
+- When there really is nobody to hide, the placeholder says why rather than
+  just stating the fact: with "do not appear online" on - the default since
+  0.9.253 - no status arrives at all, so there is nobody to list
+
 * Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.256-1
 - The list of people hidden from status was empty, which made hiding
   someone a one-way door. Muted people were appended after the ones with

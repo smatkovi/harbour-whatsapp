@@ -1551,6 +1551,14 @@ ApplicationWindow {
     // rdomschk gleich mit oben auf seine Liste gesetzt hat. Die Beitraege
     // werden nur ausgeblendet, nicht abbestellt: fuer WhatsApp aendert sich
     // nichts, und ein Abbestellen waere auch nicht rueckgaengig zu machen.
+    // Spiegel der Statusliste. Das Original liegt INNERHALB der Statusseite
+    // und ist von aussen unsichtbar - Komponenten auf Wurzelebene bekamen
+    // beim Zugriff eine Ausnahme, und genau daran sind die Seite zum
+    // Ausblenden und ihr Antippen sechs Versuche lang gescheitert.
+    property var statusMirror: []
+    // Wird von der Statusseite gesetzt, wenn sie neu geladen hat
+    signal statusesReloaded()
+
     property var mutedStatus: []
     function isStatusMuted(jid) { return mutedStatus.indexOf(jid) >= 0 }
 
@@ -1559,6 +1567,7 @@ ApplicationWindow {
     // keine zusaetzliche Abfrage, also auch kein zusaetzliches Sperrrisiko.
     function statusPeople() {
         var by = {}, order = []
+        var statuses = statusMirror || []
         for (var i = 0; i < statuses.length; i++) {
             var m = statuses[i]
             if (m.fromMe || !m.sender) continue
@@ -1575,7 +1584,9 @@ ApplicationWindow {
         return out
     }
     function statusesOf(jid) {
-        return statuses.filter(function(m) { return m.sender === jid && !m.fromMe })
+        return (statusMirror || []).filter(function(m) {
+            return m.sender === jid && !m.fromMe
+        })
     }
     function toggleStatusMute(jid) {
         var a = mutedStatus.slice()
@@ -1583,7 +1594,10 @@ ApplicationWindow {
         if (i >= 0) a.splice(i, 1); else a.push(jid)
         mutedStatus = a
         setPref("status_muted", a.join(","))
-        loadStatuses()
+        // NICHT loadStatuses() aufrufen: die Funktion gehoert der
+        // Statusseite und ist hier unsichtbar - der Aufruf warf, und der
+        // Klick-Handler brach mittendrin ab. Deshalb tat das Antippen nichts.
+        statusesReloaded()
     }
 
     // Nicht als online erscheinen. Kostet die Statusbeitraege: WhatsApp
@@ -4586,6 +4600,13 @@ Label {
                         }
                         if (statusGrouping) list = grouped
                         statuses = list
+                        // Spiegel fuer alles ausserhalb dieser Seite
+                        app.statusMirror = list
+                        // Personenliste hier neu aufbauen - an der einen
+                        // Stelle, an der die Beitraege tatsaechlich wechseln
+                        if (statusListView.rebuildPersonModel) {
+                            statusListView.rebuildPersonModel()
+                        }
                         // Wer die Seite gerade offen hat, sieht sie ja - sonst
                         // nur zaehlen, damit die Kachel es anzeigen kann
                         if (status === PageStatus.Active) markStatusSeen(list)
@@ -4689,20 +4710,12 @@ Label {
             }
 
             SilicaListView {
-                // OHNE clip zeichnet eine ListView ihre Eintraege ueber die
-                // eigenen Grenzen hinaus - und diese Eintraege nehmen auch
-                // Beruehrungen entgegen. Der letzte Chat lag damit HINTER der
-                // Bodenleiste und fing den Tipp ab, egal wie hoch sie war.
-                clip: true
-                anchors { left: parent.left; right: parent.right; top: parent.top; bottom: stNav.top }
-                // Je nach Einstellung eine Zeile pro Person oder alle
-                // Beitraege untereinander. Die Personenliste wird HIER
-                // gerechnet statt in einer Funktion weiter oben: eine Bindung
-                // erneuert sich verlaesslich, wenn sie die Daten unmittelbar
-                // liest - beim Umweg ueber einen Funktionsaufruf blieb die
-                // Liste leer (rdomschk).
-                model: {
-                    if (!statusByPerson) return statuses
+                id: statusListView
+                // Personenliste ZUWEISEN statt binden: ein JS-Block als
+                // Bindung blieb leer, und ein leeres Modell heisst blanke
+                // Seite ohne Platzhalter.
+                property var personModel: []
+                function rebuildPersonModel() {
                     var by = {}, order = []
                     for (var i = 0; i < statuses.length; i++) {
                         var m = statuses[i]
@@ -4720,14 +4733,50 @@ Label {
                     var out = []
                     for (var k = 0; k < order.length; k++) out.push(by[order[k]])
                     out.sort(function(a, b) { return b.newest - a.newest })
-                    return out
+                    personModel = out
                 }
+                Component.onCompleted: rebuildPersonModel()
+                // KEIN onStatusesChanged hier: statuses gehoert der Seite,
+                // nicht dieser Liste - der Handler war ungueltig und liess die
+                // ganze QML-Datei scheitern (weisse Flaeche). Der Neuaufbau
+                // haengt jetzt dort, wo die Liste wirklich gesetzt wird.
+                Connections {
+                    target: app
+                    onStatusesReloaded: loadStatuses()
+                }
+                // OHNE clip zeichnet eine ListView ihre Eintraege ueber die
+                // eigenen Grenzen hinaus - und diese Eintraege nehmen auch
+                // Beruehrungen entgegen. Der letzte Chat lag damit HINTER der
+                // Bodenleiste und fing den Tipp ab, egal wie hoch sie war.
+                clip: true
+                anchors { left: parent.left; right: parent.right; top: parent.top; bottom: stNav.top }
+                // Je nach Einstellung eine Zeile pro Person oder alle
+                // Beitraege untereinander. Die Personenliste wird HIER
+                // gerechnet statt in einer Funktion weiter oben: eine Bindung
+                // erneuert sich verlaesslich, wenn sie die Daten unmittelbar
+                // liest - beim Umweg ueber einen Funktionsaufruf blieb die
+                // Liste leer (rdomschk).
+                model: statusByPerson ? personModel : statuses
 
                 PullDownMenu {
                     MenuItem { text: loc.refresh; onClicked: loadStatuses() }
                     MenuItem {
                         text: loc.muteStatusPeople
                         onClicked: pageStack.push(statusMutePage)
+                    }
+                    MenuItem {
+                        // Notausgang: setzt die Liste zurueck, ohne von der
+                        // Seite abzuhaengen, die vier Anlaeufe lang leer blieb.
+                        // Ein Pulley-Eintrag ist das Einfachste, was diese
+                        // Oberflaeche hat, und funktioniert nachweislich.
+                        text: loc.unmuteAll
+                        visible: mutedStatus.length > 0
+                        onClicked: {
+                            mutedStatus = []
+                            setPref("status_muted", "")
+                            loadStatuses()
+                            globalNotice = loc.unmuteAllDone
+                        }
                     }
                     MenuItem {
                         text: loc.postImageVideo
@@ -5039,7 +5088,9 @@ Label {
                 id: personPosts
                 anchors.fill: parent
                 clip: true
-                model: statuses.filter(function(m) {
+                // Ueber den Spiegel: das Original liegt in der Statusseite
+                // und ist von hier aus unsichtbar
+                model: (app.statusMirror || []).filter(function(m) {
                     return m.sender === personJid && !m.fromMe
                 })
                 header: PageHeader {
@@ -5047,7 +5098,7 @@ Label {
                            ? getDisplayName(personJid, "") : ("+" + personJid)
                 }
                 delegate: Column {
-                    width: parent.width
+                    width: ListView.view.width
                     spacing: Theme.paddingSmall
                     Item { width: 1; height: Theme.paddingMedium }
                     Image {
@@ -5097,45 +5148,137 @@ Label {
     Component {
         id: statusMutePage
         Page {
+            // Das Modell wird ZUGEWIESEN, nicht gebunden. Als JS-Block in
+            // geschweiften Klammern blieb die Bindung leer - und weil das
+            // Modell damit undefiniert war, erschien auch der Platzhalter
+            // nicht: eine blanke Seite, obwohl die Einstellung gesetzt war.
+            property var peopleModel: []
+            property string rawMuted: ""
+
+            // Die Liste wird aus der GESPEICHERTEN Einstellung gebaut, direkt
+            // vom Dienst abgefragt. Zuvor hing sie an der Eigenschaft
+            // mutedStatus - die Beitraege werden damit nachweislich
+            // ausgeblendet, hier kam sie trotzdem leer an, und drei Versuche
+            // an der Anzeige haben daran nichts geaendert. Was gespeichert
+            // ist, laesst sich dagegen nicht wegdiskutieren.
+            function rebuildPeople() {
+                // Alles abfangen und den Grund ANZEIGEN: bisher blieb bei
+                // einem Fehler schlicht die Liste leer, und vier Versuche
+                // gingen an der falschen Stelle vorbei.
+                try {
+                    rebuildPeopleInner()
+                } catch (err) {
+                    rawMuted = "Fehler: " + err
+                    peopleModel = []
+                }
+            }
+            function rebuildPeopleInner() {
+                var x = new XMLHttpRequest()
+                x.open("GET", "http://127.0.0.1:" + backendPort + "/prefs")
+                x.onreadystatechange = function() {
+                    if (x.readyState !== 4) return
+                    var stored = []
+                    if (x.status === 200) {
+                        try {
+                            var p = JSON.parse(x.responseText)
+                            rawMuted = p.status_muted || ""
+                            stored = rawMuted.split(",").filter(function(v) {
+                                return v !== ""
+                            })
+                        } catch (e) { stored = []; rawMuted = "Antwort unlesbar: " + e }
+                    }
+                    // Der Speicher ist massgeblich; die Eigenschaft ergaenzt
+                    // nur, falls gerade erst umgeschaltet wurde
+                    for (var m = 0; m < mutedStatus.length; m++) {
+                        if (stored.indexOf(mutedStatus[m]) < 0 && mutedStatus[m]) {
+                            stored.push(mutedStatus[m])
+                        }
+                    }
+                    var seen = {}, out = []
+                    for (var k = 0; k < stored.length; k++) {
+                        if (!seen[stored[k]]) { seen[stored[k]] = true; out.push(stored[k]) }
+                    }
+                    var src = app.statusMirror || []
+                    for (var i = 0; i < src.length; i++) {
+                        var j = src[i].sender
+                        if (!j || src[i].fromMe || seen[j]) continue
+                        seen[j] = true
+                        out.push(j)
+                    }
+                    peopleModel = out
+                    if (out.length === 0) {
+                        rawMuted = "gespeichert=" + rawMuted
+                                   + " eigenschaft=" + mutedStatus.length
+                                   + " beitraege=" + (app.statusMirror || []).length
+                    }
+                }
+                x.onerror = function() { rawMuted = "Abfrage fehlgeschlagen" }
+                x.send()
+            }
+            Component.onCompleted: rebuildPeople()
+
             SilicaListView {
                 id: mutePeopleList
                 anchors.fill: parent
                 clip: true
-                header: PageHeader { title: loc.muteStatusPeople }
+                header: PageHeader {
+                    // Die Anzahl im Titel: bleibt die Seite je wieder leer,
+                    // sagt sie sofort, ob das Modell oder die Anzeige schuld ist
+                    title: loc.muteStatusPeople + " (" + mutePeopleList.count + ")"
+                }
                 // Stummgeschaltete ZUERST: sie sind der Grund, diese Seite
                 // zu oeffnen, und sie kommen in statuses gar nicht mehr vor -
                 // die Beitraege werden ja beim Laden herausgefiltert. Standen
                 // sie hinten, blieb die Liste leer, sobald jemand nichts
                 // Neues mehr postete (rdomschk).
-                model: {
-                    var seen = {}, out = []
-                    for (var k = 0; k < mutedStatus.length; k++) {
-                        if (mutedStatus[k] && !seen[mutedStatus[k]]) {
-                            seen[mutedStatus[k]] = true
-                            out.push(mutedStatus[k])
+                model: peopleModel
+                // ListItem statt TextSwitch: die Zeile war sichtbar, nahm
+                // aber keine Beruehrung an. ListItem ist in dieser App das
+                // Bauteil, das nachweislich traegt - Kanalverzeichnis,
+                // Chatliste und Statusbeitraege benutzen es alle.
+                delegate: ListItem {
+                    width: ListView.view.width
+                    contentHeight: Theme.itemSizeSmall
+                    onClicked: {
+                        toggleStatusMute(modelData)
+                        muteMark.hidden = !isStatusMuted(modelData)
+                    }
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x - Theme.itemSizeSmall
+                        anchors.verticalCenter: parent.verticalCenter
+                        truncationMode: TruncationMode.Fade
+                        text: getDisplayName(modelData, "") !== ""
+                              ? getDisplayName(modelData, "") : ("+" + modelData)
+                        color: Theme.primaryColor
+                    }
+                    Label {
+                        id: muteMark
+                        property bool hidden: !isStatusMuted(modelData)
+                        anchors {
+                            right: parent.right
+                            rightMargin: Theme.horizontalPageMargin
+                            verticalCenter: parent.verticalCenter
                         }
+                        text: hidden ? "\u2610" : "\u2611"
+                        color: Theme.highlightColor
+                        font.pixelSize: Theme.fontSizeLarge
                     }
-                    for (var i = 0; i < statuses.length; i++) {
-                        var j = statuses[i].sender
-                        if (!j || statuses[i].fromMe || seen[j]) continue
-                        seen[j] = true
-                        out.push(j)
-                    }
-                    return out
-                }
-                delegate: TextSwitch {
-                    width: parent.width
-                    text: getDisplayName(modelData, "") !== ""
-                          ? getDisplayName(modelData, "") : ("+" + modelData)
-                    description: isStatusMuted(modelData) ? loc.statusMutedDesc : ""
-                    checked: isStatusMuted(modelData)
-                    onClicked: toggleStatusMute(modelData)
                 }
                 ViewPlaceholder {
+                    // Hinter die Eintraege: ein Platzhalter fuellt die ganze
+                    // Liste, und selbst abgeschaltet stand der Verdacht im
+                    // Raum, dass er die Tipper schluckt
+                    z: -1
                     // parent ist bei einer ListView die Inhaltsflaeche, nicht
                     // die Liste - parent.model war schlicht undefiniert
-                    enabled: mutePeopleList.model.length === 0
+                    enabled: mutePeopleList.count === 0
                     text: loc.noStatusPeople
+                    // Sagt, WORAN es liegt: ohne Statusbeitraege gibt es auch
+                    // niemanden zum Ausblenden, und die haeufigste Ursache
+                    // dafuer ist die Einstellung zum Onlinestatus
+                    hintText: rawMuted !== "" ? rawMuted
+                              : (hideOnline ? loc.statusHiddenHint : "")
                 }
             }
         }
