@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.264
+Version:    0.9.272
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -22,6 +22,9 @@ Requires:   libkeepalive
 Requires:   nemo-qml-plugin-dbus-qt5
 Requires:   nemo-qml-plugin-notifications-qt5
 Requires:   sailfish-components-pickers-qt5
+# Stellt Sailfish.Share bereit - ohne das Modul laedt die QML-Datei gar nicht.
+# Paketname vom Geraet abgelesen, nicht geraten.
+Requires:   sailfishshare-components
 # Stellt /usr/bin/sailfish-qml bereit, also genau das Programm aus unserer
 # Exec-Zeile. Auf offiziell unterstuetzten Geraeten ist es immer vorhanden,
 # weil zahllose Apps es mitziehen - auf einem frisch geflashten
@@ -107,6 +110,27 @@ sed -i '/^X-Maemo-Service=/d' $D
 sed -i '/^ExecDBus=/d' $D
 printf 'ExecDBus=/usr/bin/sailfish-qml harbour-whatsapp\n' >> $D
 
+# Freigabe-Eintrag nachruesten. Die Datei ist %config(noreplace), also kam
+# die neue Fassung bei bestehenden Installationen gar nicht an - sie lag als
+# .rpmnew daneben, und der Eintrag fehlte im Teilen-Dialog. Idempotent: erst
+# wenn der Schluessel fehlt, wird angehaengt.
+if ! grep -q '^X-Share-Methods=' $D; then
+  # NICHT anhaengen: der Schluessel gehoert in den Abschnitt [Desktop Entry],
+  # und ans Ende geschrieben landet er in [X-Sailjail], wo er wirkungslos ist.
+  # Deshalb hinter X-Nemo-Application-Type einfuegen - die Zeile steht in
+  # jeder Fassung dieser Datei und liegt im richtigen Abschnitt.
+  sed -i '/^X-Nemo-Application-Type=/a X-Share-Methods=whatsapp_share;' $D
+fi
+if ! grep -q '^\[X-Share Method whatsapp_share\]' $D; then
+  {
+    printf '\n[X-Share Method whatsapp_share]\n'
+    printf 'Description=Send to WhatsApp...\n'
+    printf 'Description[de]=An WhatsApp senden...\n'
+    printf 'Capabilities=text/x-url;text/plain;text/*;image/*;video/*;audio/*;application/*\n'
+    printf 'SupportsMultipleFiles=yes\n'
+  } >> $D
+fi
+
 # Nutzer-Grants auf das Daemon-Profil spiegeln: das Haupt-Desktop-File ist
 # %config(noreplace) und traegt die per Einstellungs-Befehl erteilten Rechte,
 # das Daemon-File wird bei jedem Update ersetzt. Ohne Spiegelung darf die App
@@ -139,6 +163,102 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Mon Aug 17 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.272-1
+- Tapping a poll option does something now. Inside a Repeater, parent is the
+  surrounding Item rather than the message delegate, so parent.sendVote and
+  parent.myVotes did not exist: the call raised and nothing happened at all -
+  no vote, no counter, and not even the failure message added in 0.9.271,
+  since the code that would have shown it was never reached. The delegate is
+  addressed by name now. The sender fix from 0.9.271 was real too, but it
+  could never have been observed while the tap went nowhere
+
+* Mon Aug 17 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.271-1
+- Voting in polls works on your own polls. The sender field is empty for
+  one's own messages, and the code turned that into an invalid JID, so
+  whatsmeow could not find the poll's message secret and the vote was never
+  built - the counter stayed at zero and tapping appeared to do nothing,
+  which is what kempertom saw. Own messages now carry one's own identity.
+- A failed vote says so. It was writing into a variable nobody displays,
+  so the one case that genuinely cannot work - polls that arrived through
+  history sync, which carry no message secret and never will - was
+  indistinguishable from a broken button
+
+* Sun Aug 16 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.270-1
+- Sharing works. The dialog does not simply launch the app: it activates the
+  D-Bus service and then calls share() on an object at /share/<methodId>
+  with the interface org.sailfishos.share - and since the service itself
+  activated cleanly, the failure read as "could not share to WhatsApp" with
+  nothing about the missing object until the journal spelled it out.
+  RooTelegram's QML shows the shape exactly; this follows it, using Silica's
+  ShareAction to unpack the configuration. That needs Sailfish.Share, which
+  is now declared as a dependency - without the module the QML file does not
+  load at all
+
+* Sun Aug 16 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.269-1
+- The share entry now actually reaches installed devices. The desktop file
+  is config(noreplace), so the new version was never applied on update - it
+  was placed alongside as .rpmnew and the entry simply was not there. The
+  post-install script already retrofits keys that noreplace swallows, for
+  exactly this reason, and adding one more was the obvious step I missed.
+  Idempotent: it appends only when the key is absent, so a hand-edited file
+  keeps its permissions and its name
+
+* Sun Aug 16 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.268-1
+- Corrects the indentation of the share-argument call, which had landed at
+  the wrong nesting level in 0.9.267 - harmless to the engine, misleading to
+  read. The declared permissions are deliberately unchanged at
+  Internet;Secrets: the share entry needs none of its own, and reading files
+  from elsewhere on the device uses the storage permission that More
+  settings already offers a command for. Anyone who has granted it can send
+  shared pictures; anyone who has not sees the entry and a failure when the
+  file is read, which is the honest outcome of an optional permission
+
+* Sun Aug 16 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.267-1
+- The app appears in the share dialog, and no compiled plugin is needed
+  after all. RooTelegram declares it in its desktop file with X-Share-Methods
+  and a matching section - visible on the device in the list of X- keys,
+  which is what settled it. Yottagram and Whisperfish both ship a library
+  for this, so I had concluded one was required and written the C++ for it;
+  it was not required. Content arriving either over D-Bus or as command-line
+  arguments is accepted, since which of the two the system uses is not
+  something to guess at, and an uncovered path would fail silently.
+- Shared files are held until a chat is opened, then sent through the usual
+  queue with the usual spacing. Reading anything outside the app's own
+  directory needs the storage permission, which More settings already offers
+  a command for
+
+* Sun Aug 16 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.266-1
+- The app can receive content from the Sailfish share dialog. Reading how
+  Yottagram and Whisperfish do it settled the shape: a small QML page in
+  /usr/share/nemo-transferengine/plugins/sharing hands the shared content to
+  the running app over D-Bus, and choosing the recipient happens in the app,
+  where the contacts and the send guards already are. Files go out through
+  the same queue as everything else, so several arrive spaced apart rather
+  than in a burst.
+- The app side is in this package; the plugin itself is a separate one,
+  since its files live outside /usr/share/harbour-whatsapp - which is how
+  both of those apps ship theirs too. It needs the Sailfish SDK to build:
+  the entry in the dialog is announced by a compiled plugin, not by the QML,
+  and every QML file in that directory on the device has a matching library
+  beside it
+
+* Sun Aug 16 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.265-1
+- whatsmeow updated to 2026-08-16 (fb386f15), carrying proto v1045305987.
+  This one came with a dependency bump as well, so go.mau.fi/util, x/crypto,
+  x/net, x/text, x/exp and protobuf all moved with it - the recurring
+  stumbling block on these updates, since a mismatched util version fails to
+  build in a way that says nothing about the real cause. No API breakage
+  this time; go vet and the race-detector tests are clean
+
+* Sun Aug 16 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.265-1
+- whatsmeow updated to 2026-08-16 (fb386f15) with proto v1045305987. This
+  one came with a dependency bump alongside it - go.mau.fi/util to 0.10.0,
+  x/crypto to 0.55.0, x/net to 0.58.0, x/text to 0.41.0, x/exp and protobuf
+  to 1.36.12 - and those have to move together or the build fails on a
+  missing symbol, which is the usual stumbling block with this library. All
+  pulled along; no API breakage this time, and the tests pass under the race
+  detector
+
 * Fri Aug 14 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.264-1
 - In line mode, incoming messages in a one-to-one chat said "unknown sender"
   instead of naming the person. Nothing to do with the length of the name,

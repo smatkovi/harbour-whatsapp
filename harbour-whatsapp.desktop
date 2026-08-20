@@ -4,6 +4,17 @@ Name=WhatsApp
 Icon=harbour-whatsapp
 Exec=sailfish-qml harbour-whatsapp
 X-Nemo-Application-Type=silica-qt5
+# Eintrag im Freigabe-Dialog. Ganz ohne kompiliertes Plugin: das System
+# liest die Faehigkeit aus dieser Datei, so wie RooTelegram es macht.
+# Yottagram und Whisperfish liefern zwar eine eigene Bibliothek aus, aber
+# noetig ist sie dafuer nicht.
+X-Share-Methods=whatsapp_share;
+
+[X-Share Method whatsapp_share]
+Description=Send to WhatsApp...
+Description[de]=An WhatsApp senden...
+Capabilities=text/x-url;text/plain;text/*;image/*;video/*;audio/*;application/*
+SupportsMultipleFiles=yes
 
 [X-Sailjail]
 Permissions=Internet;Secrets;

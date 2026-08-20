@@ -341,7 +341,10 @@ var en = {
     "presenceOnline": "online",
     "presenceLastSeen": "last seen %1",
     "unmuteAll": "Show all hidden people again",
-    "unmuteAllDone": "All hidden people are shown again"
+    "unmuteAllDone": "All hidden people are shown again",
+    "shareChoose": "%1 file(s) received - open a chat to send",
+    "shareChooseText": "Text received - open a chat to send",
+    "voteFailed": "Could not vote - polls from before pairing cannot be voted on"
 }
 
 var catalogs = {
@@ -678,7 +681,10 @@ var catalogs = {
         "presenceOnline": "online",
         "presenceLastSeen": "zuletzt online %1",
         "unmuteAll": "Alle ausgeblendeten wieder anzeigen",
-        "unmuteAllDone": "Alle ausgeblendeten werden wieder angezeigt"
+        "unmuteAllDone": "Alle ausgeblendeten werden wieder angezeigt",
+        "shareChoose": "%1 Datei(en) erhalten - Chat öffnen zum Senden",
+        "shareChooseText": "Text erhalten - Chat öffnen zum Senden",
+        "voteFailed": "Abstimmen nicht möglich - bei Umfragen von vor der Kopplung geht es nicht"
     },
     "fi": {
         "language": "Kieli",
@@ -1013,7 +1019,10 @@ var catalogs = {
         "presenceOnline": "paikalla",
         "presenceLastSeen": "viimeksi paikalla %1",
         "unmuteAll": "Näytä kaikki piilotetut taas",
-        "unmuteAllDone": "Kaikki piilotetut näkyvät taas"
+        "unmuteAllDone": "Kaikki piilotetut näkyvät taas",
+        "shareChoose": "%1 tiedosto(a) vastaanotettu - avaa keskustelu",
+        "shareChooseText": "Teksti vastaanotettu - avaa keskustelu",
+        "voteFailed": "Äänestys ei onnistunut - ennen laiteparia luotuihin kyselyihin ei voi äänestää"
     },
     "sv": {
         "language": "Språk",
@@ -1348,7 +1357,10 @@ var catalogs = {
         "presenceOnline": "online",
         "presenceLastSeen": "senast online %1",
         "unmuteAll": "Visa alla dolda igen",
-        "unmuteAllDone": "Alla dolda visas igen"
+        "unmuteAllDone": "Alla dolda visas igen",
+        "shareChoose": "%1 fil(er) mottagna - öppna en chatt",
+        "shareChooseText": "Text mottagen - öppna en chatt",
+        "voteFailed": "Kunde inte rösta - omröstningar från före parkopplingen går inte"
     },
     "hu": {
         "language": "Nyelv",
@@ -1683,7 +1695,10 @@ var catalogs = {
         "presenceOnline": "online",
         "presenceLastSeen": "utoljára online %1",
         "unmuteAll": "Minden elrejtett újra megjelenítése",
-        "unmuteAllDone": "Minden elrejtett újra látszik"
+        "unmuteAllDone": "Minden elrejtett újra látszik",
+        "shareChoose": "%1 fájl érkezett - nyiss meg egy beszélgetést",
+        "shareChooseText": "Szöveg érkezett - nyiss meg egy beszélgetést",
+        "voteFailed": "Nem sikerült szavazni - a párosítás előtti szavazásoknál nem megy"
     },
     "ru": {
         "language": "Язык",
@@ -2018,7 +2033,10 @@ var catalogs = {
         "presenceOnline": "в сети",
         "presenceLastSeen": "был(а) в сети %1",
         "unmuteAll": "Снова показать всех скрытых",
-        "unmuteAllDone": "Все скрытые снова показываются"
+        "unmuteAllDone": "Все скрытые снова показываются",
+        "shareChoose": "Получено файлов: %1 - откройте чат",
+        "shareChooseText": "Текст получен - откройте чат",
+        "voteFailed": "Не удалось проголосовать - в опросах до сопряжения это невозможно"
     },
     "fr": {
         "language": "Langue",
@@ -2353,7 +2371,10 @@ var catalogs = {
         "presenceOnline": "en ligne",
         "presenceLastSeen": "vu pour la dernière fois %1",
         "unmuteAll": "Réafficher toutes les personnes masquées",
-        "unmuteAllDone": "Toutes les personnes masquées sont réaffichées"
+        "unmuteAllDone": "Toutes les personnes masquées sont réaffichées",
+        "shareChoose": "%1 fichier(s) reçu(s) - ouvrez une conversation",
+        "shareChooseText": "Texte reçu - ouvrez une conversation",
+        "voteFailed": "Vote impossible - les sondages antérieurs à l'appairage ne le permettent pas"
     },
     "la": {
         "language": "Lingua",
@@ -2688,7 +2709,10 @@ var catalogs = {
         "presenceOnline": "praesens",
         "presenceLastSeen": "ultimo visus %1",
         "unmuteAll": "Omnes celatos rursus ostendere",
-        "unmuteAllDone": "Omnes celati rursus ostenduntur"
+        "unmuteAllDone": "Omnes celati rursus ostenduntur",
+        "shareChoose": "%1 lima(e) acceptae - colloquium aperi",
+        "shareChooseText": "Textus acceptus - colloquium aperi",
+        "voteFailed": "Suffragium non licet - in rogationibus ante coniunctionem factis fieri non potest"
     },
     "es": {
         "language": "Idioma",
@@ -3011,7 +3035,10 @@ var catalogs = {
         "presenceOnline": "en línea",
         "presenceLastSeen": "últ. vez %1",
         "unmuteAll": "Volver a mostrar a todos los ocultos",
-        "unmuteAllDone": "Se muestran de nuevo todos los ocultos"
+        "unmuteAllDone": "Se muestran de nuevo todos los ocultos",
+        "shareChoose": "%1 archivo(s) recibidos: abre un chat",
+        "shareChooseText": "Texto recibido: abre un chat",
+        "voteFailed": "No se pudo votar: en encuestas anteriores al emparejamiento no es posible"
     },
     "it": {
         "language": "Lingua",
@@ -3334,7 +3361,10 @@ var catalogs = {
         "presenceOnline": "online",
         "presenceLastSeen": "ultimo accesso %1",
         "unmuteAll": "Mostra di nuovo tutti i nascosti",
-        "unmuteAllDone": "Tutti i nascosti sono di nuovo visibili"
+        "unmuteAllDone": "Tutti i nascosti sono di nuovo visibili",
+        "shareChoose": "%1 file ricevuti - apri una chat",
+        "shareChooseText": "Testo ricevuto - apri una chat",
+        "voteFailed": "Voto non riuscito - nei sondaggi precedenti all'associazione non è possibile"
     },
     "pt": {
         "language": "Idioma",
@@ -3657,7 +3687,10 @@ var catalogs = {
         "presenceOnline": "online",
         "presenceLastSeen": "visto pela última vez %1",
         "unmuteAll": "Voltar a mostrar todos os ocultos",
-        "unmuteAllDone": "Todos os ocultos são mostrados novamente"
+        "unmuteAllDone": "Todos os ocultos são mostrados novamente",
+        "shareChoose": "%1 ficheiro(s) recebidos - abra uma conversa",
+        "shareChooseText": "Texto recebido - abra uma conversa",
+        "voteFailed": "Não foi possível votar - em sondagens anteriores ao emparelhamento não dá"
     },
     "nl": {
         "language": "Taal",
@@ -3980,7 +4013,10 @@ var catalogs = {
         "presenceOnline": "online",
         "presenceLastSeen": "laatst gezien %1",
         "unmuteAll": "Alle verborgen personen weer tonen",
-        "unmuteAllDone": "Alle verborgen personen worden weer getoond"
+        "unmuteAllDone": "Alle verborgen personen worden weer getoond",
+        "shareChoose": "%1 bestand(en) ontvangen - open een chat",
+        "shareChooseText": "Tekst ontvangen - open een chat",
+        "voteFailed": "Stemmen mislukt - bij peilingen van voor het koppelen kan het niet"
     },
     "pl": {
         "language": "Język",
@@ -4303,7 +4339,10 @@ var catalogs = {
         "presenceOnline": "online",
         "presenceLastSeen": "ostatnio online %1",
         "unmuteAll": "Pokaż znowu wszystkich ukrytych",
-        "unmuteAllDone": "Wszyscy ukryci są znowu widoczni"
+        "unmuteAllDone": "Wszyscy ukryci są znowu widoczni",
+        "shareChoose": "Odebrano plików: %1 - otwórz czat",
+        "shareChooseText": "Odebrano tekst - otwórz czat",
+        "voteFailed": "Nie udało się zagłosować - w ankietach sprzed parowania to niemożliwe"
     },
     "tr": {
         "language": "Dil",
@@ -4626,7 +4665,10 @@ var catalogs = {
         "presenceOnline": "çevrimiçi",
         "presenceLastSeen": "son görülme %1",
         "unmuteAll": "Gizlenen herkesi yeniden göster",
-        "unmuteAllDone": "Gizlenen herkes yeniden görünüyor"
+        "unmuteAllDone": "Gizlenen herkes yeniden görünüyor",
+        "shareChoose": "%1 dosya alındı - bir sohbet açın",
+        "shareChooseText": "Metin alındı - bir sohbet açın",
+        "voteFailed": "Oy verilemedi - eşleştirmeden önceki anketlerde mümkün değil"
     },
     "da": {
         "language": "Sprog",
@@ -4949,7 +4991,10 @@ var catalogs = {
         "presenceOnline": "online",
         "presenceLastSeen": "sidst set %1",
         "unmuteAll": "Vis alle skjulte igen",
-        "unmuteAllDone": "Alle skjulte vises igen"
+        "unmuteAllDone": "Alle skjulte vises igen",
+        "shareChoose": "%1 fil(er) modtaget - åbn en chat",
+        "shareChooseText": "Tekst modtaget - åbn en chat",
+        "voteFailed": "Kunne ikke stemme - afstemninger fra før parringen kan ikke besvares"
     },
     "nb": {
         "language": "Språk",
@@ -5272,7 +5317,10 @@ var catalogs = {
         "presenceOnline": "pålogget",
         "presenceLastSeen": "sist sett %1",
         "unmuteAll": "Vis alle skjulte igjen",
-        "unmuteAllDone": "Alle skjulte vises igjen"
+        "unmuteAllDone": "Alle skjulte vises igjen",
+        "shareChoose": "%1 fil(er) mottatt - åpne en samtale",
+        "shareChooseText": "Tekst mottatt - åpne en samtale",
+        "voteFailed": "Kunne ikke stemme - avstemninger fra før paringen går ikke"
     },
     "cs": {
         "language": "Jazyk",
@@ -5595,7 +5643,10 @@ var catalogs = {
         "presenceOnline": "online",
         "presenceLastSeen": "naposledy online %1",
         "unmuteAll": "Znovu zobrazit všechny skryté",
-        "unmuteAllDone": "Všichni skrytí jsou znovu vidět"
+        "unmuteAllDone": "Všichni skrytí jsou znovu vidět",
+        "shareChoose": "Přijato souborů: %1 - otevřete chat",
+        "shareChooseText": "Text přijat - otevřete chat",
+        "voteFailed": "Nepodařilo se hlasovat - u anket z doby před spárováním to nejde"
     },
     "el": {
         "language": "Γλώσσα",
@@ -5918,7 +5969,10 @@ var catalogs = {
         "presenceOnline": "συνδεδεμένος",
         "presenceLastSeen": "τελευταία εμφάνιση %1",
         "unmuteAll": "Εμφάνιση ξανά όλων των κρυμμένων",
-        "unmuteAllDone": "Όλοι οι κρυμμένοι εμφανίζονται ξανά"
+        "unmuteAllDone": "Όλοι οι κρυμμένοι εμφανίζονται ξανά",
+        "shareChoose": "Ελήφθησαν %1 αρχεία - ανοίξτε μια συνομιλία",
+        "shareChooseText": "Ελήφθη κείμενο - ανοίξτε μια συνομιλία",
+        "voteFailed": "Δεν ήταν δυνατή η ψήφος - σε δημοσκοπήσεις πριν τη σύζευξη δεν γίνεται"
     },
     "et": {
         "language": "Keel",
@@ -6241,7 +6295,10 @@ var catalogs = {
         "presenceOnline": "võrgus",
         "presenceLastSeen": "viimati võrgus %1",
         "unmuteAll": "Näita kõiki peidetuid taas",
-        "unmuteAllDone": "Kõik peidetud on taas nähtaval"
+        "unmuteAllDone": "Kõik peidetud on taas nähtaval",
+        "shareChoose": "Vastu võetud %1 faili - ava vestlus",
+        "shareChooseText": "Tekst vastu võetud - ava vestlus",
+        "voteFailed": "Hääletamine ebaõnnestus - enne sidumist loodud küsitlustes pole see võimalik"
     },
     "lv": {
         "language": "Valoda",
@@ -6564,7 +6621,10 @@ var catalogs = {
         "presenceOnline": "tiešsaistē",
         "presenceLastSeen": "pēdējoreiz tiešsaistē %1",
         "unmuteAll": "Atkal rādīt visus slēptos",
-        "unmuteAllDone": "Visi slēptie atkal redzami"
+        "unmuteAllDone": "Visi slēptie atkal redzami",
+        "shareChoose": "Saņemti %1 faili - atver sarakstu",
+        "shareChooseText": "Teksts saņemts - atver sarakstu",
+        "voteFailed": "Neizdevās nobalsot - aptaujās pirms savienošanas tas nav iespējams"
     },
     "lt": {
         "language": "Kalba",
@@ -6887,7 +6947,10 @@ var catalogs = {
         "presenceOnline": "prisijungęs",
         "presenceLastSeen": "paskutinį kartą prisijungęs %1",
         "unmuteAll": "Vėl rodyti visus paslėptus",
-        "unmuteAllDone": "Visi paslėpti vėl rodomi"
+        "unmuteAllDone": "Visi paslėpti vėl rodomi",
+        "shareChoose": "Gauta failų: %1 - atverk pokalbį",
+        "shareChooseText": "Tekstas gautas - atverk pokalbį",
+        "voteFailed": "Nepavyko balsuoti - apklausose iš laikotarpio prieš susiejimą tai neįmanoma"
     },
     "sl": {
         "language": "Jezik",
@@ -7210,7 +7273,10 @@ var catalogs = {
         "presenceOnline": "na spletu",
         "presenceLastSeen": "nazadnje na spletu %1",
         "unmuteAll": "Znova prikaži vse skrite",
-        "unmuteAllDone": "Vsi skriti so spet vidni"
+        "unmuteAllDone": "Vsi skriti so spet vidni",
+        "shareChoose": "Prejetih datotek: %1 - odpri klepet",
+        "shareChooseText": "Besedilo prejeto - odpri klepet",
+        "voteFailed": "Glasovanje ni uspelo - pri anketah pred seznanitvijo to ni mogoče"
     },
     "zh": {
         "language": "语言",
@@ -7533,7 +7599,10 @@ var catalogs = {
         "presenceOnline": "在线",
         "presenceLastSeen": "最后在线 %1",
         "unmuteAll": "重新显示所有已隐藏的人",
-        "unmuteAllDone": "所有隐藏的人已重新显示"
+        "unmuteAllDone": "所有隐藏的人已重新显示",
+        "shareChoose": "已接收 %1 个文件——打开聊天以发送",
+        "shareChooseText": "已接收文本——打开聊天以发送",
+        "voteFailed": "无法投票——配对之前的投票无法参与"
     }
 }
 

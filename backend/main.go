@@ -5243,11 +5243,21 @@ func main() {
         if optsParam != "" {
             selected = strings.Split(optsParam, "||")
         }
+        // Bei EIGENEN Umfragen ist Sender leer - daraus wird eine ungueltige
+        // Kennung, und whatsmeow findet das Geheimnis der Umfrage nicht:
+        // abstimmen scheitert lautlos, der Zaehler bleibt auf null
+        // (kempertom). Fuer eigene Nachrichten die eigene Kennung einsetzen.
+        sender := types.NewJID(target.Sender, types.DefaultUserServer)
+        if target.FromMe || target.Sender == "" {
+            if client.Store.ID != nil {
+                sender = client.Store.ID.ToNonAD()
+            }
+        }
         pollInfo := &types.MessageInfo{
             ID: types.MessageID(msgID),
             MessageSource: types.MessageSource{
                 Chat:     toChatJID(chat),
-                Sender:   types.NewJID(target.Sender, types.DefaultUserServer),
+                Sender:   sender,
                 IsFromMe: target.FromMe,
             },
         }

@@ -6,6 +6,8 @@ import Nemo.DBus 2.0
 import Nemo.KeepAlive 1.2
 import Nemo.Notifications 1.0
 import Sailfish.Silica 1.0
+// ShareAction zerlegt die Konfiguration, die der Freigabe-Dialog schickt
+import Sailfish.Share 1.0
 import QtPositioning 5.2
 import Sailfish.Pickers 1.0
 import "js/twemoji.js" as Twemoji
@@ -158,6 +160,9 @@ ApplicationWindow {
                     backendFailed = false
                     console.log("Backend ready on port " + backendPort)
                     checkStatus()
+                    // Vom Freigabe-Dialog uebergebene Dateien mitnehmen,
+                    // falls die App damit gestartet wurde
+                    collectShareArguments()
                     loadPrefs()
                 } else {
                     console.log("Backend failed to start")
@@ -680,12 +685,75 @@ ApplicationWindow {
     // kanonischen Busnamen (harbour.harbour-whatsapp) - laeuft die App
     // nicht, startet sailjaild sie via ExecDBus und der Aufruf kommt
     // nach dem Start hier an
+    // Der Freigabe-Dialog ruft ein EIGENES Objekt: Pfad /share/<methodId>,
+    // Schnittstelle org.sailfishos.share, Methode share(config). Ohne dieses
+    // Objekt meldet er "No such object path" und bricht mit "could not share"
+    // ab - der Dienst selbst wird davor sauber aktiviert, was den Fehler
+    // erst irrefuehrend macht. Aufbau von RooTelegram uebernommen.
+    ShareAction { id: shareParser }
+
+    DBusAdaptor {
+        service: "harbour.harbour-whatsapp"
+        path: "/share/whatsapp_share"
+        iface: "org.sailfishos.share"
+
+        function share(shareConfiguration) {
+            shareParser.loadConfiguration(shareConfiguration)
+            var files = []
+            var r = shareParser.resources
+            if (r && r.length > 0) {
+                for (var i = 0; i < r.length; i++) {
+                    // Manche Eintraege sind Zeichenketten, andere Objekte mit
+                    // url - beides annehmen statt auf eine Form zu wetten
+                    var it = r[i]
+                    var u = (typeof it === "string") ? it : (it.url || it.filePath)
+                    if (u) files.push(String(u).replace(/^file:\/\//, ""))
+                }
+            }
+            pendingShareFiles = files
+            pendingShareText = shareParser.text || ""
+            activate()
+            pageStack.pop(mainPage, PageStackAction.Immediate)
+            globalNotice = files.length > 0
+                ? loc.shareChoose.replace("%1", files.length)
+                : loc.shareChooseText
+        }
+    }
+
     DBusAdaptor {
         service: "harbour.harbour-whatsapp"
         path: "/"
         iface: "harbour.whatsapp.Gui"
         function openChat(jid) {
             openChatExternal(jid)
+        }
+        // Gegenstelle des Freigabe-Dialogs. Die Konfiguration kommt als
+        // Objekt vom Uebergabe-QML des Plugins; interessant sind resources
+        // (Dateien oder eine Adresse) und optional ein Text.
+        function shareContent(config) {
+            if (!config) return
+            var items = config.resources || config.selectedTransferMethodInfo
+            var files = []
+            if (items) {
+                if (typeof items === "string") files = [items]
+                else if (items.length !== undefined) {
+                    for (var i = 0; i < items.length; i++) {
+                        var it = items[i]
+                        // Manche Absender liefern Objekte mit url, andere den
+                        // Pfad unmittelbar - beides annehmen statt zu raten
+                        var u = (typeof it === "string") ? it : (it.url || it.filePath)
+                        if (u) files.push(String(u).replace(/^file:\/\//, ""))
+                    }
+                }
+            }
+            pendingShareFiles = files
+            pendingShareText = config.text || config.linkTitle || ""
+            activate()
+            // Auf die Chatliste zurueck: von dort waehlt man den Empfaenger
+            pageStack.pop(mainPage, PageStackAction.Immediate)
+            globalNotice = files.length > 0
+                ? loc.shareChoose.replace("%1", files.length)
+                : loc.shareChooseText
         }
         function replyFromNotification(jid, text) {
             // lipstick haengt den getippten Text als zweites Argument an;
@@ -1555,6 +1623,32 @@ ApplicationWindow {
     // und ist von aussen unsichtbar - Komponenten auf Wurzelebene bekamen
     // beim Zugriff eine Ausnahme, und genau daran sind die Seite zum
     // Ausblenden und ihr Antippen sechs Versuche lang gescheitert.
+    // Vom Freigabe-Dialog uebergebene Inhalte, bis ein Empfaenger gewaehlt ist
+    property var pendingShareFiles: []
+    property string pendingShareText: ""
+    // Der Freigabe-Dialog kann die App auch mit den Dateien als Argumenten
+    // starten, statt ueber D-Bus zu rufen. Beide Wege annehmen: welcher es
+    // wird, haengt am System, und ein nicht abgedeckter Weg faellt lautlos
+    // aus - genau die Sorte Fehler, die man nur durch Ausprobieren findet.
+    function collectShareArguments() {
+        var a = Qt.application.arguments
+        if (!a) return
+        var files = []
+        for (var i = 1; i < a.length; i++) {
+            var v = String(a[i])
+            if (v.indexOf("-") === 0) continue
+            if (v === "harbour-whatsapp") continue
+            if (v.indexOf("file://") === 0) { files.push(v.substring(7)); continue }
+            if (v.indexOf("/") === 0) files.push(v)
+        }
+        if (files.length > 0) pendingShareFiles = files
+    }
+
+    function clearPendingShare() {
+        pendingShareFiles = []
+        pendingShareText = ""
+    }
+
     property var statusMirror: []
     // Wird von der Statusseite gesetzt, wenn sie neu geladen hat
     signal statusesReloaded()
@@ -6695,6 +6789,20 @@ Label {
                     replyToText = pendingQuoteText
                     replyToSender = pendingQuoteSender
                 }
+                // Aus dem Freigabe-Dialog Wartendes senden. Ueber
+                // sendFileQueue, damit derselbe Abstand zwischen mehreren
+                // Dateien gilt wie sonst - ein Schwall gleichzeitiger
+                // Uploads ist das Muster, das Sperren ausloest. HIER
+                // eingehaengt statt in einem zweiten Handler: zwei
+                // Component.onCompleted im selben Objekt und die Datei
+                // laedt gar nicht mehr.
+                if (app.pendingShareFiles.length > 0) {
+                    sendFileQueue(app.pendingShareFiles.slice())
+                    app.clearPendingShare()
+                } else if (app.pendingShareText !== "") {
+                    input.text = app.pendingShareText
+                    app.clearPendingShare()
+                }
             }
             // Beim Verlassen (Medium oeffnen) merken, ob die Liste am Ende
             // stand; beim Zurueckkommen genau dorthin. Ohne das landet man
@@ -7192,6 +7300,7 @@ Label {
 
 
                 delegate: ListItem {
+                    id: msgItem
                     width: parent.width
                     contentHeight: msgContent.height + Theme.paddingSmall
                     highlighted: down || menuOpen || modelData.id === highlightMsgId
@@ -7246,6 +7355,11 @@ Label {
                                 if (xhr.status !== 200) {
                                     downloadError = xhr.responseText
                                     lastDownloadFailId = modelData.id
+                                    // Sichtbar melden: bisher blieb der
+                                    // Zaehler einfach auf null stehen und es
+                                    // sah aus, als taete das Antippen nichts
+                                    globalNotice = loc.voteFailed
+                                    noticeIsError = true
                                 }
                                 load()
                             }
@@ -7408,10 +7522,14 @@ Label {
                                 BackgroundItem {
                                     width: parent.width
                                     height: Theme.itemSizeExtraSmall
-                                    onClicked: parent.sendVote(modelData)
+                                    // msgItem ausdruecklich: innerhalb eines
+                                    // Repeaters ist parent das umgebende Item,
+                                    // nicht der Nachrichten-Delegate - der
+                                    // Aufruf warf, und das Antippen tat nichts
+                                    onClicked: msgItem.sendVote(modelData)
 
-                                    property bool mine: parent.myVotes.indexOf(modelData) >= 0
-                                    property int votes: parent.voteCount(modelData)
+                                    property bool mine: msgItem.myVotes.indexOf(modelData) >= 0
+                                    property int votes: msgItem.voteCount(modelData)
 
                                     Rectangle {
                                         anchors.fill: parent
