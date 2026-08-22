@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/godbus/dbus/v5 v5.2.0
 	github.com/mutecomm/go-sqlcipher/v4 v4.4.2
-	go.mau.fi/whatsmeow v0.0.0-20260816113502-fb386f152837
+	go.mau.fi/whatsmeow v0.0.0-20260820172920-6eefbff47a8f
 	golang.org/x/sys v0.47.0
 	google.golang.org/protobuf v1.36.12
 )

@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.272
+Version:    0.9.279
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -68,6 +68,10 @@ mkdir -p %{buildroot}/usr/share/applications
 install -m 644 %{_sourcedir}/harbour-whatsapp.desktop %{buildroot}/usr/share/applications/
 echo %{version} > %{buildroot}/usr/share/harbour-whatsapp/VERSION
 install -m 644 %{_sourcedir}/harbour-whatsapp-daemon.desktop %{buildroot}/usr/share/applications/
+# Eigene Datei fuer den Freigabe-Eintrag: die Hauptdatei ist
+# config(noreplace) und wird bei Updates NICHT ersetzt - alles Neue muesste
+# ein Skript nachtragen, und daran ist der Eintrag zweimal gescheitert.
+install -m 644 %{_sourcedir}/harbour-whatsapp-share.desktop %{buildroot}/usr/share/applications/
 # Versionsstempel fuer den Daemon-Selbst-Update-Poller: /usr/share/
 # harbour-whatsapp ist im Daemon-Jail UNSICHTBAR (sailjail leitet die
 # Whitelist vom Desktop-DATEINAMEN ab -> nur *-daemon-Pfade), aber das
@@ -89,6 +93,7 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 /usr/share/icons/hicolor/*/apps/harbour-whatsapp.png
 /usr/lib/systemd/user/harbour-whatsapp-daemon.service
 /usr/share/applications/harbour-whatsapp-daemon.desktop
+/usr/share/applications/harbour-whatsapp-share.desktop
 /usr/share/harbour-whatsapp/VERSION
 /usr/bin/harbour-whatsapp-daemon
 
@@ -98,6 +103,33 @@ cp -r %{_sourcedir}/icons/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 # Schluessel muessen daher idempotent nachgeruestet werden, sonst fehlt
 # dem Jail die dbus-Erlaubnis (Reply) bzw. die Aktivierung (Tap-Kaltstart)
 D=/usr/share/applications/harbour-whatsapp.desktop
+
+# Selbstheilung: fehlt die Datei oder hat sie keinen [Desktop Entry]-Kopf,
+# wird sie vollstaendig neu geschrieben. Die Ergaenzungen weiter unten
+# arbeiten mit sed und printf; auf eine fehlende Datei angewandt entsteht
+# daraus eine Ruine aus lauter Anhaengseln - genau das ist passiert, das
+# Startsymbol verschwand, weil eine Desktop-Datei ohne Kopf nicht angezeigt
+# wird. Nachgewiesen: das Ergebnis stimmte Byte fuer Byte mit dem ueberein,
+# was die Ergaenzungen ohne Ausgangsdatei erzeugen.
+if [ ! -s $D ] || ! grep -q '^\[Desktop Entry\]' $D; then
+  # Erteilte Rechte retten, falls noch etwas lesbar ist
+  PSAVE=$(sed -n 's/^Permissions=//p' $D 2>/dev/null | head -1)
+  [ -z "$PSAVE" ] && PSAVE="Internet;Secrets;"
+  cat > $D <<DESKTOPEOF
+[Desktop Entry]
+Type=Application
+Name=WhatsApp
+Icon=harbour-whatsapp
+Exec=sailfish-qml harbour-whatsapp
+X-Nemo-Application-Type=silica-qt5
+
+[X-Sailjail]
+Permissions=$PSAVE
+OrganizationName=harbour
+ApplicationName=harbour-whatsapp
+ExecDBus=/usr/bin/sailfish-qml harbour-whatsapp
+DESKTOPEOF
+fi
 # X-Maemo-Service im HAUPT-Desktop lenkt den Icon-Start auf einen
 # D-Bus-Ruf um und macht die App vom Launcher aus unstartbar (0.9.90-
 # Lehrstueck) - die Zeile gehoert nur ins Daemon-Desktop-File
@@ -108,28 +140,29 @@ sed -i '/^X-Maemo-Service=/d' $D
 # der Grund, warum der Kaltstart-Tap nie funktionierte). Sandboxing
 # kommt ueber die Launcher-Integration, wie beim Icon-Start
 sed -i '/^ExecDBus=/d' $D
-printf 'ExecDBus=/usr/bin/sailfish-qml harbour-whatsapp\n' >> $D
+# ANHAENGEN geht seit dem Freigabe-Abschnitt nicht mehr: die Zeile landete
+# dann in [X-Share Method ...] statt in [X-Sailjail] - dort fehlte sie, und
+# der Freigabe-Eintrag verschwand aus dem Dialog. Desktop-Dateien sind
+# abschnittsweise gegliedert; ein Schluessel gehoert unter SEINE Ueberschrift.
+if grep -q '^ApplicationName=' $D; then
+  sed -i '/^ApplicationName=/a ExecDBus=/usr/bin/sailfish-qml harbour-whatsapp' $D
+else
+  # Kein [X-Sailjail]-Abschnitt vorhanden: dann ist Anhaengen richtig
+  printf 'ExecDBus=/usr/bin/sailfish-qml harbour-whatsapp\n' >> $D
+fi
 
-# Freigabe-Eintrag nachruesten. Die Datei ist %config(noreplace), also kam
-# die neue Fassung bei bestehenden Installationen gar nicht an - sie lag als
-# .rpmnew daneben, und der Eintrag fehlte im Teilen-Dialog. Idempotent: erst
-# wenn der Schluessel fehlt, wird angehaengt.
-if ! grep -q '^X-Share-Methods=' $D; then
-  # NICHT anhaengen: der Schluessel gehoert in den Abschnitt [Desktop Entry],
-  # und ans Ende geschrieben landet er in [X-Sailjail], wo er wirkungslos ist.
-  # Deshalb hinter X-Nemo-Application-Type einfuegen - die Zeile steht in
-  # jeder Fassung dieser Datei und liegt im richtigen Abschnitt.
-  sed -i '/^X-Nemo-Application-Type=/a X-Share-Methods=whatsapp_share;' $D
-fi
-if ! grep -q '^\[X-Share Method whatsapp_share\]' $D; then
-  {
-    printf '\n[X-Share Method whatsapp_share]\n'
-    printf 'Description=Send to WhatsApp...\n'
-    printf 'Description[de]=An WhatsApp senden...\n'
-    printf 'Capabilities=text/x-url;text/plain;text/*;image/*;video/*;audio/*;application/*\n'
-    printf 'SupportsMultipleFiles=yes\n'
-  } >> $D
-fi
+# D-Bus-Dienstdatei: ohne sie meldet der Freigabe-Dialog bei GESCHLOSSENER
+# App "The name harbour.harbour-whatsapp was not provided by any .service
+# files" - laeuft die App, ist der Name belegt und alles geht, deshalb fiel
+# es lange nicht auf. Aufbau von jolla-calendar uebernommen: invoker startet
+# sailjail mit unserem Desktop-Profil, damit die App IN der Sandbox landet -
+# ohne das kaeme sie nicht an die Secrets-Sammlung.
+mkdir -p /usr/share/dbus-1/services
+cat > /usr/share/dbus-1/services/harbour.harbour-whatsapp.service <<'DBUSEOF'
+[D-BUS Service]
+Name=harbour.harbour-whatsapp
+Exec=/usr/bin/invoker -s --type=generic /usr/bin/sailjail -p harbour-whatsapp.desktop /usr/bin/sailfish-qml harbour-whatsapp
+DBUSEOF
 
 # Nutzer-Grants auf das Daemon-Profil spiegeln: das Haupt-Desktop-File ist
 # %config(noreplace) und traegt die per Einstellungs-Befehl erteilten Rechte,
@@ -160,9 +193,95 @@ fi
 %postun
 if [ "$1" = "0" ]; then
   rm -f /usr/share/harbour-whatsapp/gst-launch-1.0 /usr/share/harbour-whatsapp/pactl
+  # Die Dienstdatei wird im %post geschrieben, gehoert also nicht zum
+  # Paketinhalt - beim Entfernen muss sie von Hand weg
+  rm -f /usr/share/dbus-1/services/harbour.harbour-whatsapp.service
 fi
 
 %changelog
+* Fri Aug 21 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.279-1
+- whatsmeow updated to 2026-08-20 (6eefbff4), carrying proto v1045649367.
+  Deliberately not the newest commit: a day later whatsmeow raised its
+  minimum Go version to 1.26, and the toolchain here is 1.25. Taking the
+  commit just before that leaves the protocol update in place and the build
+  working, which is the point of the update; the Go bump can wait until the
+  toolchain moves. Dependencies unchanged, no API breakage, race detector
+  clean
+
+* Mon Aug 17 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.278-1
+- The share entry moves into a desktop file of its own, which RPM installs
+  and replaces on every update. The main desktop file is config(noreplace)
+  precisely so a renamed app and granted permissions survive, which meant
+  anything new had to be retrofitted by script - and that failed twice: once
+  the key landed in the wrong section, once the file was left as a stub and
+  the launcher icon went with it. The script no longer touches that file for
+  sharing at all. The daemon has had its own desktop file all along for the
+  same reason and has never caused trouble; this follows it, hidden from the
+  launcher and carrying the same sandbox identity, so the service name the
+  dialog activates is unchanged
+
+* Mon Aug 17 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.277-1
+- The post-install script rebuilds the desktop file when it is missing or
+  headerless, instead of leaving a ruin behind. It was never destroying the
+  file: it was finding none and then applying its additions - sed does
+  nothing to a file that does not exist, printf creates one - which yields
+  a stub of ExecDBus and a share section with no [Desktop Entry] above them,
+  and a desktop file without that header is not shown, so the launcher icon
+  disappeared. Proven rather than guessed: run against no file at all, the
+  script produces 257 bytes identical to what was on the device. Why the
+  file is absent at that moment is still unknown, but the script now copes
+  with it and preserves any permissions still readable
+
+* Mon Aug 17 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.276-1
+- Repairs the desktop file, which the previous version could empty out
+  entirely - the launcher icon then disappeared, since an invalid desktop
+  file simply is not shown. Two mistakes of mine met: I had written comment
+  lines into a file that the post-install script edits with sed, and I had
+  put the share section ahead of [X-Sailjail], so inserting after
+  ApplicationName appended to the end of the file rather than into the
+  sandbox section. The comments are gone, the sections are in an order the
+  script can work with, and the script is now exercised against both the old
+  shape and the broken one, twice each, checking that every key lands under
+  its own heading and that granted permissions survive. Anyone whose file
+  was emptied gets a correct one back from this update
+
+* Mon Aug 17 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.275-1
+- Each candidate key is now tried against the database before it is
+  accepted. Several collections sit side by side in Sailfish Secrets - the
+  app's own and the handover copies - and startup took the first key it
+  found without ever testing it. Where that was a stale copy the database
+  failed to open with "file is not a database", the collection holding the
+  right key was never reached, and the whole history looked lost while being
+  entirely intact: on this device the working key was in the third
+  collection, behind one that answered first. The check opens wa.db and runs
+  a query that must decrypt a page, since opening alone reports nothing. If
+  no collection opens it the first key is used as before, so a genuinely
+  damaged file behaves no worse than it did. Three test cases
+
+* Mon Aug 17 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.274-1
+- Puts ExecDBus back where it belongs. The post-install script deletes and
+  re-appends that line on every update, which was fine until the share
+  section was added to the end of the same file: from then on the line
+  landed inside [X-Share Method] instead of [X-Sailjail], leaving the sandbox
+  section without it and the share section with a key that has no business
+  there - and the entry vanished from the dialog. Comparing the file against
+  RooTelegram's showed it in one line. It is inserted under its own heading
+  now, which is the same care taken with X-Share-Methods a version earlier
+  and should have been taken here at the same time
+
+* Mon Aug 17 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.273-1
+- Sharing works with the app closed. There was no D-Bus service file at all,
+  so the name could only ever be claimed by a running app: with it in the
+  background everything worked, and with it closed the dialog got
+  ServiceUnknown - which is why this looked like a timing problem for a
+  while. One is installed now, built like jolla-calendar's, where invoker
+  runs sailjail with the desktop profile so the app starts inside its
+  sandbox; entering sailfish-qml directly would start it outside, and it
+  would not reach the secrets store. Written from the post-install script
+  rather than shipped as a file, so it also reaches installations that
+  already exist. This ought to help wherever else a cold start over D-Bus
+  was needed, notifications among them
+
 * Mon Aug 17 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.272-1
 - Tapping a poll option does something now. Inside a Repeater, parent is the
   surrounding Item rather than the message delegate, so parent.sendVote and
