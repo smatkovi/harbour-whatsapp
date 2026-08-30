@@ -5,7 +5,7 @@ Native WhatsApp client for Sailfish OS using whatsmeow library.
 ## Requirements
 
 - Sailfish OS 4.5+ device (tested on 5.1, Xperia 10 V)
-- For building: Go **1.25 or newer** (the whatsmeow dependency requires it)
+- For building: Go **1.26 or newer** (the whatsmeow dependency requires it)
 
 ## Installing (prebuilt RPM)
 
@@ -24,6 +24,7 @@ found in the app's Settings page:
 - **Media storage** access (save/pick files outside the sandbox)
 - **Location** (send your position / share live location)
 - **Contacts** (address book suggestions, opt-in inside the app as well)
+- **Audio** and **Microphone** (voice calls: earpiece/speaker routing and the microphone; without them a call connects but stays silent)
 
 Encryption of the local database strictly requires Sailfish Secrets - the
 app refuses to run unencrypted and will guide you through a reset if an
@@ -33,7 +34,7 @@ old unencrypted database is found.
 
 ### A) On the Sailfish device itself
 
-Go 1.25+ is not in the Jolla repos, but community repositories carry it.
+Go 1.26+ is not in the Jolla repos, but community repositories carry it.
 With the Rikudou_Sennin OpenRepos repository enabled (via Storeman):
 
 ```bash

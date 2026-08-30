@@ -18,14 +18,18 @@ func TestReconnectDelayLadder(t *testing.T) {
 		want     time.Duration
 	}{
 		{0, 0},
-		{1, 5 * time.Second},
-		{2, 10 * time.Second},
-		{3, 20 * time.Second},
-		{4, 40 * time.Second},
-		{5, 80 * time.Second},
-		{6, 160 * time.Second},
-		{7, 5 * time.Minute},   // 320 s, vom Deckel gestutzt
-		{8, 5 * time.Minute},
+		// Seit 0.9.289 laeuft der erste Versuch sofort: ein Anruf, der
+		// waehrend der Trennung angeboten wird, ist endgueltig verloren -
+		// der Server liefert ihn nie nach. Die Staffelung beginnt daher
+		// erst beim zweiten Versuch.
+		{1, 0},
+		{2, 5 * time.Second},
+		{3, 10 * time.Second},
+		{4, 20 * time.Second},
+		{5, 40 * time.Second},
+		{6, 80 * time.Second},
+		{7, 160 * time.Second},
+		{8, 5 * time.Minute}, // 320 s, vom Deckel gestutzt
 		{20, 5 * time.Minute},
 		// Jenseits von 61 lief die alte Formel in int64 ueber und lieferte 0.
 		// Nach etwa fuenf Stunden ohne Netz waere daraus ein Zehn-Sekunden-

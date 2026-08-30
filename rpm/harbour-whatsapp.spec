@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.279
+Version:    0.9.304
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -40,6 +40,9 @@ Requires:   libsailfishapp-launcher
 # stattdessen die Laufzeit-Kette mit ihrer praezisen Install-Anweisung
 %ifarch aarch64
 Requires:   gstreamer1.0-tools
+# Weak dependency: pulled in when the plugin is in a repository, ignored
+# otherwise - the app must stay installable without the SDK-built plugin
+Recommends: harbour-whatsapp-voicecall-plugin
 %endif
 #Requires:   sqlcipher (statisch gelinkt)
 
@@ -199,6 +202,301 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Sun Aug 30 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.304-1
+- The reference queue is held at the length the measured round trip
+  demands. The field log shows it swinging between 22 and 1643 samples -
+  playback arrives in bursts while capture trickles in evenly, so the lead
+  set at the start drifts by a hundred milliseconds, and a reference that
+  early is worse than none: the filter adapts to the wrong alignment and
+  has to relearn, which is the echo that comes and goes. Surplus lead is
+  now trimmed every frame, and the heartbeat prints reference length
+  against target plus how much was trimmed.
+- Filter tail raised from 400 to 800 ms: the device reports a 152 ms round
+  trip, and room reverb on a phone easily doubles what the filter has to
+  span.
+
+* Sun Aug 30 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.303-1
+- Echo that came and went about twice a second: the streams were kept
+  unmuted by a request every 500 ms for the whole call, and each of those
+  makes PulseAudio re-evaluate the stream, so the timing between playback
+  and capture jumped and the canceller lost its alignment - then re-adapted,
+  then lost it again. The policy layer only mutes a stream when it appears,
+  so three passes in the first seconds are enough; after that the streams
+  are left alone.
+- The audio heartbeat counts frames that went out uncancelled because the
+  reference ran dry ("bypassed"), so the other cause of intermittent echo
+  is visible in the log.
+
+* Sun Aug 30 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.302-1
+- The echo canceller now measures its own delay instead of assuming one.
+  PulseAudio is asked for the playback and capture latency of the two call
+  streams, and the reference queue is primed with exactly that much
+  silence, so a reference block reaches the filter at the same moment as
+  the echo it caused - which is the one thing a canceller cannot guess.
+  The measurement is refreshed every two seconds, capped at the 400 ms
+  filter tail, and the audio heartbeat now prints the delay in use.
+
+* Sun Aug 30 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.302-1
+- The echo canceller is now told where the echo is instead of having to
+  find it. Shortly after the streams start, PulseAudio is asked how far
+  playback and capture actually run behind; that sum is the head start
+  the reference has over the echo in the microphone, and exactly that
+  many samples are dropped from the reference queue. Until the
+  measurement is in, microphone audio passes through unfiltered rather
+  than training the filter on a wrong delay. The measurement is logged
+  ("echo reference aligned: playback X ms + capture Y ms").
+
+* Sun Aug 30 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.301-1
+- Echo cancellation had been learning the wrong thing. Whenever the
+  playback side had not delivered a reference block yet, the microphone
+  block was processed against silence - teaching the filter that the echo
+  in the microphone belongs to no playback at all, after which it cancels
+  nothing. Microphone audio now waits for its reference; only if more
+  than a quarter second piles up does it pass through unfiltered, so the
+  other side never stalls.
+- No more double ringing: the backend still rings for every incoming
+  call, but closes its own notification as soon as the plugin confirms
+  the system call UI has the call - the confirmation only arrives when
+  the handover actually worked.
+
+* Sun Aug 30 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.300-1
+- Dead connections are recognised and rebuilt. The log shows a keepalive
+  timeout every ten minutes; until now that only set the state string, so
+  a socket that was open but carried nothing kept counting as connected -
+  the app said "connected" while neither a message nor a call got
+  through. Two timeouts in a row now tear the connection down and rebuild
+  it, a restored keepalive clears the state again, and when connman
+  reports the carrier gone the connection is closed right away instead of
+  lingering as a zombie.
+
+* Sun Aug 30 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.299-1
+- The reported state now follows the actual connection. 0.9.298 fixed one
+  path that set "reconnecting" on a healthy connection, but the state
+  still stuck: whichever path sets it, /status now corrects it whenever
+  the socket is up, logs that it did ("state was X while connected") and
+  clears the retry counter. The app no longer treats itself as offline
+  while everything is connected.
+
+* Sun Aug 30 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.298-1
+- Stuck in "reconnecting" while actually connected. A connect attempt on
+  an existing connection - the watchdog and the network watcher both
+  trigger one - returns an error from whatsmeow, and that error was
+  treated as a failure: the state went back to "reconnecting", the retry
+  counter grew and the app kept saying it was connecting although
+  everything was up. Such an attempt is now recognised as a no-op, the
+  retry counter resets and the state stays "connected".
+
+* Sun Aug 30 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.297-1
+- The backend always rings for an incoming call now, even when the system
+  call UI plugin has taken it. The field log shows "system call UI took
+  call" for calls that then appeared nowhere and rang not at all: the ack
+  proves a handler was registered with the call engine, nothing more. The
+  notification is the part we control, so it always fires; both stop
+  together when the call is answered or declined.
+
+* Sun Aug 30 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.296-1
+- A child backend now checks for the daemon BEFORE it opens a connection,
+  not a minute later: it writes the daemon's port and exits without ever
+  touching the session. The old timing still let two connections exist for
+  up to a minute, and the field log shows what that costs - a websocket
+  EOF every two to three minutes, each one a window in which an incoming
+  call cannot arrive.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.295-1
+- A notice that says "incoming call" no longer outlives the call: if the
+  fallback notification for a call the voice stack could not take gets no
+  terminate at all, it is replaced after 45 seconds by the plain
+  missed-call notice and logged in the chat.
+- The daemon check of a child backend runs once a minute instead of every
+  15 seconds - four loopback connects per minute, and the loop ends for
+  good as soon as it finds the daemon.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.294-1
+- Incoming calls arrived with the app closed and vanished once it was
+  open, because a child backend and the daemon were both talking to
+  WhatsApp with the same device session. They share the Signal session
+  state in the same encrypted database: whichever decrypts the call offer
+  first ratchets the keys forward, and the other is left with an offer it
+  cannot read - hence "voice stack did not take offer". A child backend
+  now looks for the daemon every 15 seconds, points backend.port at it and
+  exits, so exactly one process holds the session and the app follows to
+  the daemon.
+- The fallback notification for a call nobody picked up is a notice now:
+  chat feedback instead of the ringtone, and it clears itself after 45
+  seconds instead of lingering.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.293-1
+- Calls missed while offline are recovered from the phone's call log. The
+  server repeats neither the offer nor the terminate of a call that
+  arrived while we were disconnected, but the phone syncs its call log
+  with every history sync - those records now become chat entries, and an
+  incoming missed call also raises the quiet missed-call notification.
+  Only records from the last 24 hours and only calls the app did not
+  carry itself; entries already known are not announced again.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.292-1
+- Missed-call notification no longer rings: it carried the category
+  x-nemo.call.missed, and lipstick fills a category's defaults from its
+  .conf file - including the ringtone feedback of the call categories.
+  A ringtone event only stops when its notification is closed, and a
+  missed-call notice never closes, so it rang on. It now uses the chat
+  category and always states its feedback explicitly, so no category
+  default can slip back in.
+- Placing a call from the menus reports what happens: the attempt and any
+  backend error go to the log, and the notice line shows the outcome
+  instead of leaving the tap without a trace.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.291-1
+- Calls that arrived while the connection was down are no longer lost
+  silently. A call whose end reaches us without its offer - the usual
+  shape after a reconnect - was dropped on the floor; it is now logged in
+  the chat and announced with the quiet missed-call notification, like any
+  other missed call.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.290-1
+- A missed call is a notice, not a call: it now posts its own quiet
+  notification - no ringtone feedback, no urgency 2, no display wake-up,
+  no answer/decline buttons and no reply field - titled "Missed WhatsApp
+  call" with the caller's name, tapping opens the chat. Sound and
+  vibration follow the same switches as message notifications, with the
+  gentle chat feedback.
+- The ringing notification of a call the voice stack could not carry is
+  closed the moment the call ends instead of lingering.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.289-1
+- Shorter offline window for calls: an incoming call is only offered to
+  devices connected at that moment and the server never replays it, so
+  every second of downtime is a call that cannot arrive. The first
+  reconnect after a drop now happens immediately instead of after five
+  seconds; the backoff staircase starts from the second attempt, keeping
+  the session-storm protection intact.
+- Connection log with clock times: drops say how long the connection had
+  been up and count themselves, reconnects say how long we were away.
+  /status carries uptime, drop count and total offline seconds, so it is
+  finally measurable how often a call could have been missed this way.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.288-1
+- Calls the voice stack cannot carry no longer pass unnoticed. meowcaller
+  only takes plain voice calls; video calls, group calls and protocol
+  variants it does not know were dropped without a sound. The offer event
+  now starts a 1.5 second timer, and if the call has not been picked up by
+  then the backend rings with a plain notification naming the caller, with
+  a decline action (whatsmeow can decline any call even when it cannot
+  carry it) and the log line "voice stack did not take offer <id>".
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.287-1
+- Silent incoming call fixed: since 0.9.283 the backend left ringing to
+  the call engine as soon as it had seen the plugin poll - but seeing the
+  plugin does not mean the call reached the system UI, and when it did
+  not, nothing rang at all. The plugin now acknowledges each call it hands
+  to the engine (/call/uiack); if that ack does not arrive within 2.5
+  seconds, the backend rings with its own notification as before.
+- Needs the rebuilt plugin (0.9.287) for the ack; with an older plugin the
+  fallback simply always fires, which is the pre-0.9.283 behaviour.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.286-1
+- Recommends: harbour-whatsapp-voicecall-plugin - a weak dependency, so
+  the system call UI plugin comes along automatically once it sits in a
+  repository, while installs without it keep working.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.285-1
+- "WhatsApp voice call" is the first entry of both chat menus (pull-down
+  and push-up) in one-to-one chats, and the long-press menu of every call
+  entry in the chat - missed, incoming, outgoing - offers it next to the
+  cellular call-back.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.284-1
+- Echo cancellation: speexdsp's echo canceller and preprocessor (BSD,
+  vendored under backend/speexdsp, built with cgo like SQLCipher) now run
+  on the microphone path. Everything handed to PulseAudio for playback is
+  queued as far-end reference and consumed in lockstep with the captured
+  audio in 20 ms frames; a 400 ms filter tail absorbs the playback,
+  acoustic and capture delay, residual echo suppression -40/-15 dB,
+  denoise on. RooTelegram gets the same from WebRTC's audio processing.
+  Synthetic test: 44.7 dB echo return loss enhancement.
+- Ringback tone for outgoing calls: 425 Hz, 1 s on / 4 s off (the
+  European tone RooTelegram ships as a WAV), synthesised into the
+  playback path from the moment the call is placed and silenced as soon
+  as far-end audio arrives or the peer accepts. Audio therefore opens at
+  dial time for outgoing calls.
+- voicecall plugin unchanged (0.9.283 stays valid); its spec gained a
+  changelog so rpmlint in the SDK stops complaining.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.283-1
+- System call UI: new voicecall-manager plugin (voicecallplugin/, own
+  package harbour-whatsapp-voicecall-plugin, built with the Sailfish SDK)
+  registers WhatsApp calls with the Sailfish call engine, so incoming and
+  outgoing calls appear in the system call UI - over the lock screen, with
+  answer, decline, mute and speaker - and the buttons are relayed to the
+  backend over its loopback HTTP API. The plugin polls /events and
+  /call/state with a marker header; while it is present the backend leaves
+  ringing to voicecall-ui and audio routing to the playback manager, and
+  mirrors speaker/mute both ways.
+- Both call streams are re-asserted unmuted every half second: the policy
+  layer mutes ordinary streams in call mode.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.282-1
+- One-way audio fixed: the peer was audible, the microphone was not. The
+  call streams carried media.role=phone, and the Sailfish policy layer
+  maps that role to the cellular voice path, whose capture side is silent
+  without a modem call. Both streams now run without a role, like the
+  voice-message recorder that has always worked.
+- Level meters for microphone and peer on the call page (from
+  /call/state), and a five-second audio heartbeat in the backend log with
+  sample counts and levels of both directions - one-way audio is now
+  diagnosable from the log alone.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.281-1
+- Call audio routing now goes through the Sailfish Route Manager
+  (org.nemomobile.Route.Manager Prefer earpiece/speaker), the same policy
+  layer the phone app and our voice-message player use, so ohmd does not
+  undo the switch; the direct sink-port switch stays as a fallback for
+  devices without an earpiece route.
+- First field test: the call connected and the timer ran, but the backend
+  could not see the PulseAudio socket although Audio and Microphone read
+  "granted" - sailjail applies the profile at process start, and the
+  process that carries the call (child backend or daemon) was older than
+  the grant. The settings now show a "Call audio" line that is answered by
+  the backend itself (socket visible or not, and whether that was the
+  daemon), the "granted but not in effect" warning and the daemon restart
+  button cover audio as well, and the call page says what to restart.
+
+* Sat Aug 29 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.280-1
+- Voice calls. WhatsApp voice calls can now be answered and placed from
+  the app, in the child backend as well as in the background daemon - no
+  daemon is needed, only a running app. The VoIP stack is meowcaller
+  (github.com/purpshell/meowcaller, MIT), a pure-Go implementation of
+  the WhatsApp Web calling protocol including the MLow codec, wired to
+  the same whatsmeow client that carries the messages. Audio goes through
+  PulseAudio in pure Go as well (jfreymuth/pulse), so the static
+  three-architecture build is unchanged. Routing follows RooTelegram:
+  the sink with a speaker and an earpiece port carries the call, the
+  active port switches between earpiece and speakerphone and is restored
+  afterwards; a stream that comes up silent is lifted once and the sink
+  volume put back at the end (flat volumes).
+- Ringing is left to lipstick: the incoming-call notification carries
+  x-nemo-feedback=ringtone, so ngfd plays the profile ringtone with
+  vibration until the notification is closed, exactly as for the phone
+  app, and with the app closed too. Tapping the notification opens the
+  call page, its two buttons answer and decline. MCE is put into call
+  state (req_call_state_change) so the display comes on while ringing
+  and the proximity sensor blanks it during the call.
+- New call page with name, avatar, phase and duration; answer/decline,
+  mute, earpiece/speaker and hang-up. "WhatsApp voice call" in the
+  pull-down menu of one-to-one chats. Leaving the page keeps the call
+  running and shows a tappable notice line to return.
+- Calls are logged in the chat with their duration and outcome (missed,
+  declined, answered on the phone); a second incoming call gets busy.
+- Known limits: no echo cancellation, so speakerphone may echo for the
+  other side; video, group calls and the Opus fallback are still work in
+  progress in the library. Audio and Microphone must be granted in the
+  settings (the copy-commands exist), otherwise the call connects
+  silently and the call page says so.
+- whatsmeow updated to 0fadda7 (2026-08-29): handler queue no longer
+  reused between connections, unencrypted media keys ignored, noise
+  socket frames use the right context. This raised the minimum Go
+  version to 1.26.
+
 * Fri Aug 21 2026 smatkovi <smatkovi@users.noreply.github.com> - 0.9.279-1
 - whatsmeow updated to 2026-08-20 (6eefbff4), carrying proto v1045649367.
   Deliberately not the newest commit: a day later whatsmeow raised its

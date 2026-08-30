@@ -40,6 +40,10 @@ go_tests() {
     fi
     tmp=$(mktemp -d) || return 1
     cp "$ROOT"/backend/*.go "$ROOT"/backend/go.mod "$tmp"/ 2>/dev/null
+    # Unterpakete (cgo-Bibliotheken wie speexdsp) gehoeren mit in die Kopie
+    for d in "$ROOT"/backend/*/; do
+        [ -d "$d" ] && cp -r "$d" "$tmp"/ 2>/dev/null
+    done
     # Optionale lokale Umleitungen (Spiegel, Firewall) - nicht im Repo
     if [ -f "$ROOT/backend/go.replace.local" ]; then
         cat "$ROOT/backend/go.replace.local" >> "$tmp/go.mod"

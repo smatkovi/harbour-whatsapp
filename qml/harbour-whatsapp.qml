@@ -77,6 +77,7 @@ ApplicationWindow {
                     if (s !== evSeq) {
                         evSeq = s
                         loadChats()
+                        loadCallState()
                         eventTick()
                     }
                 } catch (e) {}
@@ -95,6 +96,101 @@ ApplicationWindow {
         id: evRetry
         repeat: false
         onTriggered: pollEvents()
+    }
+
+    // ---- Sprachanrufe: das Backend fuehrt den Anruf (meowcaller), die
+    // Oberflaeche ist nur Fernbedienung ueber /call/*. Der Zustand kommt
+    // per /call/state; solange ein Anruf laeuft, tickt ein Sekundentimer
+    // fuer die Dauer, sonst nur der Ereigniskanal ----
+    property var callState: ({ active: false })
+    property bool callPagePushed: false
+
+    function loadCallState() {
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/call/state")
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== 4 || xhr.status !== 200) return
+            var st
+            try { st = JSON.parse(xhr.responseText) } catch (e) { return }
+            if (!st) st = { active: false }
+            var wasActive = callState.active === true
+            callState = st
+            if (st.active) {
+                callTick.restart()
+                if (!callPagePushed) {
+                    callPagePushed = true
+                    pageStack.push(callPage)
+                    activate()
+                } else if (globalNotice.indexOf("\ud83d\udcde") !== 0) {
+                    // Seite ist irgendwo im Stapel: nichts tun
+                }
+            } else {
+                callTick.stop()
+                if (globalNotice.indexOf("\ud83d\udcde") === 0) globalNotice = ""
+                if (wasActive && !callPagePushed) loadChats()
+            }
+        }
+        xhr.send()
+    }
+
+    Timer {
+        id: callTick
+        interval: 1000
+        repeat: true
+        onTriggered: loadCallState()
+    }
+
+    function callAction(action, extra, cb) {
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "http://127.0.0.1:" + backendPort + "/call/" + action + (extra || ""))
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== 4) return
+            var r = null
+            try { r = JSON.parse(xhr.responseText) } catch (e) {}
+            if (r && r.error) globalNotice = r.error
+            loadCallState()
+            if (cb) cb(r)
+        }
+        xhr.send()
+    }
+
+    function startVoiceCall(jid) {
+        console.log("[call] start requested for " + jid + " connected=" + connected
+                    + " port=" + backendPort)
+        if (!connected) { globalNotice = loc.callNotConnected; return }
+        globalNotice = loc.callCalling
+        callAction("start", "?jid=" + encodeURIComponent(jid), function(r) {
+            if (r && r.error) {
+                console.log("[call] start failed: " + r.error)
+            } else if (!r) {
+                globalNotice = loc.callNotConnected
+                console.log("[call] start: no answer from backend")
+            }
+        })
+    }
+
+    // Zurueck zur Anrufseite (Benachrichtigung, Hinweiszeile)
+    function openCallPage() {
+        activate()
+        if (callState.active && !callPagePushed) {
+            callPagePushed = true
+            pageStack.push(callPage)
+        }
+        loadCallState()
+    }
+
+    function callPhaseText(st) {
+        if (!st || !st.active) return loc.callEnded
+        switch (st.phase) {
+        case "ringing": return st.outgoing ? loc.callRinging : loc.incomingCall
+        case "calling": return loc.callCalling
+        case "connecting": return loc.callConnecting
+        case "active":
+            var m = Math.floor((st.seconds || 0) / 60)
+            var sec = (st.seconds || 0) % 60
+            return m + ":" + (sec < 10 ? "0" : "") + sec
+        default: return st.phase || ""
+        }
     }
 
     function retryBackend() {
@@ -218,6 +314,10 @@ ApplicationWindow {
                         // Go-Backend beschriftet - dorthin gibt es nur diesen
                         // Weg; der Katalog bleibt einzige Wahrheitsquelle
                         setPref("notif_reply_label", TR.catalog(modelData.code).reply)
+                        setPref("call_answer_label", TR.catalog(modelData.code).callAnswer)
+                        setPref("call_decline_label", TR.catalog(modelData.code).callDecline)
+                        setPref("call_incoming_label", TR.catalog(modelData.code).incomingCall)
+                        setPref("call_missed_label", TR.catalog(modelData.code).missedCall)
                     }
                     Label {
                         x: Theme.horizontalPageMargin
@@ -727,6 +827,22 @@ ApplicationWindow {
         function openChat(jid) {
             openChatExternal(jid)
         }
+        // Anruf-Benachrichtigung: Antippen oeffnet die Anrufseite,
+        // die beiden Knoepfe nehmen an bzw. lehnen ab
+        function openCall() {
+            openCallPage()
+        }
+        function answerCall() {
+            callAction("accept", "", function() { openCallPage() })
+        }
+        function declineCall() {
+            callAction("reject")
+        }
+        // Anruf, den der Sprach-Stack nicht fuehren konnte (Video, Gruppe):
+        // nur ablehnen ist moeglich
+        function declineUncarriedCall(id) {
+            callAction("rejectraw", "?id=" + encodeURIComponent(id))
+        }
         // Gegenstelle des Freigabe-Dialogs. Die Konfiguration kommt als
         // Objekt vom Uebergabe-QML des Plugins; interessant sind resources
         // (Dateien oder eine Adresse) und optional ein Text.
@@ -1154,6 +1270,14 @@ ApplicationWindow {
                 // Auch fuer Bestandsinstallationen und Systemsprache setzen
                 if (p.notif_reply_label !== loc.reply)
                     setPref("notif_reply_label", loc.reply)
+                if (p.call_answer_label !== loc.callAnswer)
+                    setPref("call_answer_label", loc.callAnswer)
+                if (p.call_decline_label !== loc.callDecline)
+                    setPref("call_decline_label", loc.callDecline)
+                if (p.call_incoming_label !== loc.incomingCall)
+                    setPref("call_incoming_label", loc.incomingCall)
+                if (p.call_missed_label !== loc.missedCall)
+                    setPref("call_missed_label", loc.missedCall)
             } else {
                 globalPrefsRetry.start()
             }
@@ -1384,6 +1508,7 @@ ApplicationWindow {
                 lastError = data.lastError || ""
                 paired = data.paired === true
                 daemonRunning = data.daemon === true
+                if (data.callActive === true || callState.active === true) loadCallState()
                 backendVersion = data.version || ""
                 // Daemon-Selbst-Update: nach einem RPM-Update laeuft noch der
                 // alte Prozess. Einmal pro App-Sitzung /daemon/restart rufen -
@@ -1878,6 +2003,10 @@ ApplicationWindow {
                     width: parent.width
                     height: visible ? noticeLbl1.height + 2*Theme.paddingSmall : 0
                     onClicked: {
+                        if (callState.active && globalNotice.indexOf("\ud83d\udcde") === 0) {
+                            openCallPage()
+                            return
+                        }
                         Clipboard.text = globalNotice
                         globalNotice = loc.copiedToClipboard
                     }
@@ -2315,6 +2444,10 @@ ApplicationWindow {
                     width: parent.width
                     height: visible ? noticeLbl2.height + 2*Theme.paddingSmall : 0
                     onClicked: {
+                        if (callState.active && globalNotice.indexOf("\ud83d\udcde") === 0) {
+                            openCallPage()
+                            return
+                        }
                         Clipboard.text = globalNotice
                         globalNotice = loc.copiedToClipboard
                     }
@@ -2601,6 +2734,254 @@ ApplicationWindow {
                     }
                 }
                 xhr.send()
+            }
+        }
+    }
+
+    // ---- Anrufseite: wird beim ersten aktiven Zustand gepusht (eingehend
+    // wie ausgehend) und zeigt Name, Phase und Dauer. Klingelton und
+    // Vibration kommen ueber die Benachrichtigung des Backends (ngfd
+    // "ringtone"), das Display haelt DisplayBlanking wach; waehrend des
+    // Gespraechs deckt eine schwarze Flaeche die Knoepfe ab, sobald der
+    // Naehrungssensor "nah" meldet (Sailjail-Recht Sensors - fehlt es,
+    // passiert einfach nichts) ----
+    Component {
+        id: callPage
+        Page {
+            id: callPageItem
+            allowedOrientations: Orientation.Portrait
+            property var st: callState
+            property bool near: proxLoader.item && proxLoader.item.reading
+                                ? proxLoader.item.reading.near === true : false
+            property bool incomingRinging: st.active === true && !st.outgoing && st.phase === "ringing"
+            property bool live: st.active === true && !incomingRinging
+
+            Component.onDestruction: {
+                callPagePushed = false
+                if (callState.active === true) {
+                    globalNotice = "\ud83d\udcde " + (callState.name || "") + " \u00b7 " + loc.callReturn
+                } else {
+                    callAction("dismiss")
+                }
+            }
+
+            DisplayBlanking {
+                preventBlanking: callPageItem.status === PageStatus.Active && callState.active === true
+            }
+
+            Loader {
+                id: proxLoader
+                active: callState.active === true && callState.phase === "active"
+                sourceComponent: Component { ProximitySensor { active: true } }
+            }
+
+            SilicaFlickable {
+                anchors.fill: parent
+                contentHeight: parent.height
+
+                Column {
+                    id: callCol
+                    width: parent.width
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.paddingLarge
+
+                    Item {
+                        width: Theme.itemSizeHuge
+                        height: width
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: width / 2
+                            color: Theme.rgba(Theme.highlightColor, 0.2)
+                        }
+                        Image {
+                            id: callAvatar
+                            anchors.fill: parent
+                            fillMode: Image.PreserveAspectCrop
+                            source: st.peer && !st.peerIsLid
+                                    ? "http://127.0.0.1:" + backendPort + "/avatar/" + st.peer : ""
+                            visible: status === Image.Ready
+                            layer.enabled: true
+                            layer.effect: ShaderEffect {
+                                property variant source
+                                property real r: 0.5
+                                fragmentShader: "
+                                    varying highp vec2 qt_TexCoord0;
+                                    uniform sampler2D source;
+                                    uniform lowp float qt_Opacity;
+                                    void main() {
+                                        lowp vec2 d = qt_TexCoord0 - vec2(0.5, 0.5);
+                                        lowp float a = smoothstep(0.5, 0.49, length(d));
+                                        gl_FragColor = texture2D(source, qt_TexCoord0) * a * qt_Opacity;
+                                    }"
+                            }
+                        }
+                        Label {
+                            anchors.centerIn: parent
+                            visible: !callAvatar.visible
+                            text: (st.name || "?").substring(0, 1).toUpperCase()
+                            font.pixelSize: Theme.fontSizeHuge
+                            color: Theme.highlightColor
+                        }
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
+                        text: st.name || ""
+                        font.pixelSize: Theme.fontSizeExtraLarge
+                        color: Theme.primaryColor
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        horizontalAlignment: Text.AlignHCenter
+                        text: st.active === true ? (st.phase === "active" ? callPhaseText(st)
+                                                   : (st.outgoing ? loc.outgoingCall : loc.incomingCall))
+                                                 : loc.callEnded
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.secondaryHighlightColor
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        horizontalAlignment: Text.AlignHCenter
+                        visible: st.active === true && st.phase !== "active"
+                                 && !(st.phase === "ringing" && !st.outgoing)
+                        text: callPhaseText(st)
+                        font.pixelSize: Theme.fontSizeLarge
+                        color: Theme.highlightColor
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        horizontalAlignment: Text.AlignHCenter
+                        visible: st.active !== true && !!st.reason
+                        text: st.reason || ""
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
+                        visible: !!st.audioError
+                        text: loc.callAudioMissing + "\n(" + (st.audioError || "") + ")"
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.errorColor
+                    }
+
+                    // Pegel beider Richtungen (sekuendlich aus /call/state):
+                    // zeigt sofort, ob das Mikrofon liefert und ob die
+                    // Gegenseite ankommt
+                    Column {
+                        width: parent.width * 0.6
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: Theme.paddingSmall
+                        visible: st.active === true && st.phase === "active" && st.audioUp === true
+                        Repeater {
+                            model: [ { label: "\ud83c\udfa4", level: st.micLevel || 0 },
+                                     { label: "\ud83d\udd0a", level: st.spkLevel || 0 } ]
+                            delegate: Row {
+                                width: parent.width
+                                spacing: Theme.paddingMedium
+                                Label {
+                                    text: modelData.label
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                Rectangle {
+                                    width: parent.width - Theme.itemSizeExtraSmall
+                                    height: Theme.paddingSmall
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    radius: height / 2
+                                    color: Theme.rgba(Theme.primaryColor, 0.15)
+                                    Rectangle {
+                                        width: parent.width * Math.min(1, modelData.level * 3)
+                                        height: parent.height
+                                        radius: height / 2
+                                        color: Theme.highlightColor
+                                        Behavior on width { NumberAnimation { duration: 300 } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Column {
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: Theme.paddingLarge * 2
+                    width: parent.width
+                    spacing: Theme.paddingLarge
+
+                    // Eingehend, noch nicht angenommen: Ablehnen / Annehmen
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: Theme.paddingLarge
+                        visible: callPageItem.incomingRinging
+                        Button {
+                            text: loc.callDecline
+                            color: Theme.errorColor
+                            onClicked: callAction("reject")
+                        }
+                        Button {
+                            text: loc.callAnswer
+                            color: "#4caf50"
+                            onClicked: callAction("accept")
+                        }
+                    }
+
+                    // Laufend (ausgehend klingelnd, verbindend, aktiv)
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: Theme.paddingMedium
+                        visible: callPageItem.live
+                        Button {
+                            text: st.muted ? loc.callUnmute : loc.callMute
+                            enabled: st.phase === "active"
+                            onClicked: callAction("mute", "?on=" + (st.muted ? "0" : "1"))
+                        }
+                        Button {
+                            text: st.speaker ? loc.callEarpiece : loc.callSpeaker
+                            enabled: st.phase === "active"
+                            onClicked: {
+                                if (!st.speaker) globalNotice = loc.callAudioEcho
+                                callAction("speaker", "?on=" + (st.speaker ? "0" : "1"))
+                            }
+                        }
+                    }
+                    Button {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        visible: callPageItem.live
+                        text: loc.callHangUp
+                        color: Theme.errorColor
+                        onClicked: callAction("hangup")
+                    }
+
+                    // Beendet: Seite schliessen
+                    Button {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        visible: st.active !== true
+                        text: loc.callClose
+                        onClicked: pageStack.pop()
+                    }
+                }
+            }
+
+            // Ohr am Display: Knoepfe abdecken und Beruehrungen schlucken
+            Rectangle {
+                anchors.fill: parent
+                color: "black"
+                visible: callPageItem.near && callState.active === true
+                MouseArea { anchors.fill: parent }
             }
         }
     }
@@ -3089,6 +3470,11 @@ Label {
                         // ein Profil beim Start an, Datei und Wirklichkeit
                         // fallen zwischen Erteilen und Neustart auseinander
                         property bool mediaEffective: false
+                        // Anruf-Audio: sieht das Backend (Kind oder Daemon)
+                        // den PulseAudio-Socket? Nur das zaehlt fuer Anrufe
+                        property bool audioEffective: false
+                        property bool audioChecked: false
+                        property bool backendIsDaemon: false
                         text: loc.permIntro + "\n\n"
                               + loc.contactsPerm + ": " + (granted ? loc.granted : loc.notGranted)
                               + "\n" + loc.mediaPerm + ": " + (mediaGranted ? loc.granted : loc.notGranted)
@@ -3100,6 +3486,10 @@ Label {
                               + "\n" + loc.earSpeaker + ": " + ((sensorsGranted && (audioGranted || micGranted)) ? loc.ready
                                   : (!sensorsGranted && !(audioGranted || micGranted)) ? loc.needsAudioSensors
                                   : !sensorsGranted ? loc.needsSensors : loc.needsAudio)
+                              + "\n" + loc.callAudio + ": " + (!audioChecked ? "\u2026"
+                                  : audioEffective ? loc.ready
+                                  : (audioGranted || micGranted) ? loc.callAudioRestart : loc.needsAudio)
+                              + (audioChecked && backendIsDaemon ? " " + loc.callAudioDaemonNote : "")
                         color: Theme.highlightColor
                         font.pixelSize: Theme.fontSizeSmall
                         wrapMode: Text.Wrap
@@ -3117,6 +3507,9 @@ Label {
                                     sensorsGranted = p.sensorsPermission === true
                                     audioGranted = p.audioPermission === true
                                     mediaEffective = p.mediaAccessEffective === true
+                                    audioEffective = p.audioAccessEffective === true
+                                    backendIsDaemon = p.backendIsDaemon === true
+                                    audioChecked = true
                                     // App-weite Kopien mitziehen, damit die
                                     // Sendefehler-Meldung denselben Stand hat
                                     mediaPermConfigured = mediaGranted
@@ -3142,9 +3535,22 @@ Label {
                         font.pixelSize: Theme.fontSizeExtraSmall
                         wrapMode: Text.Wrap
                     }
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2*x
+                        visible: permStatus.audioChecked
+                                 && (permStatus.audioGranted || permStatus.micGranted) !== permStatus.audioEffective
+                        text: (permStatus.audioGranted || permStatus.micGranted)
+                              ? loc.permPendingGrant : loc.permPendingRevoke
+                        color: Theme.errorColor
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        wrapMode: Text.Wrap
+                    }
 
                     BackgroundItem {
-                        visible: permStatus.mediaGranted !== permStatus.mediaEffective
+                        visible: (permStatus.mediaGranted !== permStatus.mediaEffective
+                                  || (permStatus.audioChecked
+                                      && (permStatus.audioGranted || permStatus.micGranted) !== permStatus.audioEffective))
                                  && daemonRunning
                         width: parent.width
                         onClicked: {
@@ -6973,6 +7379,11 @@ Label {
                     // mehr noetig, um eine Aktion zu erreichen
 
                     MenuItem {
+                        text: loc.voiceCall
+                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        onClicked: startVoiceCall(chatJid)
+                    }
+                    MenuItem {
                         text: loc.refreshChannel
                         visible: !chatPageItem.isLandscape && (isChannel)
                         onClicked: {
@@ -7121,6 +7532,11 @@ Label {
                 }
 
                 PullDownMenu {
+                    MenuItem {
+                        text: loc.voiceCall
+                        visible: !isGroupChat && chatJid !== "status" && !isChannel
+                        onClicked: startVoiceCall(chatJid)
+                    }
                     MenuItem {
                         text: loc.refreshChannel
                         visible: !chatPageItem.isLandscape && (isChannel)
@@ -7413,6 +7829,12 @@ Label {
                             text: loc.deleteForEveryone
                             visible: modelData.fromMe && !modelData.revoked
                             onClicked: revokeMessage(modelData.id)
+                        }
+                        MenuItem {
+                            text: loc.voiceCall
+                            visible: modelData.text && modelData.text.indexOf("\ud83d\udcde") === 0
+                                     && !isGroupChat && !isChannel && chatJid !== "status"
+                            onClicked: startVoiceCall(chatJid)
                         }
                         MenuItem {
                             text: loc.callBack + " +" + modelData.sender
@@ -7962,6 +8384,10 @@ Label {
                     width: parent.width
                     height: visible ? chatNoticeLbl.height + 2*Theme.paddingSmall : 0
                     onClicked: {
+                        if (callState.active && globalNotice.indexOf("\ud83d\udcde") === 0) {
+                            openCallPage()
+                            return
+                        }
                         Clipboard.text = globalNotice
                         globalNotice = loc.copiedToClipboard
                     }
