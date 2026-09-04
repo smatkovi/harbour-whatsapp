@@ -1,5 +1,5 @@
 Name:       harbour-whatsapp
-Version:    0.9.304
+Version:    0.9.307
 Release:    1
 Summary:    WhatsApp Client for Sailfish OS
 License:    MIT
@@ -202,6 +202,34 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Fri Sep 04 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.307-1
+- whatsmeow updated to 28bfe53 (2026-09-04): protocol version raised to
+  v1046691727, a stream error is handled before reconnecting, own ID is
+  guessed correctly in ParseWebMessage, unencrypted media keys are also
+  ignored for thumbnails, and the group delete reason became optional.
+  Keeping the protocol version current is what stops the server from
+  turning us away.
+
+* Tue Sep 01 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.306-1
+- The microphone is chosen explicitly instead of taking the default
+  source. On these devices every output has a monitor source as well
+  (sink.primary_output.monitor and friends), and recording from one of
+  those produces exactly what the field log showed: a microphone level of
+  0.000 for an entire call. The real input (source.primary_input) is used
+  when present, otherwise the first source that is neither a monitor nor
+  a null device, and the log names what it records from.
+
+* Tue Sep 01 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.305-1
+- "No call audio: this process cannot see PulseAudio" on devices where
+  audio works fine. The check looked for ${RUNUSER}/pulse/native, but
+  Sailfish starts PulseAudio on demand and publishes its address over
+  D-Bus - the directory holds only dbus-socket until something asks for
+  audio, so a working setup was declared broken and the call stayed
+  silent. The address now comes from PULSE_SERVER or the D-Bus lookup
+  (what libpulse does, and why gstreamer worked all along), the
+  connection is retried for three seconds so the on-demand start has
+  time, and only a lasting failure counts as missing permission.
+
 * Sun Aug 30 2026 smatkovi <smatkovi@users.noreply.github.com> 0.9.304-1
 - The reference queue is held at the length the measured round trip
   demands. The field log shows it swinging between 22 and 1643 samples -

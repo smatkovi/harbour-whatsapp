@@ -33,9 +33,44 @@ func pulseSocketPath() string {
 }
 
 // audioAccessEffective reports whether THIS process can reach PulseAudio.
+// The socket file alone is not the answer: Sailfish starts PulseAudio on
+// demand and publishes its address over D-Bus, so ${RUNUSER}/pulse can be
+// empty on a perfectly working device (only dbus-socket in it). The D-Bus
+// lookup therefore counts as reachable too.
 func audioAccessEffective() bool {
-	_, err := os.Stat(pulseSocketPath())
-	return err == nil
+	if _, err := os.Stat(pulseSocketPath()); err == nil {
+		return true
+	}
+	return pulseServerFromDBus() != ""
+}
+
+// pulseServerFromDBus asks the session bus where PulseAudio listens. This
+// is what libpulse does before falling back to the well-known path, and
+// it is why gstreamer works on devices where our socket check failed.
+func pulseServerFromDBus() string {
+	conn, err := dbus.SessionBus()
+	if err != nil {
+		return ""
+	}
+	obj := conn.Object("org.PulseAudio1", dbus.ObjectPath("/org/pulseaudio/server_lookup1"))
+	v, err := obj.GetProperty("org.PulseAudio.ServerLookup1.Address")
+	if err != nil {
+		return ""
+	}
+	addr, _ := v.Value().(string)
+	return addr
+}
+
+// pulseServerString returns the address to connect to, preferring an
+// explicit PULSE_SERVER, then the D-Bus lookup, then the default path.
+func pulseServerString() string {
+	if s := os.Getenv("PULSE_SERVER"); s != "" {
+		return s
+	}
+	if s := pulseServerFromDBus(); s != "" {
+		return s
+	}
+	return ""
 }
 
 // ---- Route Manager (org.nemomobile.Route.Manager): the Sailfish policy
@@ -192,15 +227,36 @@ const (
 // (the session socket is then simply not there) - the caller turns that into
 // a hint for the settings page instead of failing the call.
 func openCallAudio(managed bool) (*callAudio, error) {
-	if !audioAccessEffective() {
-		return nil, fmt.Errorf("pulseaudio socket %s is not visible in this process", pulseSocketPath())
-	}
-	pc, err := pulse.NewClient(
+	// Just try to connect. PulseAudio is started on demand here, so a
+	// missing socket is not a verdict - retry for a few seconds and let
+	// the connection attempt itself wake it up. Only a lasting failure
+	// means the sandbox really cannot reach it.
+	opts := []pulse.ClientOption{
 		pulse.ClientApplicationName("harbour-whatsapp"),
 		pulse.ClientApplicationIconName("harbour-whatsapp"),
-		pulse.ClientTimeout(5*time.Second))
+		pulse.ClientTimeout(5 * time.Second),
+	}
+	if srv := pulseServerString(); srv != "" {
+		fmt.Printf("📞 pulseaudio address from lookup: %s\n", srv)
+		opts = append(opts, pulse.ClientServerString(srv))
+	}
+	var pc *pulse.Client
+	var err error
+	for attempt := 1; attempt <= 6; attempt++ {
+		pc, err = pulse.NewClient(opts...)
+		if err == nil {
+			break
+		}
+		if attempt == 1 {
+			fmt.Printf("📞 pulseaudio not up yet (%v) - retrying\n", err)
+		}
+		time.Sleep(500 * time.Millisecond)
+		if srv := pulseServerString(); srv != "" {
+			opts = append(opts, pulse.ClientServerString(srv))
+		}
+	}
 	if err != nil {
-		return nil, fmt.Errorf("pulseaudio: %w", err)
+		return nil, fmt.Errorf("pulseaudio unreachable after 3s: %w", err)
 	}
 	a := &callAudio{pc: pc, managed: managed}
 	if aec, aerr := speexdsp.New(meowcaller.SampleRate, aecFrame, aecTail); aerr == nil {
@@ -217,11 +273,22 @@ func openCallAudio(managed bool) (*callAudio, error) {
 	// silent without a real modem call - first field test heard the peer
 	// but the peer heard nothing. The voice-message recorder (gst pulsesrc)
 	// runs without a role and works, so the call streams do the same.
-	a.rec, err = pc.NewRecord(pulse.Float32Writer(a.onMic),
+	// Pick the microphone explicitly. The default source on these devices
+	// can be a monitor of an output (sink.primary_output.monitor and
+	// friends are all sources too), and recording from one of those gives
+	// exactly what the field log showed: a microphone level of 0.000 for
+	// the whole call.
+	recOpts := []pulse.RecordOption{
 		pulse.RecordSampleRate(meowcaller.SampleRate),
 		pulse.RecordChannels(proto.ChannelMap{proto.ChannelMono}),
 		pulse.RecordLatency(0.04),
-		pulse.RecordMediaName("WhatsApp call"))
+		pulse.RecordMediaName("WhatsApp call"),
+	}
+	if src := a.pickMicrophone(); src != nil {
+		fmt.Printf("📞 recording from %q (%s)\n", src.Name(), src.ID())
+		recOpts = append(recOpts, pulse.RecordSource(src))
+	}
+	a.rec, err = pc.NewRecord(pulse.Float32Writer(a.onMic), recOpts...)
 	if err != nil {
 		pc.Close()
 		return nil, fmt.Errorf("microphone: %w", err)
@@ -449,6 +516,34 @@ func peakOf(buf []float32) float32 {
 		}
 	}
 	return peak
+}
+
+// pickMicrophone returns a real input, never a monitor: the well-known
+// droid name first, then any source whose name is not a monitor, and the
+// default only as a last resort.
+func (a *callAudio) pickMicrophone() *pulse.Source {
+	if src, err := a.pc.SourceByID("source.primary_input"); err == nil && src != nil {
+		return src
+	}
+	if srcs, err := a.pc.ListSources(); err == nil {
+		for _, src := range srcs {
+			if src == nil {
+				continue
+			}
+			name := strings.ToLower(src.Name() + " " + src.ID())
+			if !strings.Contains(name, "monitor") && !strings.Contains(name, "null") {
+				return src
+			}
+		}
+	}
+	src, err := a.pc.DefaultSource()
+	if err != nil {
+		return nil
+	}
+	if src != nil && strings.Contains(strings.ToLower(src.Name()+" "+src.ID()), "monitor") {
+		fmt.Printf("📞 default source %q is a monitor - recording would be silent\n", src.Name())
+	}
+	return src
 }
 
 // discoverSink looks for the output that carries both a speaker and an

@@ -8,7 +8,7 @@ require (
 	github.com/mutecomm/go-sqlcipher/v4 v4.4.2
 	github.com/purpshell/meowcaller v0.0.0-20260811012811-27a3c6b18657
 	github.com/rs/zerolog v1.35.1
-	go.mau.fi/whatsmeow v0.0.0-20260828224850-0fadda796019
+	go.mau.fi/whatsmeow v0.0.0-20260904121843-28bfe537ea6a
 	golang.org/x/sys v0.47.0
 	google.golang.org/protobuf v1.36.12
 )
